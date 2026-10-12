@@ -1,8 +1,8 @@
 [package]
 name = "idea-tree"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+version = "0.5.0"
+description = "トニー・ブザンの法則に忠実な、macOS 向けのマインドマップツール"
+authors = ["Toshiaki Nomura"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

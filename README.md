@@ -1,5 +1,7 @@
 # IdeaTree
 
+現在のバージョン: **0.5.0**
+
 TypeScript と Rust (Tauri) で開発する、macOS 向けのマインドマップツールです。トニー・ブザンのマインドマップの法則に忠実な描画と、キーボードだけで完結する操作性を目指します。
 
 ## リポジトリ
@@ -48,15 +50,21 @@ https://github.com/Toshiaki0315/IdeaTree.git
 - Rust（`cargo`）と、Tauri の前提環境（macOS では Xcode Command Line Tools）
 
 ### コマンド
+`make help` で一覧が出ます。
+
 ```bash
-npm install            # 依存パッケージのインストール
-npm run tauri dev      # アプリを起動（開発モード）
-npm run dev            # フロントエンドだけをブラウザで確認（ファイルの保存・読み込みは使えない）
-npm test               # フロントエンドのテスト
-npm run test:coverage  # カバレッジ付きでテスト（閾値 95%）
-npm run build          # 型チェックとビルド
-cargo test --manifest-path src-tauri/Cargo.toml   # バックエンドのテスト
+make setup      # 初回セットアップ（npm install）
+make dev        # アプリを起動（Tauri dev。初回は Rust のビルドで数分かかる）
+make test       # フロントエンドのテスト
+make test-cov   # カバレッジ付きでテスト（閾値 95%）
+make test-rust  # バックエンド（Rust）のテスト
+make check      # コミット前チェック（型 + テスト + clippy）
+make app        # アプリ（.app）を組む → src-tauri/target/release/bundle/macos/IdeaTree.app
+make dmg        # インストール用の DMG を作る → src-tauri/target/release/bundle/dmg/
 ```
+
+- `npm run dev` で、フロントエンドだけをブラウザで確認することもできます（ファイルの保存・読み込みなど、Tauri の機能は使えません）。
+- 署名・公証はまだです。配布した `.app` は、初回に右クリック →「開く」で Gatekeeper を通します。
 
 ### ディレクトリ構成
 - `src/domain/` — マインドマップのデータ操作（追加・削除・移動・レイアウト・保存形式・SVG 生成など）。画面や Tauri に依存しない純粋な関数。
