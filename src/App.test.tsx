@@ -249,5 +249,29 @@ describe("App（マインドマップ編集UI）", () => {
       expect(nodes(container)).toHaveLength(2);
       expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
+
+    it("入力欄からフォーカスが外れた状態でも、編集中はノード操作のショートカットは無効", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard("{Tab}");
+
+      await user.click(document.body);
+      await user.keyboard("{Tab}");
+
+      expect(nodes(container)).toHaveLength(2);
+    });
+  });
+
+  describe("対象外のキー", () => {
+    it("修飾キー付き（Cmd+Tab など）や未割り当てのキーでは、何も起きない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard("{Meta>}{Tab}{/Meta}");
+      await user.keyboard("a");
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
   });
 });

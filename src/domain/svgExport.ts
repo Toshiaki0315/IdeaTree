@@ -1,15 +1,20 @@
 import { getBranchColor } from "./branchColor";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 
-const FONT_FAMILY = "'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic', sans-serif";
+export const FONT_FAMILY = "'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic', sans-serif";
 const MARGIN = 120;
 const BASE_STROKE_WIDTH = 12;
 const STROKE_DECAY = 0.6;
-const CENTRAL_RX = 70;
-const CENTRAL_RY = 40;
-const CENTRAL_STROKE = "#333333";
-const BACKGROUND = "#FFFFFF";
-const LABEL_HALO_WIDTH = 5;
+
+/** 深さが増えるほど細くなる線幅 */
+export function strokeWidthAt(depth: number): number {
+  return BASE_STROKE_WIDTH * STROKE_DECAY ** (depth - 1);
+}
+export const CENTRAL_RX = 70;
+export const CENTRAL_RY = 40;
+export const CENTRAL_STROKE = "#333333";
+export const BACKGROUND = "#FFFFFF";
+export const LABEL_HALO_WIDTH = 5;
 
 /** 小数第2位に丸め、-0 や指数表記を避けた数値文字列にする */
 function fmt(value: number): string {
@@ -25,14 +30,14 @@ function escapeXml(text: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function depthOf(map: MindMap, node: MindMapNode): number {
+export function depthOf(map: MindMap, node: MindMapNode): number {
   let depth = 0;
   for (let n = node; n.parentId !== null; n = map.nodes[n.parentId]) depth++;
   return depth;
 }
 
 /** 親から子へ、緩やかなS字を描く三次ベジェ曲線のパス */
-function branchPath(from: MindMapNode, to: MindMapNode): string {
+export function branchPath(from: MindMapNode, to: MindMapNode): string {
   const dx = to.position.x - from.position.x;
   const dy = to.position.y - from.position.y;
   // 進行方向に直交する単位ベクトル × 長さの一部 = 曲がりの大きさ
@@ -75,7 +80,7 @@ export function exportSvg(map: MindMap): string {
     }
 
     const color = getBranchColor(map, node.id) as string;
-    const strokeWidth = BASE_STROKE_WIDTH * STROKE_DECAY ** (depth - 1);
+    const strokeWidth = strokeWidthAt(depth);
     branches.push(
       `<path data-node-id="${id}" d="${branchPath(map.nodes[node.parentId], node)}" fill="none" stroke="${color}" stroke-width="${fmt(strokeWidth)}" stroke-linecap="round"/>`,
     );
