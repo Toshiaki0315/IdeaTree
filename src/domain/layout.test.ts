@@ -3,6 +3,7 @@ import { addChild } from "./addChild";
 import { toggleCollapse } from "./collapse";
 import { CENTRAL_IMAGE_EXTRA, LEVEL_DISTANCE, layout } from "./layout";
 import { setNodeImage } from "./nodeImage";
+import { setNodeStyle } from "./nodeStyle";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
 
@@ -402,4 +403,31 @@ describe("layout（放射状レイアウト）", () => {
       );
     });
   });
+
+  describe("中心ノードの画像の倍率", () => {
+    const PNG =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+
+    it("画像を拡大・縮小すると、ブランチを外側へずらす距離も、倍率に比例して変わる", () => {
+      const root = createMindMap("root");
+      const one = addChild(setNodeImage(root, root.rootId, PNG), root.rootId, "a");
+
+      const at = (scale: number) =>
+        distanceOf(layout(setNodeStyle(one.map, root.rootId, { imageScale: scale })), one.nodeId);
+
+      expect(at(2)).toBeCloseTo(LEVEL_DISTANCE + CENTRAL_IMAGE_EXTRA * 2);
+      expect(at(0.5)).toBeCloseTo(LEVEL_DISTANCE + CENTRAL_IMAGE_EXTRA * 0.5);
+      expect(at(1)).toBeCloseTo(LEVEL_DISTANCE + CENTRAL_IMAGE_EXTRA);
+    });
+
+    it("画像がなければ、倍率を指定しても、距離は変わらない", () => {
+      const root = createMindMap("root");
+      const one = addChild(root, root.rootId, "a");
+
+      const laid = layout(setNodeStyle(one.map, root.rootId, { imageScale: 3 }));
+
+      expect(distanceOf(laid, one.nodeId)).toBeCloseTo(LEVEL_DISTANCE);
+    });
+  });
 });
+

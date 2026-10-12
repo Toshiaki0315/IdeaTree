@@ -602,4 +602,55 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       expect(icon(setNodeIcon(setNodeIcon(map, ids.a, star), ids.a, undefined), ids.a)).toBeNull();
     });
   });
+
+  describe("画像の倍率（imageScale）への対応", () => {
+    const PNG =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+    const el = (map: MindMap, id: NodeId) =>
+      parse(exportSvg(map)).querySelector(`image[data-node-id="${id}"]`)!;
+    const num = (e: Element, name: string) => Number(e.getAttribute(name));
+
+    it("倍率を指定すると、画像の枠の幅と高さが、その倍率になる（標準は 1 倍）", () => {
+      const { map, ids } = buildMap();
+      const normal = setNodeImage(map, ids.a1, PNG);
+      const scaled = setNodeStyle(normal, ids.a1, { imageScale: 2 });
+
+      expect(num(el(scaled, ids.a1), "width")).toBeCloseTo(num(el(normal, ids.a1), "width") * 2);
+      expect(num(el(scaled, ids.a1), "height")).toBeCloseTo(num(el(normal, ids.a1), "height") * 2);
+    });
+
+    it("ブランチの画像は、ラベルの上に、同じ水平位置を中心にして、拡大・縮小される（下端は変わらない）", () => {
+      const { map, ids } = buildMap();
+      const normal = setNodeImage(map, ids.a1, PNG);
+      const scaled = setNodeStyle(normal, ids.a1, { imageScale: 0.5 });
+
+      const [a, b] = [el(normal, ids.a1), el(scaled, ids.a1)];
+      expect(num(b, "x") + num(b, "width") / 2).toBeCloseTo(num(a, "x") + num(a, "width") / 2);
+      expect(num(b, "y") + num(b, "height")).toBeCloseTo(num(a, "y") + num(a, "height"));
+    });
+
+    it("中心ノードの画像は、中心を保って拡大・縮小され、テキストは、画像の下に、位置を合わせて置かれる", () => {
+      const { map, ids } = buildMap();
+      const scaled = setNodeStyle(setNodeImage(map, ids.root, PNG), ids.root, { imageScale: 2 });
+      const doc = parse(exportSvg(scaled));
+
+      const image = doc.querySelector(`image[data-node-id="${ids.root}"]`)!;
+      const text = byNodeId(doc, "text", ids.root);
+      expect(num(image, "x") + num(image, "width") / 2).toBeCloseTo(0);
+      expect(num(image, "y") + num(image, "height") / 2).toBeCloseTo(0);
+      expect(num(image, "width")).toBeCloseTo(320);
+      expect(Number(text.getAttribute("y"))).toBeGreaterThan(num(image, "y") + num(image, "height"));
+    });
+
+    it("中心ノードのアイコンは、拡大した画像の上に描かれる", () => {
+      const { map, ids } = buildMap();
+      const scaled = setNodeStyle(setNodeImage(map, ids.root, PNG), ids.root, { imageScale: 2 });
+      const doc = parse(exportSvg(setNodeIcon(scaled, ids.root, ICON_PRESETS[0].value)));
+
+      const icon = doc.querySelector(`text[data-icon-for="${ids.root}"]`)!;
+      const image = doc.querySelector(`image[data-node-id="${ids.root}"]`)!;
+      expect(Number(icon.getAttribute("y"))).toBeLessThan(num(image, "y"));
+    });
+  });
 });
+
