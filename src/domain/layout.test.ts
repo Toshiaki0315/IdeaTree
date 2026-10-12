@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
+import { toggleCollapse } from "./collapse";
 import { LEVEL_DISTANCE, layout } from "./layout";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
@@ -170,4 +171,100 @@ describe("layout（放射状レイアウト）", () => {
       );
     },
   );
+
+  describe("折りたたみへの対応", () => {
+    it("折りたたまれたブランチは、1枚の葉として扇形を割り当てられる", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 2);
+      const withLeaves = addChildren(mains.map, mains.ids[0], 3);
+      const folded = toggleCollapse(withLeaves.map, mains.ids[0]);
+
+      const laid = layout(folded);
+
+      // 葉は A(折りたたみ)=1枚 と B=1枚 の計2枚なので、扇形は半分ずつ
+      expect(angleOf(laid, mains.ids[0])).toBeCloseTo(-Math.PI / 2);
+      expect(angleOf(laid, mains.ids[1])).toBeCloseTo(Math.PI / 2);
+      expect(distanceOf(laid, mains.ids[0])).toBeCloseTo(LEVEL_DISTANCE);
+    });
+
+    it("折りたたまれたノードの子孫は、そのノードと同じ位置に置かれる（孫も同様）", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 2);
+      const subs = addChildren(mains.map, mains.ids[0], 2);
+      const deep = addChildren(subs.map, subs.ids[0], 2);
+      const folded = toggleCollapse(deep.map, mains.ids[0]);
+
+      const laid = layout(folded);
+      const head = laid.nodes[mains.ids[0]].position;
+
+      for (const id of [...subs.ids, ...deep.ids]) {
+        expect(laid.nodes[id].position).toEqual(head);
+      }
+    });
+
+    it("展開すると、折りたたむ前と同じ配置に戻る", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 3);
+      const subs = addChildren(mains.map, mains.ids[1], 3);
+      const original = layout(subs.map);
+
+      const unfolded = toggleCollapse(toggleCollapse(subs.map, mains.ids[1]), mains.ids[1]);
+
+      for (const id of Object.keys(original.nodes)) {
+        expect(layout(unfolded).nodes[id].position).toEqual(original.nodes[id].position);
+      }
+    });
+
+    it("内側で折りたたまれたノードの葉の数も、1枚として数える", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 2);
+      const subs = addChildren(mains.map, mains.ids[0], 2);
+      const deep = addChildren(subs.map, subs.ids[0], 3); // subs[0] の下に葉3枚
+      const folded = toggleCollapse(deep.map, subs.ids[0]); // → subs[0] は1枚
+
+      const laid = layout(folded);
+
+      // A の葉は subs[0](1枚) + subs[1](1枚) = 2枚、B は1枚 → A は 2/3 の扇形 [-π, π/3]
+      expect(angleOf(laid, mains.ids[0])).toBeCloseTo(-Math.PI / 3);
+      expect(angleOf(laid, mains.ids[1])).toBeCloseTo((2 * Math.PI) / 3);
+    });
+
+    it("中心ノードを折りたたむと、他のすべてのノードが原点に置かれる", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 3);
+      const subs = addChildren(mains.map, mains.ids[0], 2);
+
+      const laid = layout(toggleCollapse(subs.map, root.rootId));
+
+      for (const node of Object.values(laid.nodes)) {
+        expect(node.position).toEqual({ x: 0, y: 0 });
+      }
+    });
+
+    it("折りたたまれていても、全ノードが位置を持ち、再レイアウトしても結果は変わらない", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 3);
+      const subs = addChildren(mains.map, mains.ids[2], 2);
+      const folded = layout(toggleCollapse(subs.map, mains.ids[2]));
+
+      expect(Object.keys(folded.nodes)).toEqual(Object.keys(subs.map.nodes));
+      expect(layout(folded)).toEqual(folded);
+    });
+
+    it("子を持たないノードに残った折りたたみ状態は、配置に影響しない", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 3);
+      const stale: MindMap = {
+        ...mains.map,
+        nodes: {
+          ...mains.map.nodes,
+          [mains.ids[0]]: { ...mains.map.nodes[mains.ids[0]], collapsed: true },
+        },
+      };
+
+      expect(layout(stale).nodes[mains.ids[0]].position).toEqual(
+        layout(mains.map).nodes[mains.ids[0]].position,
+      );
+    });
+  });
 });
