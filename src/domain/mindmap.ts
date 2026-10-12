@@ -29,6 +29,8 @@ export interface MindMapNode {
   branchColor?: string;
   /** ノードの画像（PNG・JPEG・GIF・WebP の base64 のデータURL）。中心ノードに置くとセントラルイメージになる */
   image?: string;
+  /** ノードのアイコン（選択肢の中の記号）。ラベルの横に表示する */
+  icon?: string;
 }
 
 export interface MindMap {
