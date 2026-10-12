@@ -127,6 +127,10 @@ export default function App() {
     setEditing(null);
   };
 
+  /** 選択ノードをサブツリーごと削除し、親を選択する（履歴に1件記録） */
+  const deleteSelected = (parentId: NodeId) =>
+    commit({ map: deleteNode(map, selectedId), selectedId: parentId });
+
   /** ファイル操作を実行し、失敗したらエラーメッセージを表示する */
   const runFileAction = async (action: () => Promise<void>) => {
     try {
@@ -170,6 +174,9 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (editing || event.target instanceof HTMLInputElement) return;
+      const node = map.nodes[selectedId];
+      const isRoot = node.parentId === null;
+
       if (event.metaKey && !event.ctrlKey && !event.altKey) {
         const key = event.key.toLowerCase();
         if (key === "s") {
@@ -185,6 +192,14 @@ export default function App() {
         if (key === "c") {
           event.preventDefault();
           setClipboard(copyNode(map, selectedId));
+          return;
+        }
+        if (key === "x") {
+          event.preventDefault();
+          if (!isRoot) {
+            setClipboard(copyNode(map, selectedId));
+            deleteSelected(node.parentId as NodeId);
+          }
           return;
         }
         if (key === "v") {
@@ -208,9 +223,6 @@ export default function App() {
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
-      const node = map.nodes[selectedId];
-      const isRoot = node.parentId === null;
-
       if (event.key === "Tab") {
         event.preventDefault();
         startNewNode(addChild(map, selectedId, ""));
@@ -223,9 +235,7 @@ export default function App() {
         setEditing({ nodeId: selectedId, draft: node.text, base: null });
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
-        if (isRoot) return;
-        const parentId = node.parentId as NodeId;
-        commit({ map: deleteNode(map, selectedId), selectedId: parentId });
+        if (!isRoot) deleteSelected(node.parentId as NodeId);
       } else if (event.key in ARROW_DIRECTIONS) {
         event.preventDefault();
         replacePresent({ map, selectedId: navigate(map, selectedId, ARROW_DIRECTIONS[event.key]) });
