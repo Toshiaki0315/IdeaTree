@@ -2872,4 +2872,203 @@ describe("App（マインドマップ編集UI）", () => {
       });
     });
   });
+
+  describe("マウスのドラッグ: ノードを別のノードの子へつなぎ替える", () => {
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const at = (x: number, y: number) => ({ clientX: x, clientY: y });
+
+    /** 描かれている順（深さ優先）のノードのテキスト */
+    const order = (container: HTMLElement) =>
+      [...nodes(container)].map((g) => g.textContent);
+    const nodeG = (text: string) => screen.getByText(text).closest("g[data-node-id]") as Element;
+
+    /** ノードを押して、十分に動かしてから、別のノードの上まで移動する（まだ離さない） */
+    async function dragOver(user: User, from: string, to: string) {
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: screen.getByText(from), coords: at(100, 100) },
+        { target: screen.getByText(from), coords: at(130, 130) },
+        { target: screen.getByText(to), coords: at(300, 300) },
+      ]);
+    }
+
+    /** ドラッグして、ドロップ先で離す */
+    async function drag(user: User, from: string, to: string) {
+      await dragOver(user, from, to);
+      await user.pointer({ keys: "[/MouseLeft]", target: screen.getByText(to), coords: at(300, 300) });
+    }
+
+    /** 中心 ─ a(a1) / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await user.keyboard("{ArrowLeft}");
+      await addSiblingNamed(user, "b");
+    }
+
+    it("ノードを別のノードの上にドラッグして離すと、そのノードの子になり、移動したノードが選択される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await drag(user, "b", "a1");
+
+      expect(selectedText(container)).toBe("b");
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("a1");
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b"]);
+    });
+
+    it("中心ノードの上にドラッグすると、中心ノードの子（メインブランチ）になり、色が割り当てられる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      expect(screen.getByText("a1").getAttribute("fill")).toBe(BRANCH_COLORS[0]);
+
+      await drag(user, "a1", "中心テーマ");
+
+      expect(screen.getByText("a1").getAttribute("fill")).toBe(BRANCH_COLORS[2]); // a, b が使用済み
+    });
+
+    it("メインブランチを、別のブランチの下にドラッグすると、移動先のブランチの色になる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      expect(screen.getByText("b").getAttribute("fill")).toBe(BRANCH_COLORS[1]);
+
+      await drag(user, "b", "a");
+
+      expect(screen.getByText("b").getAttribute("fill")).toBe(BRANCH_COLORS[0]);
+    });
+
+    it("折りたたまれたノードの上に離すと、自動で展開される", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.click(screen.getByText("a"));
+      await user.keyboard(" ");
+      expect(screen.getByText("a…")).toBeInTheDocument();
+
+      await drag(user, "b", "a…");
+
+      expect(screen.getByText("a1")).toBeInTheDocument();
+      expect(screen.getByText("a")).toBeInTheDocument();
+    });
+
+    it("移動は1手の履歴で、元に戻したり、やり直したりできる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await drag(user, "b", "a1");
+
+      await user.keyboard(CMD_Z);
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("中心テーマ"); // b は、元どおり中心ノードの子
+
+      await user.keyboard("{Meta>}{Shift>}z{/Shift}{/Meta}");
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("a1");
+    });
+
+    it("ドラッグ中は、ドロップできるノードが強調表示され、離すと消える", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+
+      await dragOver(user, "b", "a1");
+      expect(nodeG("a1")).toHaveAttribute("data-drop-target", "true");
+      expect(nodeG("a")).not.toHaveAttribute("data-drop-target", "true");
+
+      await user.pointer({ keys: "[/MouseLeft]", target: screen.getByText("a1"), coords: at(300, 300) });
+      expect(document.querySelector('[data-drop-target="true"]')).toBeNull();
+    });
+
+    it("何もない場所に離すと、何も起きない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: screen.getByText("b"), coords: at(100, 100) },
+        { target: screen.getByText("b"), coords: at(150, 150) },
+        { target: screen.getByRole("application"), coords: at(400, 400) },
+        { keys: "[/MouseLeft]", target: screen.getByRole("application"), coords: at(400, 400) },
+      ]);
+
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b"]);
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("中心テーマ");
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(3); // 履歴には残っていない（b の追加が戻る）
+    });
+
+    it("自分自身・自分の子孫・今の親の上に離しても、何も起きず、強調表示もされない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await dragOver(user, "a", "a1");
+      expect(document.querySelector('[data-drop-target="true"]')).toBeNull();
+      await user.pointer({ keys: "[/MouseLeft]", target: screen.getByText("a1"), coords: at(300, 300) });
+
+      await drag(user, "a", "a");
+      await drag(user, "a1", "a");
+
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b"]);
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(3); // 履歴に残っていない
+    });
+
+    it("中心ノードは、ドラッグしても移動しない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await drag(user, "中心テーマ", "a1");
+
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b"]);
+    });
+
+    it("少ししか動かしていない操作は、ドラッグではなくクリック（選択）として扱われる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: screen.getByText("a"), coords: at(100, 100) },
+        { target: screen.getByText("a"), coords: at(102, 101) },
+        { keys: "[/MouseLeft]", target: screen.getByText("a"), coords: at(102, 101) },
+      ]);
+
+      expect(selectedText(container)).toBe("a");
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b"]);
+    });
+
+    it("ドラッグの途中で Escape を押すと、取り消され、離しても移動しない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await dragOver(user, "b", "a1");
+
+      await user.keyboard("{Escape}");
+      expect(document.querySelector('[data-drop-target="true"]')).toBeNull();
+      await user.pointer({ keys: "[/MouseLeft]", target: screen.getByText("a1"), coords: at(300, 300) });
+
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("中心テーマ");
+    });
+
+    it("左ボタン以外では、ドラッグしない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.pointer([
+        { keys: "[MouseRight>]", target: screen.getByText("b"), coords: at(100, 100) },
+        { target: screen.getByText("b"), coords: at(130, 130) },
+        { target: screen.getByText("a1"), coords: at(300, 300) },
+        { keys: "[/MouseRight]", target: screen.getByText("a1"), coords: at(300, 300) },
+      ]);
+
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b"]);
+    });
+  });
 });
