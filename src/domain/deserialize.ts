@@ -1,4 +1,5 @@
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
+import { isNodeStyle } from "./nodeStyle";
 import { SAVE_FORMAT_VERSION } from "./serialize";
 
 const FORMAT_ERROR = "保存データの形式が不正です";
@@ -9,7 +10,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNode(key: string, value: unknown): value is MindMapNode {
   if (!isRecord(value)) return false;
-  const { id, kind, text, parentId, childIds, position, collapsed } = value;
+  const { id, kind, text, parentId, childIds, position, collapsed, style } = value;
   return (
     id === key &&
     (kind === "central" || kind === "branch") &&
@@ -20,7 +21,8 @@ function isNode(key: string, value: unknown): value is MindMapNode {
     isRecord(position) &&
     typeof position.x === "number" &&
     typeof position.y === "number" &&
-    (collapsed === undefined || typeof collapsed === "boolean")
+    (collapsed === undefined || typeof collapsed === "boolean") &&
+    (style === undefined || isNodeStyle(style))
   );
 }
 

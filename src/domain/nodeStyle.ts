@@ -3,27 +3,52 @@ import type { MindMap, MindMapNode, NodeId, NodeStyle } from "./mindmap";
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 200;
 
+const INVALID_MESSAGES: Record<keyof NodeStyle, string> = {
+  bold: "太字は真偽値で指定してください",
+  italic: "斜体は真偽値で指定してください",
+  color: "色は #RRGGBB の形式で指定してください",
+  fontFamily: "フォント名が空です",
+  fontSize: `文字サイズは ${MIN_FONT_SIZE} 以上 ${MAX_FONT_SIZE} 以下の数値で指定してください`,
+};
+
 const COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+
+const isColor = (value: unknown): value is string =>
+  typeof value === "string" && COLOR_PATTERN.test(value);
+
+const isFontSize = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isFinite(value) &&
+  value >= MIN_FONT_SIZE &&
+  value <= MAX_FONT_SIZE;
+
+const isFontFamily = (value: unknown): value is string =>
+  typeof value === "string" && value.trim() !== "";
+
+/** 各項目の検証。ファイルの読み込みと、操作での設定で、同じ規則を使う */
+const VALIDATORS: Record<keyof NodeStyle, (value: unknown) => boolean> = {
+  bold: (value) => typeof value === "boolean",
+  italic: (value) => typeof value === "boolean",
+  color: isColor,
+  fontFamily: isFontFamily,
+  fontSize: isFontSize,
+};
+
+/** 値が、有効な項目だけを持つスタイルか（未知の項目や不正な値は無効） */
+export function isNodeStyle(value: unknown): value is NodeStyle {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  return Object.entries(value).every(([key, item]) =>
+    Object.prototype.hasOwnProperty.call(VALIDATORS, key) ? VALIDATORS[key as keyof NodeStyle](item) : false,
+  );
+}
 
 /** 設定する値を検証し、正規化した値を返す（undefined は解除を表す） */
 function normalize<K extends keyof NodeStyle>(key: K, value: NodeStyle[K]): NodeStyle[K] {
-  if (key === "color" && value !== undefined && !COLOR_PATTERN.test(value as string)) {
-    throw new Error("色は #RRGGBB の形式で指定してください");
+  if (value === undefined) return value;
+  if (!VALIDATORS[key](value)) {
+    throw new Error(INVALID_MESSAGES[key]);
   }
-  if (key === "fontSize" && value !== undefined) {
-    const size = value as number;
-    if (!Number.isFinite(size) || size < MIN_FONT_SIZE || size > MAX_FONT_SIZE) {
-      throw new Error(
-        `文字サイズは ${MIN_FONT_SIZE} 以上 ${MAX_FONT_SIZE} 以下の数値で指定してください`,
-      );
-    }
-  }
-  if (key === "fontFamily" && value !== undefined) {
-    const family = (value as string).trim();
-    if (family === "") throw new Error("フォント名が空です");
-    return family as NodeStyle[K];
-  }
-  return value;
+  return (key === "fontFamily" ? (value as string).trim() : value) as NodeStyle[K];
 }
 
 /**
