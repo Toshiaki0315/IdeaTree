@@ -1,31 +1,64 @@
+/** 画面の表示範囲。拡大率と、見ている範囲の中心（パン）。マップの座標で表す */
 export interface Viewport {
   zoom: number;
   panX: number;
   panY: number;
 }
 
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export const DEFAULT_VIEWPORT: Viewport = { zoom: 1, panX: 0, panY: 0 };
 export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 4;
+/** 拡大・縮小の1回あたりの倍率 */
 export const ZOOM_STEP = 1.25;
 
-export function zoomIn(_viewport: Viewport): Viewport {
-  throw new Error("未実装");
+function zoomBy(viewport: Viewport, factor: number): Viewport {
+  const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, viewport.zoom * factor));
+  return zoom === viewport.zoom ? viewport : { ...viewport, zoom };
 }
-export function zoomOut(_viewport: Viewport): Viewport {
-  throw new Error("未実装");
+
+/** 1段階拡大する（上限は MAX_ZOOM）。変わらないときは同じ値を返す */
+export function zoomIn(viewport: Viewport): Viewport {
+  return zoomBy(viewport, ZOOM_STEP);
 }
-export function panBy(_viewport: Viewport, _dx: number, _dy: number): Viewport {
-  throw new Error("未実装");
+
+/** 1段階縮小する（下限は MIN_ZOOM）。変わらないときは同じ値を返す */
+export function zoomOut(viewport: Viewport): Viewport {
+  return zoomBy(viewport, 1 / ZOOM_STEP);
 }
-export function visibleRect(_half: number, _viewport: Viewport) {
-  throw new Error("未実装");
+
+/** 見ている範囲の中心を、指定した量（マップの座標）だけ動かす */
+export function panBy(viewport: Viewport, dx: number, dy: number): Viewport {
+  return { ...viewport, panX: viewport.panX + dx, panY: viewport.panY + dy };
 }
+
+/** 今、見えている範囲。拡大率 1 のとき、中心から half の距離まで見える */
+export function visibleRect(half: number, viewport: Viewport): Rect {
+  const size = (half * 2) / viewport.zoom;
+  return { x: viewport.panX - size / 2, y: viewport.panY - size / 2, width: size, height: size };
+}
+
+/**
+ * 点が、見える範囲の内側（端から margin 以上）に入るよう動かす。
+ * すでに入っていれば、同じ値を返す。入っていなければ、その点が中心になるようにする。
+ */
 export function panToInclude(
-  _viewport: Viewport,
-  _half: number,
-  _point: { x: number; y: number },
-  _margin: number,
+  viewport: Viewport,
+  half: number,
+  point: { x: number; y: number },
+  margin: number,
 ): Viewport {
-  throw new Error("未実装");
+  const rect = visibleRect(half, viewport);
+  const inside =
+    point.x >= rect.x + margin &&
+    point.x <= rect.x + rect.width - margin &&
+    point.y >= rect.y + margin &&
+    point.y <= rect.y + rect.height - margin;
+  return inside ? viewport : { ...viewport, panX: point.x, panY: point.y };
 }
