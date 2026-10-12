@@ -36,6 +36,37 @@ export function nodeLabel(node: MindMapNode): string {
   return node.collapsed && node.childIds.length > 0 ? `${node.text}…` : node.text;
 }
 
+/** テキストと枝の見た目（スタイルの指定があればそれを、なければ既定値を使う） */
+export interface NodeTextStyle {
+  color: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: "bold" | "normal";
+  fontStyle: "italic" | "normal";
+}
+
+const DEFAULT_FONT_SIZES = { central: 24, main: 20, sub: 16 };
+
+export function nodeTextStyle(map: MindMap, node: MindMapNode): NodeTextStyle {
+  const style = node.style ?? {};
+  const isRoot = node.parentId === null;
+  const defaultSize = isRoot
+    ? DEFAULT_FONT_SIZES.central
+    : depthOf(map, node) === 1
+      ? DEFAULT_FONT_SIZES.main
+      : DEFAULT_FONT_SIZES.sub;
+  // CSS の font-family を壊さないよう、引用符とバックスラッシュは取り除く
+  const family = style.fontFamily?.replace(/['"\\]/g, "");
+
+  return {
+    color: style.color ?? (isRoot ? CENTRAL_STROKE : (getBranchColor(map, node.id) as string)),
+    fontFamily: family ? `'${family}', ${FONT_FAMILY}` : FONT_FAMILY,
+    fontSize: style.fontSize ?? defaultSize,
+    fontWeight: style.bold ? "bold" : "normal",
+    fontStyle: style.italic ? "italic" : "normal",
+  };
+}
+
 export function depthOf(map: MindMap, node: MindMapNode): number {
   let depth = 0;
   for (let n = node; n.parentId !== null; n = map.nodes[n.parentId]) depth++;
@@ -75,17 +106,20 @@ export function exportSvg(map: MindMap): string {
     const depth = depthOf(map, node);
     const { x, y } = node.position;
 
+    const look = nodeTextStyle(map, node);
+    const font = `font-family="${escapeXml(look.fontFamily)}" font-size="${look.fontSize}" font-weight="${look.fontWeight}" font-style="${look.fontStyle}"`;
+
     if (node.parentId === null) {
       shapes.push(
-        `<ellipse data-node-id="${id}" cx="${fmt(x)}" cy="${fmt(y)}" rx="${CENTRAL_RX}" ry="${CENTRAL_RY}" fill="${BACKGROUND}" stroke="${CENTRAL_STROKE}" stroke-width="4"/>`,
+        `<ellipse data-node-id="${id}" cx="${fmt(x)}" cy="${fmt(y)}" rx="${CENTRAL_RX}" ry="${CENTRAL_RY}" fill="${BACKGROUND}" stroke="${look.color}" stroke-width="4"/>`,
       );
       labels.push(
-        `<text data-node-id="${id}" x="${fmt(x)}" y="${fmt(y)}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="24" font-weight="bold" fill="${CENTRAL_STROKE}">${escapeXml(nodeLabel(node))}</text>`,
+        `<text data-node-id="${id}" x="${fmt(x)}" y="${fmt(y)}" text-anchor="middle" dominant-baseline="central" ${font} fill="${look.color}">${escapeXml(nodeLabel(node))}</text>`,
       );
       continue;
     }
 
-    const color = getBranchColor(map, node.id) as string;
+    const color = look.color;
     const strokeWidth = strokeWidthAt(depth);
     branches.push(
       `<path data-node-id="${id}" d="${branchPath(map.nodes[node.parentId], node)}" fill="none" stroke="${color}" stroke-width="${fmt(strokeWidth)}" stroke-linecap="round"/>`,
@@ -95,7 +129,7 @@ export function exportSvg(map: MindMap): string {
     const labelX = (parent.position.x + x) / 2;
     const labelY = (parent.position.y + y) / 2;
     labels.push(
-      `<text data-node-id="${id}" x="${fmt(labelX)}" y="${fmt(labelY)}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="${depth === 1 ? 20 : 16}" font-weight="bold" fill="${color}" stroke="${BACKGROUND}" stroke-width="${LABEL_HALO_WIDTH}" paint-order="stroke" stroke-linejoin="round">${escapeXml(nodeLabel(node))}</text>`,
+      `<text data-node-id="${id}" x="${fmt(labelX)}" y="${fmt(labelY)}" text-anchor="middle" dominant-baseline="central" ${font} fill="${color}" stroke="${BACKGROUND}" stroke-width="${LABEL_HALO_WIDTH}" paint-order="stroke" stroke-linejoin="round">${escapeXml(nodeLabel(node))}</text>`,
     );
   }
 
