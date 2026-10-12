@@ -1042,4 +1042,168 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.queryByText("a")).not.toBeInTheDocument();
     });
   });
+
+  describe("Cmd+C / Cmd+V: コピー＆ペースト", () => {
+    const CMD_C = "{Meta>}c{/Meta}";
+    const CMD_V = "{Meta>}v{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+
+    const selectedNodeId = (container: HTMLElement) =>
+      container
+        .querySelector('g[data-node-id][data-selected="true"]')
+        ?.getAttribute("data-node-id");
+    const nodeIdOf = (text: string) =>
+      screen.getByText(text).closest("g[data-node-id]")?.getAttribute("data-node-id");
+
+    /** 中心 ─ a(a1) / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await user.keyboard("{ArrowLeft}");
+      await addSiblingNamed(user, "b");
+    }
+
+    it("選択ノードをコピーし、別のノードの子として貼り付ける（貼り付けたノードが選択される）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user); // 選択: b
+      await user.keyboard("{ArrowUp}"); // 選択: a
+      const originalId = nodeIdOf("a");
+
+      await user.keyboard(CMD_C);
+      await user.keyboard("{ArrowDown}"); // 選択: b
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(6);
+      expect(screen.getAllByText("a")).toHaveLength(2);
+      expect(screen.getAllByText("a1")).toHaveLength(2);
+      expect(selectedText(container)).toBe("a");
+      expect(selectedNodeId(container)).not.toBe(originalId);
+      // 貼り付けたノードは b の子
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("b");
+    });
+
+    it("コピーしても、マップは変わらず、履歴にも残らない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+
+      await user.keyboard(CMD_C);
+      expect(nodes(container)).toHaveLength(2);
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(1); // a の追加が1手で戻る（コピーは手数に含まれない）
+    });
+
+    it("貼り付けを元に戻し、やり直せる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_C);
+      await user.keyboard("{ArrowLeft}");
+      await user.keyboard(CMD_V);
+      expect(nodes(container)).toHaveLength(3);
+
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(2);
+      expect(selectedText(container)).toBe("中心テーマ");
+
+      await user.keyboard("{Meta>}{Shift>}z{/Shift}{/Meta}");
+      expect(nodes(container)).toHaveLength(3);
+    });
+
+    it("同じ内容を何度でも貼り付けられる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_C);
+      await user.keyboard("{ArrowLeft}");
+
+      await user.keyboard(CMD_V);
+      await user.keyboard("{ArrowLeft}");
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(4);
+      expect(screen.getAllByText("a")).toHaveLength(3);
+    });
+
+    it("コピーした後に元のノードを編集・削除しても、貼り付けるのはコピー時点の内容", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_C);
+      await user.keyboard("{F2}");
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("変更後{Enter}");
+      await user.keyboard("{Delete}");
+
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.getByText("a")).toBeInTheDocument();
+      expect(screen.queryByText("変更後")).not.toBeInTheDocument();
+    });
+
+    it("中心ノードをコピーして貼り付けると、全体がブランチとして貼り付く", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{ArrowLeft}");
+
+      await user.keyboard(CMD_C);
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(4);
+      expect(screen.getAllByText("中心テーマ")).toHaveLength(2);
+      expect(container.querySelectorAll("ellipse")).toHaveLength(1);
+    });
+
+    it("コピーしていないときの Cmd+V は、何もしない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(1);
+    });
+
+    it("コピーした内容は、別のファイルを開いた後でも貼り付けられる", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "持ち越し");
+      await user.keyboard(CMD_C);
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByRole("status");
+
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(4);
+      expect(screen.getByText("持ち越し")).toBeInTheDocument();
+    });
+
+    it("Cmd+C と Cmd+V は、ブラウザ標準の動作を止める", async () => {
+      render(<App />);
+
+      expect(fireEvent.keyDown(window, { key: "c", metaKey: true })).toBe(false);
+      expect(fireEvent.keyDown(window, { key: "v", metaKey: true })).toBe(false);
+    });
+
+    it("テキスト編集中や、Ctrl+C / Ctrl+V では、コピー＆ペーストしない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{Control>}c{/Control}");
+      await user.keyboard("{Control>}v{/Control}");
+      expect(nodes(container)).toHaveLength(2);
+
+      await user.keyboard(CMD_C);
+      await user.keyboard("{Tab}");
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+  });
 });
