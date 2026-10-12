@@ -1,0 +1,253 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+import App from "./App";
+import { BRANCH_COLORS } from "./domain/branchColor";
+
+type User = ReturnType<typeof userEvent.setup>;
+
+const nodes = (container: HTMLElement) => container.querySelectorAll("g[data-node-id]");
+const selectedText = (container: HTMLElement) =>
+  container.querySelector('g[data-node-id][data-selected="true"]')?.textContent;
+
+/** 選択ノードの子を追加し、テキストを入力して確定する（Tab → 入力 → Enter） */
+async function addChildNamed(user: User, text: string) {
+  await user.keyboard("{Tab}");
+  await user.keyboard(text);
+  await user.keyboard("{Enter}");
+}
+
+/** 選択ノードの兄弟を追加し、テキストを入力して確定する（Enter → 入力 → Enter） */
+async function addSiblingNamed(user: User, text: string) {
+  await user.keyboard("{Enter}");
+  await user.keyboard(text);
+  await user.keyboard("{Enter}");
+}
+
+describe("App（マインドマップ編集UI）", () => {
+  describe("初期表示", () => {
+    it("マインドマップ領域(SVG)に、中央ノードが表示される", () => {
+      const { container } = render(<App />);
+
+      expect(screen.getByRole("application", { name: "マインドマップ" })).toBeInTheDocument();
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+    });
+
+    it("中央ノードが選択されており、編集入力欄は表示されない", () => {
+      const { container } = render(<App />);
+
+      expect(selectedText(container)).toBe("中心テーマ");
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Tab: 子ノードの追加", () => {
+    it("子ノードが追加され、選択されて、フォーカス済みの空の入力欄が表示される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard("{Tab}");
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.getByRole("textbox", { name: "ノードのテキスト" })).toHaveFocus();
+      expect(screen.getByRole("textbox")).toHaveValue("");
+    });
+
+    it("入力して Enter で確定すると、テキストが表示され入力欄が消える", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await addChildNamed(user, "企画");
+
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(screen.getByText("企画")).toBeInTheDocument();
+      expect(selectedText(container)).toBe("企画");
+    });
+
+    it("追加したノードごとに、親から伸びるブランチ(曲線)が描かれ、メインブランチの色が付く", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await addChildNamed(user, "企画");
+
+      const paths = container.querySelectorAll("path");
+      expect(paths).toHaveLength(1);
+      expect(paths[0]).toHaveAttribute("stroke", BRANCH_COLORS[0]);
+    });
+
+    it("空のまま確定すると、追加したノードは破棄され、親が選択される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard("{Tab}");
+      await user.keyboard("{Enter}");
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(selectedText(container)).toBe("中心テーマ");
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
+
+    it("Escape で入力を取り消すと、追加したノードは破棄される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard("{Tab}");
+      await user.keyboard("途中");
+      await user.keyboard("{Escape}");
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.queryByText("途中")).not.toBeInTheDocument();
+      expect(selectedText(container)).toBe("中心テーマ");
+    });
+  });
+
+  describe("Enter: 兄弟ノードの追加", () => {
+    it("選択ノードの兄弟が追加され、入力して確定できる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await addChildNamed(user, "企画");
+      await user.keyboard("{Enter}");
+      expect(screen.getByRole("textbox")).toHaveFocus();
+      await user.keyboard("予算");
+      await user.keyboard("{Enter}");
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.getByText("企画")).toBeInTheDocument();
+      expect(screen.getByText("予算")).toBeInTheDocument();
+      expect(selectedText(container)).toBe("予算");
+    });
+
+    it("兄弟ブランチは別のメインブランチ色になる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await addChildNamed(user, "企画");
+      await addSiblingNamed(user, "予算");
+
+      const strokes = [...container.querySelectorAll("path")].map((p) => p.getAttribute("stroke"));
+      expect(strokes).toEqual([BRANCH_COLORS[0], BRANCH_COLORS[1]]);
+    });
+
+    it("中央ノードでは何も起きない（ルートに兄弟は作れない）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard("{Enter}");
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("矢印キー: ノード間の移動", () => {
+    it("→ で最初の子、← で親、↓ で次の兄弟、↑ で前の兄弟へ移動する", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+      await user.keyboard("{ArrowUp}");
+      expect(selectedText(container)).toBe("a");
+
+      await user.keyboard("{ArrowRight}"); // 子がないので移動しない
+      expect(selectedText(container)).toBe("a");
+
+      await addChildNamed(user, "a1");
+      expect(selectedText(container)).toBe("a1");
+
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("a");
+      await user.keyboard("{ArrowDown}");
+      expect(selectedText(container)).toBe("b");
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("中心テーマ");
+      await user.keyboard("{ArrowRight}");
+      expect(selectedText(container)).toBe("a");
+    });
+  });
+
+  describe("Delete / Backspace: ノードの削除", () => {
+    it.each([["{Delete}"], ["{Backspace}"]])(
+      "%s で選択ノードをサブツリーごと削除し、親を選択する",
+      async (key) => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await addChildNamed(user, "a");
+        await addChildNamed(user, "a1");
+        await user.keyboard("{ArrowLeft}");
+        expect(selectedText(container)).toBe("a");
+
+        await user.keyboard(key);
+
+        expect(nodes(container)).toHaveLength(1);
+        expect(screen.queryByText("a1")).not.toBeInTheDocument();
+        expect(selectedText(container)).toBe("中心テーマ");
+      },
+    );
+
+    it("中央ノードは削除できない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard("{Delete}");
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+    });
+  });
+
+  describe("F2: テキスト編集", () => {
+    it("選択ノードの現在のテキストが入った入力欄が開き、変更を確定できる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard("{F2}");
+      const input = screen.getByRole("textbox", { name: "ノードのテキスト" });
+      expect(input).toHaveValue("中心テーマ");
+      expect(input).toHaveFocus();
+
+      await user.clear(input);
+      await user.keyboard("新テーマ{Enter}");
+
+      expect(screen.getByText("新テーマ")).toBeInTheDocument();
+      expect(screen.queryByText("中心テーマ")).not.toBeInTheDocument();
+    });
+
+    it("Escape で取り消すと、元のテキストのまま（ノードも残る）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "企画");
+
+      await user.keyboard("{F2}");
+      await user.keyboard("あああ{Escape}");
+
+      expect(screen.getByText("企画")).toBeInTheDocument();
+      expect(nodes(container)).toHaveLength(2);
+    });
+
+    it("既存ノードを空にして確定した場合は、元のテキストを保つ", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard("{F2}");
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("{Enter}");
+
+      expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+    });
+  });
+
+  describe("編集中のキー入力", () => {
+    it("入力欄の中では、ノード操作のショートカット(Tab・矢印・Delete)は無効", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard("{Tab}");
+      await user.keyboard("{Tab}{ArrowLeft}{Delete}{Backspace}");
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+  });
+});
