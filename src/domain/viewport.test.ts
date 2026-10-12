@@ -101,10 +101,12 @@ describe("viewport（ズームとパン）", () => {
     });
 
     it("余白の内側（端に近すぎる）場合も、見えているとは見なさず、動かす", () => {
-      const viewport = { zoom: 2, panX: 0, panY: 0 }; // 見える範囲は -100 〜 100
+      const viewport = { zoom: 2, panX: 0, panY: 0 }; // 見える範囲は -200 〜 200
 
-      expect(panToInclude(viewport, 400, { x: 95, y: 0 }, 20).panX).toBe(95);
-      expect(panToInclude(viewport, 400, { x: 70, y: 0 }, 20)).toBe(viewport);
+      expect(panToInclude(viewport, 400, { x: 190, y: 0 }, 20).panX).toBe(190);
+      expect(panToInclude(viewport, 400, { x: 170, y: 0 }, 20)).toBe(viewport);
+      expect(panToInclude(viewport, 400, { x: 0, y: -190 }, 20).panY).toBe(-190);
+      expect(panToInclude(viewport, 400, { x: 0, y: 190 }, 20).panY).toBe(190);
     });
   });
 });
