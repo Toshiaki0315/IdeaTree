@@ -17,7 +17,7 @@ function countLeaves(map: MindMap, id: NodeId): number {
 /**
  * 扇形分割型の放射状レイアウトで、全ノードの位置を計算し直す。
  * ルートは原点、他のノードは扇形の中央の角度に「深さ × levelDistance」の距離で置く。
- * 扇形は左（-π）から時計回りに、葉の数に比例して子へ分配する。
+ * 扇形は、最初のメインブランチが右向き（角度0）の中心になる位置から時計回りに、葉の数に比例して子へ分配する。
  * 折りたたまれたノードは1枚の葉として扱い、その子孫は同じ位置に置く。
  */
 export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
@@ -58,7 +58,13 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
     }
   };
 
-  place(map.rootId, 0, -Math.PI, Math.PI);
+  // 最初のメインブランチの扇形が、右向き（角度0）を中心にするよう、開始角をずらす
+  const [firstChildId] = map.nodes[map.rootId].childIds;
+  const start =
+    firstChildId === undefined
+      ? -Math.PI
+      : (-Math.PI * countLeaves(map, firstChildId)) / countLeaves(map, map.rootId);
+  place(map.rootId, 0, start, start + 2 * Math.PI);
 
   return { ...map, nodes };
 }
