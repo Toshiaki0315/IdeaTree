@@ -129,3 +129,12 @@ body,
 .mindmap g[data-drop-target="true"] {
   filter: drop-shadow(0 0 8px #1a7fd1);
 }
+
+.style-panel-image {
+  display: flex;
+  gap: 8px;
+}
+
+.style-panel-image button {
+  flex: 1;
+}

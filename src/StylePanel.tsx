@@ -8,8 +8,12 @@ interface Props {
   nodeText: string;
   /** 選択中のノードの現在のスタイル */
   style: NodeStyle;
+  /** 選択中のノードが画像を持っているか */
+  hasImage: boolean;
   /** 項目を変更する（undefined は「自動」に戻す） */
   onChange: (patch: Partial<NodeStyle>) => void;
+  onChooseImage: () => void;
+  onRemoveImage: () => void;
   onClose: () => void;
 }
 
@@ -19,7 +23,15 @@ function withCurrent<T>(options: { name: string; value: T }[], current: T | unde
   return known ? options : [...options, { name, value: current as T }];
 }
 
-export default function StylePanel({ nodeText, style, onChange, onClose }: Props) {
+export default function StylePanel({
+  nodeText,
+  style,
+  hasImage,
+  onChange,
+  onChooseImage,
+  onRemoveImage,
+  onClose,
+}: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   // 開いたら、現在選ばれている色にフォーカスを移す
@@ -109,6 +121,15 @@ export default function StylePanel({ nodeText, style, onChange, onClose }: Props
           ))}
         </select>
       </label>
+
+      <div className="style-panel-image">
+        <button type="button" onClick={onChooseImage}>
+          画像を選ぶ…
+        </button>
+        <button type="button" onClick={onRemoveImage} disabled={!hasImage}>
+          画像を外す
+        </button>
+      </div>
 
       <button type="button" onClick={onClose}>
         閉じる

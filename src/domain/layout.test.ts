@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { toggleCollapse } from "./collapse";
-import { LEVEL_DISTANCE, layout } from "./layout";
+import { CENTRAL_IMAGE_EXTRA, LEVEL_DISTANCE, layout } from "./layout";
+import { setNodeImage } from "./nodeImage";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
 
@@ -339,6 +340,65 @@ describe("layout（放射状レイアウト）", () => {
 
       expect(layout(stale).nodes[mains.ids[0]].position).toEqual(
         layout(mains.map).nodes[mains.ids[0]].position,
+      );
+    });
+  });
+
+  describe("中心ノードの画像（セントラルイメージ）への対応", () => {
+    const PNG =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+
+    it("中心ノードに画像があると、すべてのブランチが、画像の分だけ外側にずれる", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 3);
+      const subs = addChildren(mains.map, mains.ids[0], 2);
+      const withImage = setNodeImage(subs.map, root.rootId, PNG);
+
+      const laid = layout(withImage);
+
+      for (const id of mains.ids) {
+        expect(distanceOf(laid, id)).toBeCloseTo(LEVEL_DISTANCE + CENTRAL_IMAGE_EXTRA);
+      }
+      for (const id of subs.ids) {
+        expect(distanceOf(laid, id)).toBeCloseTo(LEVEL_DISTANCE * 2 + CENTRAL_IMAGE_EXTRA);
+      }
+    });
+
+    it("角度（扇形の配分）は、画像があっても変わらない", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 4);
+      const plain = layout(mains.map);
+
+      const withImage = layout(setNodeImage(mains.map, root.rootId, PNG));
+
+      for (const id of mains.ids) {
+        expect(wrap(angleOf(withImage, id) - angleOf(plain, id))).toBeCloseTo(0);
+      }
+    });
+
+    it("画像がなければ（外せば）、これまでどおりの距離になる", () => {
+      const root = createMindMap("root");
+      const mains = addChildren(root, root.rootId, 2);
+      const removed = setNodeImage(setNodeImage(mains.map, root.rootId, PNG), root.rootId, undefined);
+
+      expect(distanceOf(layout(removed), mains.ids[0])).toBeCloseTo(LEVEL_DISTANCE);
+    });
+
+    it("中心ノードは、画像があっても、原点に置かれる", () => {
+      const root = createMindMap("root");
+
+      expect(layout(setNodeImage(root, root.rootId, PNG)).nodes[root.rootId].position).toEqual({
+        x: 0,
+        y: 0,
+      });
+    });
+
+    it("levelDistance オプションは、画像の分のずれに影響しない（階層ごとの距離だけが変わる）", () => {
+      const root = createMindMap("root");
+      const one = addChild(setNodeImage(root, root.rootId, PNG), root.rootId, "a");
+
+      expect(distanceOf(layout(one.map, { levelDistance: 100 }), one.nodeId)).toBeCloseTo(
+        100 + CENTRAL_IMAGE_EXTRA,
       );
     });
   });

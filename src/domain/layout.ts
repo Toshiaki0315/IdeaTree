@@ -3,6 +3,9 @@ import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 /** 階層ごとの、親ノードからの距離（px） */
 export const LEVEL_DISTANCE = 180;
 
+/** 中心ノードに画像があるときに、ブランチを外側へずらす距離（px） */
+export const CENTRAL_IMAGE_EXTRA = 80;
+
 export interface LayoutOptions {
   levelDistance?: number;
 }

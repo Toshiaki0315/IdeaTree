@@ -14,6 +14,7 @@ import type { History } from "./domain/history";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
+import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { canMoveTo, moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
@@ -26,7 +27,10 @@ import {
   CENTRAL_RY,
   LABEL_HALO_WIDTH,
   branchPath,
+  centralLabelY,
   depthOf,
+  imageBox,
+  labelPosition,
   nodeLabel,
   nodeTextStyle,
   strokeWidthAt,
@@ -37,6 +41,7 @@ import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { loadFile } from "./files/loadFile";
+import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
 import StylePanel from "./StylePanel";
@@ -302,6 +307,18 @@ export default function App() {
     if (updated !== map) commit({ map: updated, selectedId });
   };
 
+  /** 画像を選ばせて、選択ノードに設定する（履歴に1手として記録）。キャンセルなら、何もしない */
+  const chooseImage = () =>
+    runFileAction(async () => {
+      const image = await pickImage();
+      if (image === null) return;
+      const updated = setNodeImage(map, selectedId, image);
+      if (updated !== map) commit({ map: updated, selectedId });
+    });
+
+  /** 選択ノードの画像を外す */
+  const removeImage = () => commit({ map: setNodeImage(map, selectedId, undefined), selectedId });
+
   /** ファイル操作を実行し、失敗したらエラーメッセージを表示する */
   const runFileAction = async (action: () => Promise<void>) => {
     try {
@@ -373,6 +390,11 @@ export default function App() {
         if (key === "c") {
           event.preventDefault();
           copySelected();
+          return;
+        }
+        if (key === "i" && event.shiftKey) {
+          event.preventDefault();
+          void chooseImage();
           return;
         }
         if ((key === "b" || key === "i") && !event.shiftKey) {
@@ -484,9 +506,10 @@ export default function App() {
         {nodes.map((node) => {
           const isRoot = node.parentId === null;
           const look = nodeTextStyle(laidOut, node);
-          const parent = isRoot ? node : laidOut.nodes[node.parentId as NodeId];
-          const labelX = (parent.position.x + node.position.x) / 2;
-          const labelY = (parent.position.y + node.position.y) / 2;
+          // 中心ノードは、ノードの位置（画像があれば、その下）に、それ以外は、枝の中点にラベルを置く
+          const labelX = isRoot ? node.position.x : labelPosition(laidOut, node).x;
+          const labelY = isRoot ? centralLabelY(node) : labelPosition(laidOut, node).y;
+          const box = node.image ? imageBox(laidOut, node) : null;
           const isEditing = editing?.nodeId === node.id;
           const selected = node.id === selectedId;
 
@@ -509,7 +532,7 @@ export default function App() {
               onClick={() => select(node.id)}
               onDoubleClick={() => startEdit(node.id)}
             >
-              {isRoot && (
+              {isRoot && !node.image && (
                 <ellipse
                   cx={node.position.x}
                   cy={node.position.y}
@@ -519,6 +542,30 @@ export default function App() {
                   stroke={selected ? "#1A7FD1" : look.color}
                   strokeWidth={selected ? 6 : 4}
                 />
+              )}
+              {node.image && box && (
+                <>
+                  <image
+                    href={node.image}
+                    x={box.x}
+                    y={box.y}
+                    width={box.width}
+                    height={box.height}
+                    preserveAspectRatio="xMidYMid meet"
+                  />
+                  {selected && (
+                    <rect
+                      x={box.x - 4}
+                      y={box.y - 4}
+                      width={box.width + 8}
+                      height={box.height + 8}
+                      rx={8}
+                      fill="none"
+                      stroke="#1A7FD1"
+                      strokeWidth={3}
+                    />
+                  )}
+                </>
               )}
               {!isEditing && (
                 <text
@@ -570,7 +617,10 @@ export default function App() {
         <StylePanel
           nodeText={map.nodes[selectedId].text}
           style={map.nodes[selectedId].style ?? {}}
+          hasImage={map.nodes[selectedId].image !== undefined}
           onChange={changeStyle}
+          onChooseImage={() => void chooseImage()}
+          onRemoveImage={removeImage}
           onClose={() => setStyleOpen(false)}
         />
       )}
