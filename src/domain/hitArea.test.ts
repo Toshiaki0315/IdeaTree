@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_HIT_HEIGHT, MIN_HIT_WIDTH, hitAreaSize } from "./hitArea";
+import { MIN_HIT_HEIGHT, MIN_HIT_WIDTH, estimateTextWidth, hitAreaSize } from "./hitArea";
 
 describe("hitAreaSize（ノードのクリックできる範囲の大きさ）", () => {
   it("日本語の文字は、1文字が文字サイズと同じ幅として数え、左右に余白を足す", () => {
@@ -38,3 +38,17 @@ describe("hitAreaSize（ノードのクリックできる範囲の大きさ）",
     expect(hitAreaSize("企画…", 20).width).toBe(3 * 20 + 24);
   });
 });
+
+describe("estimateTextWidth（文字の幅の見積もり）", () => {
+  it("全角は文字サイズと同じ幅、半角は 6 割の幅として数えて、足す", () => {
+    expect(estimateTextWidth("企画", 20)).toBe(40);
+    expect(estimateTextWidth("abc", 20)).toBeCloseTo(36);
+    expect(estimateTextWidth("UI設計", 10)).toBeCloseTo(2 * 6 + 2 * 10);
+  });
+
+  it("空文字列は 0。文字サイズに比例する", () => {
+    expect(estimateTextWidth("", 20)).toBe(0);
+    expect(estimateTextWidth("企画", 40)).toBe(2 * estimateTextWidth("企画", 20));
+  });
+});
+

@@ -18,3 +18,7 @@ export function hitAreaSize(label: string, fontSize: number): { width: number; h
     height: Math.max(MIN_HIT_HEIGHT, fontSize + PADDING_Y * 2),
   };
 }
+
+export function estimateTextWidth(_label: string, _fontSize: number): number {
+  throw new Error("未実装");
+}
