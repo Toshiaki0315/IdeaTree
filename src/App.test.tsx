@@ -374,6 +374,16 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 
+    it("Error 以外の値で失敗した場合も、その内容を表示する", async () => {
+      mockedSaveFile.mockRejectedValue("boom");
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_S);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+    });
+
     it("保存に成功すると、前回のエラーメッセージは消える", async () => {
       mockedSaveFile
         .mockRejectedValueOnce(new Error("保存に失敗しました: disk full"))

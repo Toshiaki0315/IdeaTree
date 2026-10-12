@@ -22,6 +22,7 @@ import {
   strokeWidthAt,
 } from "./domain/svgExport";
 import { updateText } from "./domain/updateText";
+import { saveFile } from "./files/saveFile";
 
 /** 編集中のノードと入力途中のテキスト */
 interface Editing {
@@ -29,6 +30,12 @@ interface Editing {
   draft: string;
   /** Tab/Enter で追加した直後のノードか（取り消し・空確定で破棄する） */
   isNew: boolean;
+}
+
+/** 画面下部に表示する、保存結果などのメッセージ */
+interface Message {
+  kind: "status" | "alert";
+  text: string;
 }
 
 const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
@@ -50,6 +57,8 @@ export default function App() {
   const [map, setMap] = useState<MindMap>(initialMap);
   const [selectedId, setSelectedId] = useState<NodeId>(() => map.rootId);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [filePath, setFilePath] = useState<string | undefined>(undefined);
+  const [message, setMessage] = useState<Message | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const laidOut = useMemo(() => layout(map), [map]);
@@ -83,9 +92,27 @@ export default function App() {
     setEditing(null);
   };
 
+  /** 保存する。saveAs が true なら保存先を決め直す（名前を付けて保存） */
+  const save = async (saveAs: boolean) => {
+    try {
+      const path = await saveFile(map, saveAs ? undefined : filePath);
+      if (path !== null) {
+        setFilePath(path);
+        setMessage({ kind: "status", text: `保存しました: ${path}` });
+      }
+    } catch (error) {
+      setMessage({ kind: "alert", text: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (editing || event.target instanceof HTMLInputElement) return;
+      if (event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void save(event.shiftKey);
+        return;
+      }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       const node = map.nodes[selectedId];
@@ -121,7 +148,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [map, selectedId, editing]);
+  }, [map, selectedId, editing, filePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, editing: Editing) => {
     event.stopPropagation();
@@ -143,85 +170,92 @@ export default function App() {
   );
 
   return (
-    <svg
-      className="mindmap"
-      role="application"
-      aria-label="マインドマップ"
-      viewBox={`${-half} ${-half} ${half * 2} ${half * 2}`}
-    >
-      <rect x={-half} y={-half} width={half * 2} height={half * 2} fill={BACKGROUND} />
-      {nodes.map((node) => {
-        if (node.parentId === null) return null;
-        return (
-          <path
-            key={node.id}
-            d={branchPath(laidOut.nodes[node.parentId], node)}
-            fill="none"
-            stroke={getBranchColor(laidOut, node.id) as string}
-            strokeWidth={strokeWidthAt(depthOf(laidOut, node))}
-            strokeLinecap="round"
-          />
-        );
-      })}
-      {nodes.map((node) => {
-        const isRoot = node.parentId === null;
-        const color = isRoot ? CENTRAL_STROKE : (getBranchColor(laidOut, node.id) as string);
-        const parent = isRoot ? node : laidOut.nodes[node.parentId as NodeId];
-        const labelX = (parent.position.x + node.position.x) / 2;
-        const labelY = (parent.position.y + node.position.y) / 2;
-        const isEditing = editing?.nodeId === node.id;
-        const selected = node.id === selectedId;
-
-        return (
-          <g key={node.id} data-node-id={node.id} data-selected={selected}>
-            {isRoot && (
-              <ellipse
-                cx={node.position.x}
-                cy={node.position.y}
-                rx={CENTRAL_RX}
-                ry={CENTRAL_RY}
-                fill={BACKGROUND}
-                stroke={selected ? "#1A7FD1" : CENTRAL_STROKE}
-                strokeWidth={selected ? 6 : 4}
-              />
-            )}
-            {!isEditing && (
-              <text
-                x={labelX}
-                y={labelY}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontFamily={FONT_FAMILY}
-                fontSize={isRoot ? 24 : depthOf(laidOut, node) === 1 ? 20 : 16}
-                fontWeight="bold"
-                fill={color}
-                {...(isRoot
-                  ? {}
-                  : {
-                      stroke: selected ? "#FFE066" : BACKGROUND,
-                      strokeWidth: LABEL_HALO_WIDTH + (selected ? 3 : 0),
-                      paintOrder: "stroke",
-                      strokeLinejoin: "round" as const,
-                    })}
-              >
-                {node.text}
-              </text>
-            )}
-            {isEditing && editing && (
-              <foreignObject x={labelX - 80} y={labelY - 18} width={160} height={36}>
-                <input
-                  ref={inputRef}
-                  className="node-input"
-                  aria-label="ノードのテキスト"
-                  value={editing.draft}
-                  onChange={(event) => setEditing({ ...editing, draft: event.target.value })}
-                  onKeyDown={(event) => onInputKeyDown(event, editing)}
+      <>
+      <svg
+        className="mindmap"
+        role="application"
+        aria-label="マインドマップ"
+        viewBox={`${-half} ${-half} ${half * 2} ${half * 2}`}
+      >
+        <rect x={-half} y={-half} width={half * 2} height={half * 2} fill={BACKGROUND} />
+        {nodes.map((node) => {
+          if (node.parentId === null) return null;
+          return (
+            <path
+              key={node.id}
+              d={branchPath(laidOut.nodes[node.parentId], node)}
+              fill="none"
+              stroke={getBranchColor(laidOut, node.id) as string}
+              strokeWidth={strokeWidthAt(depthOf(laidOut, node))}
+              strokeLinecap="round"
+            />
+          );
+        })}
+        {nodes.map((node) => {
+          const isRoot = node.parentId === null;
+          const color = isRoot ? CENTRAL_STROKE : (getBranchColor(laidOut, node.id) as string);
+          const parent = isRoot ? node : laidOut.nodes[node.parentId as NodeId];
+          const labelX = (parent.position.x + node.position.x) / 2;
+          const labelY = (parent.position.y + node.position.y) / 2;
+          const isEditing = editing?.nodeId === node.id;
+          const selected = node.id === selectedId;
+  
+          return (
+            <g key={node.id} data-node-id={node.id} data-selected={selected}>
+              {isRoot && (
+                <ellipse
+                  cx={node.position.x}
+                  cy={node.position.y}
+                  rx={CENTRAL_RX}
+                  ry={CENTRAL_RY}
+                  fill={BACKGROUND}
+                  stroke={selected ? "#1A7FD1" : CENTRAL_STROKE}
+                  strokeWidth={selected ? 6 : 4}
                 />
-              </foreignObject>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+              )}
+              {!isEditing && (
+                <text
+                  x={labelX}
+                  y={labelY}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontFamily={FONT_FAMILY}
+                  fontSize={isRoot ? 24 : depthOf(laidOut, node) === 1 ? 20 : 16}
+                  fontWeight="bold"
+                  fill={color}
+                  {...(isRoot
+                    ? {}
+                    : {
+                        stroke: selected ? "#FFE066" : BACKGROUND,
+                        strokeWidth: LABEL_HALO_WIDTH + (selected ? 3 : 0),
+                        paintOrder: "stroke",
+                        strokeLinejoin: "round" as const,
+                      })}
+                >
+                  {node.text}
+                </text>
+              )}
+              {isEditing && editing && (
+                <foreignObject x={labelX - 80} y={labelY - 18} width={160} height={36}>
+                  <input
+                    ref={inputRef}
+                    className="node-input"
+                    aria-label="ノードのテキスト"
+                    value={editing.draft}
+                    onChange={(event) => setEditing({ ...editing, draft: event.target.value })}
+                    onKeyDown={(event) => onInputKeyDown(event, editing)}
+                  />
+                </foreignObject>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      {message && (
+        <div className={`message message-${message.kind}`} role={message.kind}>
+          {message.text}
+        </div>
+      )}
+      </>
   );
 }
