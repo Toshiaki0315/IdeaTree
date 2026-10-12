@@ -135,4 +135,35 @@ describe("deserialize（JSON読み込み）", () => {
 
     expect(() => deserialize(JSON.stringify(data))).toThrow("到達できないノードがあります: orphan");
   });
+
+  it.each([["null", null], ["配列", []], ["文字列", "x"]])(
+    "ノードの値が不正（%s）な場合はエラーになる",
+    (_label, value) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a] = value;
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(
+        `ノードの形式が不正です: ${ids.a}`,
+      );
+    },
+  );
+
+  it.each([[null], [{ x: 1 }], [{ x: "1", y: 2 }]])(
+    "position が不正（%j）な場合はエラーになる",
+    (position) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].position = position;
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(
+        `ノードの形式が不正です: ${ids.a}`,
+      );
+    },
+  );
+
+  it("子ノードの childIds が重複していても復元できる", () => {
+    const { data, ids } = validData();
+    data.nodes[ids.root].childIds.push(ids.a);
+
+    expect(deserialize(JSON.stringify(data)).nodes[ids.root].childIds).toHaveLength(3);
+  });
 });
