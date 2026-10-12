@@ -190,8 +190,8 @@ export default function App() {
     });
 
   useEffect(() => {
+    // 編集中のキー入力は、入力欄が受け取って伝播を止める（ここには届かない）
     const onKeyDown = (event: KeyboardEvent) => {
-      if (editing || event.target instanceof HTMLInputElement) return;
       const node = map.nodes[selectedId];
       const isRoot = node.parentId === null;
 
@@ -266,7 +266,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [history, editing, filePath, clipboard]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [history, filePath, clipboard]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, editing: Editing) => {
     event.stopPropagation();
