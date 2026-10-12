@@ -9,7 +9,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNode(key: string, value: unknown): value is MindMapNode {
   if (!isRecord(value)) return false;
-  const { id, kind, text, parentId, childIds, position } = value;
+  const { id, kind, text, parentId, childIds, position, collapsed } = value;
   return (
     id === key &&
     (kind === "central" || kind === "branch") &&
@@ -19,7 +19,8 @@ function isNode(key: string, value: unknown): value is MindMapNode {
     childIds.every((childId) => typeof childId === "string") &&
     isRecord(position) &&
     typeof position.x === "number" &&
-    typeof position.y === "number"
+    typeof position.y === "number" &&
+    (collapsed === undefined || typeof collapsed === "boolean")
   );
 }
 
