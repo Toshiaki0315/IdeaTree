@@ -5,6 +5,7 @@ import { toggleCollapse } from "./collapse";
 import { layout } from "./layout";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
+import { setNodeImage } from "./nodeImage";
 import { setNodeStyle } from "./nodeStyle";
 import { exportSvg } from "./svgExport";
 import { updateText } from "./updateText";
@@ -437,6 +438,74 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       exportSvg(styled);
 
       expect(styled).toEqual(before);
+    });
+  });
+
+  describe("ノードの画像への対応", () => {
+    const PNG =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+    const image = (map: MindMap, id: NodeId) => parse(exportSvg(map)).querySelector(`image[data-node-id="${id}"]`);
+    const num = (el: Element, name: string) => Number(el.getAttribute(name));
+
+    it("画像のないノードには、画像の要素を出力しない（中心ノードは、従来どおり楕円）", () => {
+      const { map, ids } = buildMap();
+      const doc = parse(exportSvg(map));
+
+      expect(doc.querySelectorAll("image")).toHaveLength(0);
+      expect(doc.querySelector(`ellipse[data-node-id="${ids.root}"]`)).not.toBeNull();
+    });
+
+    it("中心ノードの画像（セントラルイメージ）は、楕円の代わりに、中心に描かれ、テキストは画像の下に置かれる", () => {
+      const { map, ids } = buildMap();
+      const withImage = setNodeImage(map, ids.root, PNG);
+      const doc = parse(exportSvg(withImage));
+
+      const el = doc.querySelector(`image[data-node-id="${ids.root}"]`)!;
+      expect(el.getAttribute("href")).toBe(PNG);
+      expect(el.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
+      expect(num(el, "x") + num(el, "width") / 2).toBeCloseTo(pos(map, ids.root).x);
+      expect(num(el, "y") + num(el, "height") / 2).toBeCloseTo(pos(map, ids.root).y);
+      expect(doc.querySelector(`ellipse[data-node-id="${ids.root}"]`)).toBeNull();
+      const text = byNodeId(doc, "text", ids.root);
+      expect(Number(text.getAttribute("y"))).toBeGreaterThan(num(el, "y") + num(el, "height") - 1);
+    });
+
+    it("メインブランチなどの画像は、ラベルの上に、ラベルと同じ水平位置で描かれる", () => {
+      const { map, ids } = buildMap();
+      const withImage = setNodeImage(map, ids.a1, PNG);
+      const doc = parse(exportSvg(withImage));
+
+      const el = doc.querySelector(`image[data-node-id="${ids.a1}"]`)!;
+      const text = byNodeId(doc, "text", ids.a1);
+      expect(el.getAttribute("href")).toBe(PNG);
+      expect(num(el, "x") + num(el, "width") / 2).toBeCloseTo(Number(text.getAttribute("x")), 1);
+      expect(num(el, "y") + num(el, "height")).toBeLessThanOrEqual(Number(text.getAttribute("y")));
+    });
+
+    it("画像は、枝の上、テキストの下に重ねて描かれる（文字が隠れない）", () => {
+      const { map, ids } = buildMap();
+      const withImage = setNodeImage(setNodeImage(map, ids.root, PNG), ids.a, PNG);
+      const names = [...parse(exportSvg(withImage)).documentElement.querySelectorAll("path, image, text")].map(
+        (e) => e.localName,
+      );
+
+      expect(names.lastIndexOf("path")).toBeLessThan(names.indexOf("image"));
+      expect(names.lastIndexOf("image")).toBeLessThan(names.indexOf("text"));
+    });
+
+    it("折りたたまれて見えないノードの画像は、出力しない", () => {
+      const { map, ids } = buildMap();
+      const hidden = toggleCollapse(setNodeImage(map, ids.a1, PNG), ids.a);
+
+      expect(image(hidden, ids.a1)).toBeNull();
+    });
+
+    it("画像を外すと、再び、中心ノードは楕円になる", () => {
+      const { map, ids } = buildMap();
+      const removed = setNodeImage(setNodeImage(map, ids.root, PNG), ids.root, undefined);
+
+      expect(image(removed, ids.root)).toBeNull();
+      expect(parse(exportSvg(removed)).querySelector(`ellipse[data-node-id="${ids.root}"]`)).not.toBeNull();
     });
   });
 });
