@@ -5,6 +5,7 @@ import { toggleCollapse } from "./collapse";
 import { layout } from "./layout";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
+import { setNodeStyle } from "./nodeStyle";
 import { exportSvg } from "./svgExport";
 import { updateText } from "./updateText";
 
@@ -311,6 +312,131 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
 
       expect(folded.getAttribute("stroke")).toBe(normal.getAttribute("stroke"));
       expect(folded.getAttribute("stroke-width")).toBe(normal.getAttribute("stroke-width"));
+    });
+  });
+
+  describe("ノードのスタイルへの対応", () => {
+    const text = (map: MindMap, id: NodeId) => byNodeId(parse(exportSvg(map)), "text", id);
+    const path = (map: MindMap, id: NodeId) => byNodeId(parse(exportSvg(map)), "path", id);
+
+    it("スタイルがないノードは、標準の太さ・字体で、既定のサイズ（中心24・メイン20・それ以降16）になる", () => {
+      const { map, ids } = buildMap();
+
+      for (const id of [ids.root, ids.a, ids.a1]) {
+        expect(text(map, id).getAttribute("font-weight")).toBe("normal");
+        expect(text(map, id).getAttribute("font-style")).toBe("normal");
+      }
+      expect(text(map, ids.root).getAttribute("font-size")).toBe("24");
+      expect(text(map, ids.a).getAttribute("font-size")).toBe("20");
+      expect(text(map, ids.a1).getAttribute("font-size")).toBe("16");
+    });
+
+    it("太字・斜体を指定したノードのテキストに、反映される（他のノードは変わらない）", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(setNodeStyle(map, ids.a, { bold: true }), ids.b, { italic: true });
+
+      expect(text(styled, ids.a).getAttribute("font-weight")).toBe("bold");
+      expect(text(styled, ids.a).getAttribute("font-style")).toBe("normal");
+      expect(text(styled, ids.b).getAttribute("font-style")).toBe("italic");
+      expect(text(styled, ids.b).getAttribute("font-weight")).toBe("normal");
+      expect(text(styled, ids.a1).getAttribute("font-weight")).toBe("normal");
+    });
+
+    it("太字・斜体は、中心ノードにも反映される", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(map, ids.root, { bold: true, italic: true });
+
+      expect(text(styled, ids.root).getAttribute("font-weight")).toBe("bold");
+      expect(text(styled, ids.root).getAttribute("font-style")).toBe("italic");
+    });
+
+    it("文字サイズの指定は、既定のサイズを置き換える", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(setNodeStyle(map, ids.a1, { fontSize: 40 }), ids.root, {
+        fontSize: 30,
+      });
+
+      expect(text(styled, ids.a1).getAttribute("font-size")).toBe("40");
+      expect(text(styled, ids.root).getAttribute("font-size")).toBe("30");
+      expect(text(styled, ids.a).getAttribute("font-size")).toBe("20");
+    });
+
+    it("フォントの指定は先頭に置かれ、既定のフォントが代替として続く", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(map, ids.a, { fontFamily: "Hiragino Mincho ProN" });
+
+      const family = text(styled, ids.a).getAttribute("font-family")!;
+      const defaultFamily = text(map, ids.a).getAttribute("font-family")!;
+
+      expect(family.startsWith("'Hiragino Mincho ProN', ")).toBe(true);
+      expect(family.endsWith(defaultFamily)).toBe(true);
+      expect(text(styled, ids.b).getAttribute("font-family")).toBe(defaultFamily);
+    });
+
+    it("フォント名に特殊文字が含まれていても、SVGの属性を壊さない", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(map, ids.a, { fontFamily: `Evil" onload="x'<&>` });
+
+      const doc = parse(exportSvg(styled));
+
+      expect(doc.querySelector("parsererror")).toBeNull();
+      expect(byNodeId(doc, "text", ids.a).getAttribute("onload")).toBeNull();
+      expect(byNodeId(doc, "text", ids.a).textContent).toBe("企画");
+    });
+
+    it("色の指定は、そのノードのテキストと、親から伸びる枝に反映される", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(map, ids.a1, { color: "#123456" });
+
+      expect(text(styled, ids.a1).getAttribute("fill")).toBe("#123456");
+      expect(path(styled, ids.a1).getAttribute("stroke")).toBe("#123456");
+    });
+
+    it("色の指定は、子孫や兄弟には引き継がれず、メインブランチの色のまま", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(map, ids.a, { color: "#123456" });
+
+      expect(path(styled, ids.a).getAttribute("stroke")).toBe("#123456");
+      expect(path(styled, ids.a1).getAttribute("stroke")).toBe(BRANCH_COLORS[0]);
+      expect(text(styled, ids.a1).getAttribute("fill")).toBe(BRANCH_COLORS[0]);
+      expect(path(styled, ids.b).getAttribute("stroke")).toBe(BRANCH_COLORS[1]);
+    });
+
+    it("中心ノードの色の指定は、テキストと楕円の枠線に反映される", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(map, ids.root, { color: "#AA0000" });
+      const doc = parse(exportSvg(styled));
+
+      expect(byNodeId(doc, "text", ids.root).getAttribute("fill")).toBe("#AA0000");
+      expect(byNodeId(doc, "ellipse", ids.root).getAttribute("stroke")).toBe("#AA0000");
+    });
+
+    it("色を指定しても、枝の太さや、文字の縁取り（白）は変わらない", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(map, ids.a, { color: "#123456" });
+
+      expect(path(styled, ids.a).getAttribute("stroke-width")).toBe(
+        path(map, ids.a).getAttribute("stroke-width"),
+      );
+      expect(text(styled, ids.a).getAttribute("stroke")).toBe("#FFFFFF");
+    });
+
+    it("折りたたみの印「…」と、スタイルは同時に使える", () => {
+      const { map, ids } = buildMap();
+      const styled = toggleCollapse(setNodeStyle(map, ids.a, { bold: true }), ids.a);
+
+      expect(text(styled, ids.a).textContent).toBe("企画…");
+      expect(text(styled, ids.a).getAttribute("font-weight")).toBe("bold");
+    });
+
+    it("スタイルを設定しても、元のマインドマップを変更しない", () => {
+      const { map, ids } = buildMap();
+      const styled = setNodeStyle(map, ids.a, { bold: true, color: "#123456", fontSize: 30 });
+      const before = structuredClone(styled);
+
+      exportSvg(styled);
+
+      expect(styled).toEqual(before);
     });
   });
 });
