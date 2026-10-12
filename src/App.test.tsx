@@ -4039,4 +4039,113 @@ describe("App（マインドマップ編集UI）", () => {
       expect(selectedText(container)).toBe(`b${star.value}`); // ノードの文字には、アイコンの記号も含まれる
     });
   });
+
+  describe("スタイルパネル: 画像の大きさ", () => {
+    const PNG =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+    const CMD_K = "{Meta>}k{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const panel = () => screen.getByRole("dialog", { name: "スタイル" });
+    const scaleSelect = () => within(panel()).getByRole("combobox", { name: "画像の大きさ" });
+    const imageWidth = (container: HTMLElement) => Number(container.querySelector("image")!.getAttribute("width"));
+
+    /** 中心ノードに画像を付けて、スタイルパネルを開く（中心画像の幅は、標準で 160） */
+    async function withCentralImage(user: User) {
+      mockedPickImage.mockResolvedValue(PNG);
+      const view = render(<App />);
+      await user.keyboard("{Meta>}{Shift>}i{/Shift}{/Meta}");
+      await waitFor(() => expect(view.container.querySelectorAll("image")).toHaveLength(1));
+      await user.keyboard(CMD_K);
+      return view;
+    }
+
+    it("画像のないノードでは、選べない。画像があると、選べる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard(CMD_K);
+      expect(scaleSelect()).toBeDisabled();
+
+      mockedPickImage.mockResolvedValue(PNG);
+      await user.click(within(panel()).getByRole("button", { name: "画像を選ぶ…" }));
+
+      await waitFor(() => expect(scaleSelect()).toBeEnabled());
+    });
+
+    it("選択肢は、「自動（100%）」と、50%・75%・150%・200%・300%", async () => {
+      const user = userEvent.setup();
+      await withCentralImage(user);
+
+      const options = within(scaleSelect()).getAllByRole("option").map((o) => o.textContent);
+
+      expect(options).toEqual(["自動（100%）", "50%", "75%", "150%", "200%", "300%"]);
+      expect(scaleSelect()).toHaveDisplayValue("自動（100%）");
+    });
+
+    it("倍率を選ぶと、画像の大きさが変わり、「自動」で標準に戻る", async () => {
+      const user = userEvent.setup();
+      const { container } = await withCentralImage(user);
+      expect(imageWidth(container)).toBe(160);
+
+      await user.selectOptions(scaleSelect(), "200%");
+      expect(imageWidth(container)).toBe(320);
+      expect(scaleSelect()).toHaveDisplayValue("200%");
+
+      await user.selectOptions(scaleSelect(), "50%");
+      expect(imageWidth(container)).toBe(80);
+
+      await user.selectOptions(scaleSelect(), "自動（100%）");
+      expect(imageWidth(container)).toBe(160);
+    });
+
+    it("倍率の変更は1手の履歴で、同じ倍率を選び直しても、増えない", async () => {
+      const user = userEvent.setup();
+      const { container } = await withCentralImage(user);
+      await user.selectOptions(scaleSelect(), "200%");
+      await user.selectOptions(scaleSelect(), "200%");
+      await user.keyboard("{Escape}");
+
+      await user.keyboard(CMD_Z);
+      expect(imageWidth(container)).toBe(160);
+      expect(container.querySelectorAll("image")).toHaveLength(1); // 画像の設定は、まだ戻っていない
+    });
+
+    it("倍率は保存されるファイルに含まれ、候補にない倍率のファイルでも、表示できる", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      const { container } = await withCentralImage(user);
+      await user.selectOptions(scaleSelect(), "150%");
+      await user.keyboard("{Escape}");
+      await user.keyboard("{Meta>}s{/Meta}");
+      await screen.findByRole("status");
+      const [saved] = mockedSaveFile.mock.calls[0];
+      expect(Object.values(saved.nodes)[0].style).toEqual({ imageScale: 1.5 });
+
+      const base = loadedMap();
+      mockedLoadFile.mockResolvedValue({
+        map: setNodeStyle(setNodeImage(base, base.rootId, PNG), base.rootId, { imageScale: 1.2 }),
+        path: "/Users/me/other.json",
+      });
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByText(/開きました/);
+      await user.keyboard(CMD_K);
+
+      expect(imageWidth(container)).toBeCloseTo(192);
+      expect(scaleSelect()).toHaveDisplayValue("120%");
+    });
+
+    it("メインブランチなどの画像の大きさも、変えられる", async () => {
+      mockedPickImage.mockResolvedValue(PNG);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{Meta>}{Shift>}i{/Shift}{/Meta}");
+      await waitFor(() => expect(container.querySelectorAll("image")).toHaveLength(1));
+      expect(imageWidth(container)).toBe(64);
+      await user.keyboard(CMD_K);
+
+      await user.selectOptions(scaleSelect(), "300%");
+
+      expect(imageWidth(container)).toBe(192);
+    });
+  });
 });
