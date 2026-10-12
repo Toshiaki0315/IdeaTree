@@ -20,7 +20,7 @@ function buildMap() {
   };
 }
 
-/** 指定ノードのテキストを持つ、貼り付けたサブツリー内のノードID一覧 */
+/** 指定ノードを根とするサブツリーのテキストを、深さ優先の順に並べる */
 function textsOf(map: MindMap, rootId: NodeId): string[] {
   const texts: string[] = [];
   const walk = (id: NodeId) => {
