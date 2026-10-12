@@ -3,7 +3,12 @@ import type { KeyboardEvent } from "react";
 import type { NodeStyle } from "./domain/mindmap";
 import { ICON_PRESETS } from "./domain/nodeIcon";
 import { isColor } from "./domain/nodeStyle";
-import { COLOR_PRESETS, FONT_PRESETS, FONT_SIZE_PRESETS } from "./domain/stylePresets";
+import {
+  COLOR_PRESETS,
+  FONT_PRESETS,
+  FONT_SIZE_PRESETS,
+  IMAGE_SCALE_PRESETS,
+} from "./domain/stylePresets";
 
 interface Props {
   /** 選択中のノードのID（選択が変わったら、入力欄の表示を切り替えるため） */
@@ -89,6 +94,13 @@ export default function StylePanel({
     FONT_SIZE_PRESETS.map((size) => ({ name: String(size), value: size })),
     style.fontSize,
     String(style.fontSize),
+  );
+
+  const percent = (scale: number) => `${Math.round(scale * 100)}%`;
+  const scales = withCurrent(
+    IMAGE_SCALE_PRESETS.map((scale) => ({ name: percent(scale), value: scale })),
+    style.imageScale,
+    style.imageScale === undefined ? "" : percent(style.imageScale),
   );
 
   return (
@@ -197,6 +209,25 @@ export default function StylePanel({
           {ICON_PRESETS.map((preset) => (
             <option key={preset.value} value={preset.value}>
               {preset.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="style-panel-field">
+        画像の大きさ
+        <select
+          aria-label="画像の大きさ"
+          disabled={!hasImage}
+          value={style.imageScale === undefined ? "" : String(style.imageScale)}
+          onChange={(event) =>
+            onChange({ imageScale: event.target.value ? Number(event.target.value) : undefined })
+          }
+        >
+          <option value="">自動（100%）</option>
+          {scales.map((scale) => (
+            <option key={scale.value} value={scale.value}>
+              {scale.name}
             </option>
           ))}
         </select>
