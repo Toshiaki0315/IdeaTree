@@ -117,7 +117,8 @@ describe("layout（放射状レイアウト）", () => {
     expect(subAngles[0]).toBeLessThan(subAngles[1]);
     expect(subAngles[1]).toBeLessThan(subAngles[2]);
     for (const angle of subAngles) {
-      expect(Math.abs(angle - mainAngle)).toBeLessThan((2 * Math.PI) / 3 / 2 + 1e-9);
+      // 葉は 1+3+1=5 枚。中央のブランチの扇形幅は 2π×3/5
+      expect(Math.abs(angle - mainAngle)).toBeLessThan((2 * Math.PI * 3) / 5 / 2);
     }
   });
 
