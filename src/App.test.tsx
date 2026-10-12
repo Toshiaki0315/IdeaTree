@@ -700,4 +700,190 @@ describe("App（マインドマップ編集UI）", () => {
       expect(mockedSvgExportFile).not.toHaveBeenCalled();
     });
   });
+
+  describe("Cmd+Z: 元に戻す（Undo）", () => {
+    const CMD_Z = "{Meta>}z{/Meta}";
+
+    it("ノードの追加を元に戻す（追加前のノードが選択される）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "企画");
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.queryByText("企画")).not.toBeInTheDocument();
+      expect(selectedText(container)).toBe("中心テーマ");
+    });
+
+    it("操作を1つずつ、順番にさかのぼれる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.queryByText("b")).not.toBeInTheDocument();
+      expect(selectedText(container)).toBe("a");
+
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(1);
+    });
+
+    it("テキスト編集の確定を元に戻す", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard("{F2}");
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("新テーマ{Enter}");
+      expect(screen.getByText("新テーマ")).toBeInTheDocument();
+
+      await user.keyboard(CMD_Z);
+
+      expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+      expect(screen.queryByText("新テーマ")).not.toBeInTheDocument();
+    });
+
+    it("ノードの削除を元に戻す（サブツリーごと復活し、直前に記録した時点の選択に戻る）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await user.keyboard("{ArrowLeft}");
+      await user.keyboard("{Delete}");
+      expect(nodes(container)).toHaveLength(1);
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.getByText("a1")).toBeInTheDocument();
+      // 履歴は「記録した時点の状態」に戻る。矢印キーの移動は記録されないので、a1 の追加直後の選択
+      expect(selectedText(container)).toBe("a1");
+    });
+
+    it("何も操作していないときは、何も起きない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+    });
+
+    it("ノードの移動（矢印キー）は履歴に残らない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+      await user.keyboard("{ArrowUp}{ArrowLeft}");
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.queryByText("b")).not.toBeInTheDocument();
+    });
+
+    it("取り消し・空のまま確定して破棄したノードは、履歴に残らない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{Tab}{Escape}");
+      await user.keyboard("{Tab}{Enter}");
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.queryByText("a")).not.toBeInTheDocument();
+    });
+
+    it("変化のない操作（ルートの削除・兄弟追加）は履歴に残らない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{ArrowLeft}");
+      await user.keyboard("{Delete}");
+      await user.keyboard("{Enter}");
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.queryByText("a")).not.toBeInTheDocument();
+    });
+
+    it("元に戻した後も、通常どおり編集を続けられる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_Z);
+
+      await addChildNamed(user, "b");
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.getByText("b")).toBeInTheDocument();
+      expect(screen.queryByText("a")).not.toBeInTheDocument();
+    });
+
+    it("ブラウザ標準の動作を止める", async () => {
+      render(<App />);
+
+      const notPrevented = fireEvent.keyDown(window, { key: "z", metaKey: true });
+
+      expect(notPrevented).toBe(false);
+    });
+
+    it("ファイルを開くと履歴は新しくなり、読み込む前の状態には戻れない", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "古い子");
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByRole("status");
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.getByText("子A")).toBeInTheDocument();
+      expect(screen.queryByText("古い子")).not.toBeInTheDocument();
+    });
+
+    it("読み込み後の編集は、読み込んだ状態まで元に戻せる", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByRole("status");
+      await addChildNamed(user, "追加");
+      expect(nodes(container)).toHaveLength(4);
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.getByText("子A")).toBeInTheDocument();
+    });
+
+    it("テキスト編集中は元に戻さない（入力欄の文字の取り消しはブラウザに任せる）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{Tab}");
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+
+    it("Ctrl+Z では元に戻さない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+
+      await user.keyboard("{Control>}z{/Control}");
+
+      expect(nodes(container)).toHaveLength(2);
+    });
+  });
 });
