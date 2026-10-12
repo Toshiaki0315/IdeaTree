@@ -3337,16 +3337,16 @@ describe("App（マインドマップ編集UI）", () => {
       }
     });
 
-    it("文字を大きくすると、クリック範囲も大きくなる", async () => {
+    it("文字を大きくすると、クリック範囲（の高さ）も大きくなる", async () => {
       const user = userEvent.setup();
       render(<App />);
       await buildTree(user);
-      const before = Number(hitArea("b")!.getAttribute("width"));
+      const before = Number(hitArea("b")!.getAttribute("height"));
 
       await user.keyboard("{Meta>}k{/Meta}");
       await user.selectOptions(screen.getByRole("combobox", { name: "文字サイズ" }), "48");
 
-      expect(Number(hitArea("b")!.getAttribute("width"))).toBeGreaterThan(before);
+      expect(Number(hitArea("b")!.getAttribute("height"))).toBeGreaterThan(before);
     });
 
     it("クリック範囲をクリックすると、そのノードが選択され、ダブルクリックで編集できる", async () => {
@@ -3380,13 +3380,14 @@ describe("App（マインドマップ編集UI）", () => {
     it("折りたたまれたノードのクリック範囲は、「…」を含む表示に合わせた大きさになる", async () => {
       const user = userEvent.setup();
       render(<App />);
-      await buildTree(user);
-      await user.click(screen.getByText("a"));
-      const before = Number(hitArea("a")!.getAttribute("width"));
+      await addChildNamed(user, "企画");
+      await addChildNamed(user, "調査");
+      await user.keyboard("{ArrowLeft}");
+      const before = Number(hitArea("企画")!.getAttribute("width"));
 
       await user.keyboard(" ");
 
-      expect(Number(hitArea("a…")!.getAttribute("width"))).toBeGreaterThan(before);
+      expect(Number(hitArea("企画…")!.getAttribute("width"))).toBeGreaterThan(before);
     });
   });
 });
