@@ -7,10 +7,10 @@ export interface LayoutOptions {
   levelDistance?: number;
 }
 
-/** 部分木に含まれる葉の数（扇形の大きさの重み） */
+/** 部分木に含まれる葉の数（扇形の大きさの重み）。折りたたまれたノードは1枚の葉として数える */
 function countLeaves(map: MindMap, id: NodeId): number {
-  const { childIds } = map.nodes[id];
-  if (childIds.length === 0) return 1;
+  const { childIds, collapsed } = map.nodes[id];
+  if (childIds.length === 0 || collapsed) return 1;
   return childIds.reduce((sum, childId) => sum + countLeaves(map, childId), 0);
 }
 
@@ -18,6 +18,7 @@ function countLeaves(map: MindMap, id: NodeId): number {
  * 扇形分割型の放射状レイアウトで、全ノードの位置を計算し直す。
  * ルートは原点、他のノードは扇形の中央の角度に「深さ × levelDistance」の距離で置く。
  * 扇形は左（-π）から時計回りに、葉の数に比例して子へ分配する。
+ * 折りたたまれたノードは1枚の葉として扱い、その子孫は同じ位置に置く。
  */
 export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
   const levelDistance = options.levelDistance ?? LEVEL_DISTANCE;
@@ -36,6 +37,17 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
         ? { x: 0, y: 0 }
         : { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
     nodes[id] = { ...node, position };
+
+    if (node.collapsed) {
+      // 折りたたまれた子孫は表示されないので、このノードと同じ位置に置く
+      const hide = (childIds: NodeId[]) =>
+        childIds.forEach((childId) => {
+          nodes[childId] = { ...map.nodes[childId], position };
+          hide(map.nodes[childId].childIds);
+        });
+      hide(node.childIds);
+      return;
+    }
 
     const total = countLeaves(map, id);
     let cursor = start;
