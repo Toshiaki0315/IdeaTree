@@ -4,6 +4,8 @@ import "./App.css";
 import { addChild } from "./domain/addChild";
 import { addSibling } from "./domain/addSibling";
 import { getBranchColor } from "./domain/branchColor";
+import { copyNode } from "./domain/copyNode";
+import type { Subtree } from "./domain/copyNode";
 import { deleteNode } from "./domain/deleteNode";
 import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
@@ -12,6 +14,7 @@ import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId } from "./domain/mindmap";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
+import { pasteNode } from "./domain/pasteNode";
 import {
   BACKGROUND,
   CENTRAL_RX,
@@ -73,6 +76,8 @@ export default function App() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [filePath, setFilePath] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<Message | null>(null);
+  /** コピーしたサブツリー。ファイルを開いても保持する */
+  const [clipboard, setClipboard] = useState<Subtree | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { map, selectedId } = history.present;
@@ -177,6 +182,19 @@ export default function App() {
           void open();
           return;
         }
+        if (key === "c") {
+          event.preventDefault();
+          setClipboard(copyNode(map, selectedId));
+          return;
+        }
+        if (key === "v") {
+          event.preventDefault();
+          if (clipboard !== null) {
+            const pasted = pasteNode(map, selectedId, clipboard);
+            commit({ map: pasted.map, selectedId: pasted.nodeId });
+          }
+          return;
+        }
         if (key === "z") {
           event.preventDefault();
           setHistory(event.shiftKey ? redo(history) : undo(history));
@@ -216,7 +234,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [history, editing, filePath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [history, editing, filePath, clipboard]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, editing: Editing) => {
     event.stopPropagation();
