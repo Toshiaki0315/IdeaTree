@@ -1,4 +1,5 @@
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
+import { isIcon } from "./nodeIcon";
 import { isImageDataUrl } from "./nodeImage";
 import { isColor, isNodeStyle } from "./nodeStyle";
 import { SAVE_FORMAT_VERSION } from "./serialize";
@@ -11,7 +12,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNode(key: string, value: unknown): value is MindMapNode {
   if (!isRecord(value)) return false;
-  const { id, kind, text, parentId, childIds, position, collapsed, style, branchColor, image } = value;
+  const { id, kind, text, parentId, childIds, position, collapsed, style, branchColor, image, icon } = value;
   return (
     id === key &&
     (kind === "central" || kind === "branch") &&
@@ -25,7 +26,8 @@ function isNode(key: string, value: unknown): value is MindMapNode {
     (collapsed === undefined || typeof collapsed === "boolean") &&
     (style === undefined || isNodeStyle(style)) &&
     (branchColor === undefined || isColor(branchColor)) &&
-    (image === undefined || isImageDataUrl(image))
+    (image === undefined || isImageDataUrl(image)) &&
+    (icon === undefined || isIcon(icon))
   );
 }
 
