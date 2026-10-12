@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -1829,6 +1829,310 @@ describe("App（マインドマップ編集UI）", () => {
 
       expect(weightOf("b")).toBe("normal");
       expect(fontStyleOf("b")).toBe("normal");
+    });
+  });
+
+  describe("Cmd+K: スタイルパネル（色・フォント・文字サイズ）", () => {
+    const CMD_K = "{Meta>}k{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const COLOR_NAMES = ["赤", "オレンジ", "黄", "緑", "青", "紫", "ピンク", "茶"];
+
+    const panel = () => screen.getByRole("dialog", { name: "スタイル" });
+    const radio = (name: string) => within(panel()).getByRole("radio", { name });
+    const fontSelect = () => within(panel()).getByRole("combobox", { name: "フォント" });
+    const sizeSelect = () => within(panel()).getByRole("combobox", { name: "文字サイズ" });
+    const fillOf = (text: string) => screen.getByText(text).getAttribute("fill");
+    const strokeOfBranch = (container: HTMLElement, text: string) => {
+      const id = screen.getByText(text).closest("g[data-node-id]")?.getAttribute("data-node-id");
+      return container.querySelector(`path[data-node-id="${id}"]`)?.getAttribute("stroke");
+    };
+
+    /** 中心 ─ a / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+    }
+
+    describe("開閉", () => {
+      it("Cmd+K で、選択ノード用のパネルが開き、フォーカスがパネルの中に移る", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+        await user.keyboard(CMD_K);
+
+        expect(panel()).toBeInTheDocument();
+        expect(within(panel()).getByText("選択中: b")).toBeInTheDocument();
+        expect(panel()).toContainElement(document.activeElement as HTMLElement);
+      });
+
+      it("もう一度 Cmd+K、Escape、閉じるボタンのいずれでも閉じる", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+
+        await user.keyboard(CMD_K);
+        await user.keyboard(CMD_K);
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+        await user.keyboard(CMD_K);
+        await user.keyboard("{Escape}");
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+        await user.keyboard(CMD_K);
+        await user.click(within(panel()).getByRole("button", { name: "閉じる" }));
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+
+      it("閉じた後は、通常のキーボード操作に戻る", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+        await user.keyboard("{Escape}");
+
+        await addChildNamed(user, "b1");
+
+        expect(nodes(container)).toHaveLength(4);
+        expect(selectedText(container)).toBe("b1");
+      });
+
+      it("ブラウザ標準の動作を止める。Ctrl+K・Cmd+Shift+K、テキスト編集中は開かない", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        expect(fireEvent.keyDown(window, { key: "k", metaKey: true })).toBe(false);
+        await user.keyboard("{Meta>}k{/Meta}");
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(); // 上の keyDown で開いたものを閉じた
+        await user.keyboard("{Control>}k{/Control}");
+        await user.keyboard("{Meta>}{Shift>}k{/Shift}{/Meta}");
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+        await user.keyboard("{F2}");
+        await user.keyboard(CMD_K);
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+    });
+
+    describe("色", () => {
+      it("「自動」と、8色のパレットが選べ、初期状態では「自動」が選ばれている", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await user.keyboard(CMD_K);
+
+        const group = within(panel()).getByRole("radiogroup", { name: "色" });
+        const names = within(group).getAllByRole("radio").map((r) => r.getAttribute("aria-label"));
+
+        expect(names).toEqual(["自動", ...COLOR_NAMES]);
+        expect(radio("自動")).toBeChecked();
+      });
+
+      it("色を選ぶと、すぐにノードのテキストと、親から伸びる枝に反映される", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+
+        await user.click(radio("青"));
+
+        expect(fillOf("b")).toBe(BRANCH_COLORS[4]);
+        expect(strokeOfBranch(container, "b")).toBe(BRANCH_COLORS[4]);
+        expect(radio("青")).toBeChecked();
+      });
+
+      it("色の選択は、選択しているノードだけに効き、他のノードは変わらない", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+
+        await user.click(radio("茶"));
+
+        expect(fillOf("b")).toBe(BRANCH_COLORS[7]);
+        expect(fillOf("a")).toBe(BRANCH_COLORS[0]);
+      });
+
+      it("「自動」を選ぶと、メインブランチの色に戻る", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+        await user.click(radio("紫"));
+        expect(fillOf("b")).toBe(BRANCH_COLORS[5]);
+
+        await user.click(radio("自動"));
+
+        expect(fillOf("b")).toBe(BRANCH_COLORS[1]);
+        expect(radio("自動")).toBeChecked();
+      });
+
+      it("中心ノードにも色を付けられる", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await user.keyboard(CMD_K);
+
+        await user.click(radio("青"));
+
+        expect(fillOf("中心テーマ")).toBe(BRANCH_COLORS[4]);
+      });
+    });
+
+    describe("フォントと文字サイズ", () => {
+      it("フォントを選ぶと、ノードのテキストに反映され、「自動」で既定に戻る", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        const defaultFamily = screen.getByText("b").getAttribute("font-family");
+        await user.keyboard(CMD_K);
+
+        await user.selectOptions(fontSelect(), "ヒラギノ明朝");
+        expect(screen.getByText("b").getAttribute("font-family")).toMatch(/^'Hiragino Mincho ProN', /);
+
+        await user.selectOptions(fontSelect(), "等幅");
+        expect(screen.getByText("b").getAttribute("font-family")).toMatch(/^'Menlo', /);
+
+        await user.selectOptions(fontSelect(), "自動");
+        expect(screen.getByText("b").getAttribute("font-family")).toBe(defaultFamily);
+      });
+
+      it("文字サイズを選ぶと、ノードのテキストに反映され、「自動」で既定に戻る", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        const defaultSize = screen.getByText("b").getAttribute("font-size");
+        await user.keyboard(CMD_K);
+
+        await user.selectOptions(sizeSelect(), "32");
+        expect(screen.getByText("b").getAttribute("font-size")).toBe("32");
+        expect(screen.getByText("a").getAttribute("font-size")).toBe(defaultSize);
+
+        await user.selectOptions(sizeSelect(), "自動");
+        expect(screen.getByText("b").getAttribute("font-size")).toBe(defaultSize);
+      });
+
+      it("選択肢には、現在のスタイルが反映されている（ファイルから読み込んだ、候補にない値も表示する）", async () => {
+        const base = loadedMap();
+        mockedLoadFile.mockResolvedValue({
+          map: setNodeStyle(base, base.rootId, { fontSize: 30, fontFamily: "Custom Font", color: "#123456" }),
+          path: "/Users/me/map.json",
+        });
+        const user = userEvent.setup();
+        render(<App />);
+        await user.keyboard("{Meta>}o{/Meta}");
+        await screen.findByRole("status");
+
+        await user.keyboard(CMD_K);
+
+        expect(sizeSelect()).toHaveValue("30");
+        expect(within(sizeSelect()).getByRole("option", { name: "30" })).toBeInTheDocument();
+        expect(fontSelect()).toHaveDisplayValue("Custom Font");
+        expect(within(panel()).getByRole("radio", { name: "#123456" })).toBeChecked();
+      });
+    });
+
+    describe("選択ノードとの連動", () => {
+      it("パネルは、現在選択しているノードの値を表示し、別のノードをクリックすると切り替わる", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+        await user.click(radio("緑"));
+
+        await user.click(screen.getByText("a"));
+
+        expect(within(panel()).getByText("選択中: a")).toBeInTheDocument();
+        expect(radio("自動")).toBeChecked();
+
+        await user.click(screen.getByText("b"));
+        expect(within(panel()).getByText("選択中: b")).toBeInTheDocument();
+        expect(radio("緑")).toBeChecked();
+      });
+    });
+
+    describe("履歴と保存", () => {
+      it("1回の変更が1手の履歴になり、閉じた後に Cmd+Z で戻せる", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+        await user.click(radio("赤"));
+        await user.click(radio("青"));
+        await user.keyboard("{Escape}");
+
+        await user.keyboard(CMD_Z);
+        expect(fillOf("b")).toBe(BRANCH_COLORS[0]);
+
+        await user.keyboard(CMD_Z);
+        expect(fillOf("b")).toBe(BRANCH_COLORS[1]);
+      });
+
+      it("同じ値を選び直しても、履歴は増えない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+        await user.click(radio("赤"));
+        await user.click(radio("赤"));
+        await user.selectOptions(sizeSelect(), "24");
+        await user.selectOptions(sizeSelect(), "24");
+        await user.keyboard("{Escape}");
+
+        await user.keyboard(CMD_Z); // サイズ
+        await user.keyboard(CMD_Z); // 色
+        await user.keyboard(CMD_Z); // b の追加
+
+        expect(nodes(container)).toHaveLength(2);
+      });
+
+      it("変更したスタイルは、保存されるファイルの内容に含まれる", async () => {
+        mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+        await user.click(radio("緑"));
+        await user.selectOptions(fontSelect(), "ヒラギノ角ゴ");
+        await user.selectOptions(sizeSelect(), "20");
+        await user.keyboard("{Escape}");
+
+        await user.keyboard("{Meta>}s{/Meta}");
+
+        const [map] = mockedSaveFile.mock.calls[0];
+        const saved = Object.values(map.nodes).find((n) => n.text === "b");
+        expect(saved?.style).toEqual({ color: BRANCH_COLORS[3], fontFamily: "Hiragino Sans", fontSize: 20 });
+      });
+    });
+
+    describe("キーボード操作", () => {
+      it("パネルの中のキー入力では、ノードの追加・削除・移動などの操作は起きない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+        within(panel()).getByRole("button", { name: "閉じる" }).focus();
+
+        await user.keyboard("{Delete}{Backspace}{ArrowLeft}{ArrowUp}");
+        await user.keyboard("{Meta>}c{/Meta}{Meta>}b{/Meta}");
+
+        expect(panel()).toBeInTheDocument();
+
+        expect(nodes(container)).toHaveLength(3);
+        expect(selectedText(container)).toBe("b");
+        expect(screen.getByText("b").getAttribute("font-weight")).toBe("normal");
+      });
+
+      it("Tab キーで、パネルの中のコントロール間を移動できる（ノードは追加されない）", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard(CMD_K);
+
+        await user.tab();
+        await user.tab();
+
+        expect(nodes(container)).toHaveLength(3);
+        expect(panel()).toContainElement(document.activeElement as HTMLElement);
+      });
     });
   });
 });
