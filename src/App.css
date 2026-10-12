@@ -121,3 +121,11 @@ body,
   font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
   font-size: 13px;
 }
+
+.mindmap {
+  user-select: none;
+}
+
+.mindmap g[data-drop-target="true"] {
+  filter: drop-shadow(0 0 8px #1a7fd1);
+}

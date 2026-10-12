@@ -99,4 +99,19 @@ describe("registerCloseGuard（ウィンドウを閉じるときの、未保存�
     expect(await win.requestClose()).toBe(true);
     expect(confirm).toHaveBeenCalledTimes(1);
   });
+
+  it("Tauri の外（ブラウザ）で getCurrentWindow が例外を投げても、例外ではなく、Promise の失敗として返す", async () => {
+    mockedGetCurrentWindow.mockImplementation(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'metadata')");
+    });
+
+    let promise: Promise<() => void> | undefined;
+    expect(() => {
+      promise = registerCloseGuard(
+        () => false,
+        async () => true,
+      );
+    }).not.toThrow();
+    await expect(promise).rejects.toThrow("metadata");
+  });
 });

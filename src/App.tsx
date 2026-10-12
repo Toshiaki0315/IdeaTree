@@ -15,7 +15,7 @@ import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
-import { moveNode } from "./domain/moveNode";
+import { canMoveTo, moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
@@ -65,6 +65,18 @@ function errorMessage(error: unknown): Message {
   return { kind: "alert", text: error instanceof Error ? error.message : String(error) };
 }
 
+/** この距離（px）より動かしたら、クリックではなく、ドラッグとみなす */
+const DRAG_THRESHOLD = 4;
+
+/** ドラッグの状態（ノードを押してから、離すまで） */
+interface Drag {
+  nodeId: NodeId;
+  startX: number;
+  startY: number;
+  /** しきい値を超えて、実際にドラッグが始まったか */
+  active: boolean;
+}
+
 const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
   ArrowRight: "firstChild",
   ArrowLeft: "parent",
@@ -95,14 +107,68 @@ export default function App() {
   const [filePath, setFilePath] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<Message | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
+  const dragRef = useRef<Drag | null>(null);
+  /** ドラッグ中に、離すとつなぎ替えられるノード（強調表示する） */
+  const [dropTarget, setDropTarget] = useState<NodeId | null>(null);
   /** コピーしたサブツリー。ファイルを開いても保持する */
   const [clipboard, setClipboard] = useState<Subtree | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { map, selectedId } = history.present;
+  const mapRef = useRef(map);
+  mapRef.current = map;
   const dirty = map !== savedMap;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+
+  // ノードのドラッグ移動: 押したノードを、別のノードの上で離すと、そのノードの子につなぎ替える
+  useEffect(() => {
+    /** マウスの下にあるノードのうち、ドラッグ中のノードを、子としてつなぎ替えられるもの */
+    const dropTargetAt = (target: EventTarget | null, nodeId: NodeId): NodeId | null => {
+      const id = (target as Element).closest("g[data-node-id]")?.getAttribute("data-node-id");
+      return id !== undefined && id !== null && canMoveTo(mapRef.current, nodeId, id) ? id : null;
+    };
+    const cancel = () => {
+      dragRef.current = null;
+      setDropTarget(null);
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+      const drag = dragRef.current;
+      if (drag === null) return;
+      if (!drag.active) {
+        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) <= DRAG_THRESHOLD) {
+          return;
+        }
+        drag.active = true;
+        setHistory((h) => ({ ...h, present: { ...h.present, selectedId: drag.nodeId } }));
+      }
+      setDropTarget(dropTargetAt(event.target, drag.nodeId));
+    };
+    const onMouseUp = (event: MouseEvent) => {
+      const drag = dragRef.current;
+      if (drag === null) return;
+      const target = drag.active ? dropTargetAt(event.target, drag.nodeId) : null;
+      cancel();
+      if (target !== null) {
+        setHistory((h) =>
+          record(h, { map: moveNode(h.present.map, drag.nodeId, target), selectedId: drag.nodeId }),
+        );
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") cancel();
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
 
   // ウィンドウを閉じるときに、未保存の変更を確認する（Tauri の外では登録に失敗するが、無視する）
   useEffect(() => {
@@ -429,6 +495,17 @@ export default function App() {
               key={node.id}
               data-node-id={node.id}
               data-selected={selected}
+              data-drop-target={dropTarget === node.id}
+              onMouseDown={(event) => {
+                // 左ボタンで、中心ノード以外を押したときだけ、ドラッグの候補にする（入力欄の操作は除く）
+                if (event.button !== 0 || isRoot || event.target instanceof HTMLInputElement) return;
+                dragRef.current = {
+                  nodeId: node.id,
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  active: false,
+                };
+              }}
               onClick={() => select(node.id)}
               onDoubleClick={() => startEdit(node.id)}
             >

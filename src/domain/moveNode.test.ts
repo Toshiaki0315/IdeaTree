@@ -4,7 +4,7 @@ import { addSibling } from "./addSibling";
 import { BRANCH_COLORS, getBranchColor } from "./branchColor";
 import { toggleCollapse } from "./collapse";
 import { createMindMap } from "./mindmap";
-import { moveNode } from "./moveNode";
+import { canMoveTo, moveNode } from "./moveNode";
 import { setNodeStyle } from "./nodeStyle";
 
 /** root ─ a(a1(a11), a2) / b / c の木 */
@@ -197,3 +197,42 @@ describe("moveNode（ノードの移動・並べ替え）", () => {
     expect(map).toEqual(before);
   });
 });
+
+describe("canMoveTo（ドラッグ移動で、そのノードの子にできるか）", () => {
+  it("別のブランチのノードの下へは、移動できる", () => {
+    const { map, ids } = buildMap();
+
+    expect(canMoveTo(map, ids.b, ids.a)).toBe(true);
+    expect(canMoveTo(map, ids.a1, ids.root)).toBe(true);
+    expect(canMoveTo(map, ids.a2, ids.b)).toBe(true);
+  });
+
+  it("中心ノードは移動できない", () => {
+    const { map, ids } = buildMap();
+
+    expect(canMoveTo(map, ids.root, ids.a)).toBe(false);
+  });
+
+  it("自分自身・自分の子孫の下へは、移動できない", () => {
+    const { map, ids } = buildMap();
+
+    expect(canMoveTo(map, ids.a, ids.a)).toBe(false);
+    expect(canMoveTo(map, ids.a, ids.a1)).toBe(false);
+    expect(canMoveTo(map, ids.a, ids.a11)).toBe(false);
+  });
+
+  it("今の親の下へは、移動しても変わらないので、移動できないものとして扱う", () => {
+    const { map, ids } = buildMap();
+
+    expect(canMoveTo(map, ids.a1, ids.a)).toBe(false);
+    expect(canMoveTo(map, ids.b, ids.root)).toBe(false);
+  });
+
+  it("存在しないノードを指定すると、移動できない", () => {
+    const { map, ids } = buildMap();
+
+    expect(canMoveTo(map, "missing", ids.a)).toBe(false);
+    expect(canMoveTo(map, ids.a, "missing")).toBe(false);
+  });
+});
+

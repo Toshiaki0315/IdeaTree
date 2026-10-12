@@ -10,6 +10,21 @@ function isSelfOrDescendant(map: MindMap, nodeId: NodeId, ancestorId: NodeId): b
 }
 
 /**
+ * ドラッグ移動で、指定したノードの子にできるか。
+ * 中心ノード、自分自身・子孫の下、今の親の下（変化がない）、存在しないノードは、できない。
+ */
+export function canMoveTo(map: MindMap, nodeId: NodeId, targetId: NodeId): boolean {
+  const node = map.nodes[nodeId];
+  return (
+    node !== undefined &&
+    node.parentId !== null &&
+    map.nodes[targetId] !== undefined &&
+    node.parentId !== targetId &&
+    !isSelfOrDescendant(map, targetId, nodeId)
+  );
+}
+
+/**
  * ノードを（子孫ごと）別の親へ移動する。同じ親を指定すると、並べ替えになる（元のマップは変更しない）。
  * index は、移動後の、新しい親の子の中での位置。省略すると末尾。範囲外は先頭か末尾に収める。
  * 位置が変わらないときは、同じマップを返す。移動先が折りたたまれていれば、展開する。
