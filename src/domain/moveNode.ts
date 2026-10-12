@@ -75,3 +75,16 @@ export function moveNode(map: MindMap, nodeId: NodeId, newParentId: NodeId, inde
   nodes[target.id] = updatedTarget;
   return { ...map, nodes };
 }
+
+export function canReorderTo(_map: MindMap, _nodeId: NodeId, _targetId: NodeId): boolean {
+  return false;
+}
+
+export function dropNode(
+  _map: MindMap,
+  _nodeId: NodeId,
+  _targetId: NodeId,
+  _mode: "child" | "reorder",
+): MindMap {
+  throw new Error("未実装");
+}

@@ -4,7 +4,7 @@ import { addSibling } from "./addSibling";
 import { BRANCH_COLORS, getBranchColor } from "./branchColor";
 import { toggleCollapse } from "./collapse";
 import { createMindMap } from "./mindmap";
-import { canMoveTo, moveNode } from "./moveNode";
+import { canMoveTo, canReorderTo, dropNode, moveNode } from "./moveNode";
 import { setNodeStyle } from "./nodeStyle";
 
 /** root ─ a(a1(a11), a2) / b / c の木 */
@@ -233,6 +233,73 @@ describe("canMoveTo（ドラッグ移動で、そのノードの子にできる�
 
     expect(canMoveTo(map, "missing", ids.a)).toBe(false);
     expect(canMoveTo(map, ids.a, "missing")).toBe(false);
+  });
+});
+
+describe("canReorderTo（ドラッグで、兄弟の位置に入れ替えられるか）", () => {
+  it("同じ親を持つ、別の兄弟のノードの上へは、入れ替えられる", () => {
+    const { map, ids } = buildMap();
+
+    expect(canReorderTo(map, ids.a, ids.b)).toBe(true);
+    expect(canReorderTo(map, ids.c, ids.a)).toBe(true);
+    expect(canReorderTo(map, ids.a2, ids.a1)).toBe(true);
+  });
+
+  it("自分自身・兄弟でないノード・中心ノード・存在しないノードは、入れ替えられない", () => {
+    const { map, ids } = buildMap();
+
+    expect(canReorderTo(map, ids.a, ids.a)).toBe(false);
+    expect(canReorderTo(map, ids.a, ids.a1)).toBe(false);
+    expect(canReorderTo(map, ids.a1, ids.b)).toBe(false);
+    expect(canReorderTo(map, ids.root, ids.a)).toBe(false);
+    expect(canReorderTo(map, ids.a, ids.root)).toBe(false);
+    expect(canReorderTo(map, "missing", ids.a)).toBe(false);
+    expect(canReorderTo(map, ids.a, "missing")).toBe(false);
+  });
+});
+
+describe("dropNode（ドラッグで離したときの移動）", () => {
+  it("child: ドロップ先の子の末尾につなぎ替える（moveNode と同じ）", () => {
+    const { map, ids } = buildMap();
+
+    expect(dropNode(map, ids.b, ids.a, "child")).toEqual(moveNode(map, ids.b, ids.a));
+  });
+
+  it("reorder: 兄弟の上で離すと、そのノードがあった位置に入る（後ろから前へ）", () => {
+    const { map, ids } = buildMap();
+
+    const next = dropNode(map, ids.c, ids.a, "reorder");
+
+    expect(next.nodes[ids.root].childIds).toEqual([ids.c, ids.a, ids.b]);
+  });
+
+  it("reorder: 前から後ろへも、そのノードがあった位置に入る", () => {
+    const { map, ids } = buildMap();
+
+    const next = dropNode(map, ids.a, ids.c, "reorder");
+
+    expect(next.nodes[ids.root].childIds).toEqual([ids.b, ids.c, ids.a]);
+  });
+
+  it("reorder: 隣の兄弟の上で離すと、その2つが入れ替わる", () => {
+    const { map, ids } = buildMap();
+
+    const next = dropNode(map, ids.a, ids.b, "reorder");
+
+    expect(next.nodes[ids.root].childIds).toEqual([ids.b, ids.a, ids.c]);
+  });
+
+  it("reorder: メインブランチの色は変わらず、サブブランチの兄弟でも入れ替えられる", () => {
+    const { map, ids } = buildMap();
+
+    expect(getBranchColor(dropNode(map, ids.c, ids.a, "reorder"), ids.c)).toBe(BRANCH_COLORS[2]);
+    expect(dropNode(map, ids.a2, ids.a1, "reorder").nodes[ids.a].childIds).toEqual([ids.a2, ids.a1]);
+  });
+
+  it("reorder できない相手（兄弟でない）を指定すると、エラーになる", () => {
+    const { map, ids } = buildMap();
+
+    expect(() => dropNode(map, ids.a, ids.a1, "reorder")).toThrow("兄弟のノードの上でのみ、入れ替えられます");
   });
 });
 
