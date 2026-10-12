@@ -12,6 +12,8 @@ export interface MindMapNode {
   parentId: NodeId | null;
   childIds: NodeId[];
   position: Position;
+  /** 子孫を非表示にしているか（省略時は展開状態） */
+  collapsed?: boolean;
 }
 
 export interface MindMap {
