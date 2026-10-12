@@ -37,6 +37,7 @@ https://github.com/Toshiaki0315/IdeaTree.git
 | `Cmd + Shift + S` | 名前を付けて保存 |
 | `Cmd + O` | ファイルを開く |
 | `Cmd + Shift + E` | SVG として書き出し |
+| `Cmd + =` / `Cmd + -` / `Cmd + 0` | 拡大 / 縮小 / 元に戻す（ホイールや、何もない場所のドラッグでパン） |
 | `Cmd + =` / `Cmd + -` / `Cmd + 0` | 拡大 / 縮小 / 元に戻す（ホイール・ドラッグでパン） |
 
 詳しい仕様は [docs/spec.md](docs/spec.md) を参照してください。
