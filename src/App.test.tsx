@@ -3390,4 +3390,143 @@ describe("App（マインドマップ編集UI）", () => {
       expect(Number(hitArea("企画…")!.getAttribute("width"))).toBeGreaterThan(before);
     });
   });
+
+  describe("スタイルパネル: 色の自由入力", () => {
+    const CMD_K = "{Meta>}k{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const panel = () => screen.getByRole("dialog", { name: "スタイル" });
+    const codeField = () => within(panel()).getByRole("textbox", { name: "色コード" });
+    const picker = () => within(panel()).getByLabelText("色を選ぶ") as HTMLInputElement;
+    const fillOf = (text: string) => screen.getByText(text).getAttribute("fill");
+
+    /** 中心 ─ a / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+    }
+
+    it("色コード（#RRGGBB）を入力して Enter で、選択ノードの色を、任意の色にできる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      expect(codeField()).toHaveValue("");
+
+      await user.type(codeField(), "#12abEF{Enter}");
+
+      expect(fillOf("b")).toBe("#12ABEF");
+      expect(codeField()).toHaveValue("#12ABEF");
+      expect(within(panel()).getByRole("radio", { name: "#12ABEF" })).toBeChecked();
+      expect(panel()).toBeInTheDocument(); // Enter でパネルは閉じない
+    });
+
+    it("パレットと同じ色を（小文字などで）入力すると、そのパレットの色が選ばれる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+
+      await user.type(codeField(), "#e63946{Enter}");
+
+      expect(within(panel()).getByRole("radio", { name: "赤" })).toBeChecked();
+    });
+
+    it("形式が正しくない色コードは、エラーを表示して、色を変えない。正しく入力し直すと、エラーが消える", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      const before = fillOf("b");
+
+      await user.type(codeField(), "red{Enter}");
+
+      expect(codeField()).toHaveAttribute("aria-invalid", "true");
+      expect(within(panel()).getByText("色は #RRGGBB の形式で指定してください")).toBeInTheDocument();
+      expect(fillOf("b")).toBe(before);
+
+      await user.clear(codeField());
+      await user.type(codeField(), "#00FF00{Enter}");
+      expect(codeField()).not.toHaveAttribute("aria-invalid", "true");
+      expect(within(panel()).queryByText("色は #RRGGBB の形式で指定してください")).not.toBeInTheDocument();
+      expect(fillOf("b")).toBe("#00FF00");
+    });
+
+    it("空にして Enter を押すと、「自動」（メインブランチの色）に戻る", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      await user.type(codeField(), "#00FF00{Enter}");
+
+      await user.clear(codeField());
+      await user.keyboard("{Enter}");
+
+      expect(fillOf("b")).toBe(BRANCH_COLORS[1]);
+      expect(within(panel()).getByRole("radio", { name: "自動" })).toBeChecked();
+    });
+
+    it("色の選択ボタン（カラーピッカー）で選んだ色も、反映される", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+
+      fireEvent.change(picker(), { target: { value: "#00ff00" } });
+
+      expect(fillOf("b")).toBe("#00FF00");
+      expect(codeField()).toHaveValue("#00FF00");
+    });
+
+    it("色の選択ボタンは、現在の色（スタイルがなければ、ブランチの色）を表示する", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+
+      expect(picker().value.toUpperCase()).toBe(BRANCH_COLORS[1]);
+
+      await user.type(codeField(), "#123456{Enter}");
+      expect(picker().value.toUpperCase()).toBe("#123456");
+    });
+
+    it("色の変更は1手の履歴で、同じ色を入力し直しても、増えない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      await user.type(codeField(), "#00FF00{Enter}");
+      await user.type(codeField(), "{Enter}");
+      await user.keyboard("{Escape}");
+
+      await user.keyboard(CMD_Z);
+
+      expect(fillOf("b")).toBe(BRANCH_COLORS[1]);
+    });
+
+    it("入力欄は、選択しているノードの色を表示し、別のノードを選ぶと切り替わる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      await user.type(codeField(), "#00FF00{Enter}");
+
+      await user.click(screen.getByText("a"));
+      expect(codeField()).toHaveValue("");
+
+      await user.click(screen.getByText("b"));
+      expect(codeField()).toHaveValue("#00FF00");
+    });
+
+    it("入力欄の中のキー（文字の入力・Backspace など）は、ノードの操作として扱われない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+
+      await user.type(codeField(), "#abc{Backspace}{Backspace} ");
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(selectedText(container)).toBe("b");
+    });
+  });
 });
