@@ -897,4 +897,149 @@ describe("App（マインドマップ編集UI）", () => {
       expect(nodes(container)).toHaveLength(2);
     });
   });
+
+  describe("Cmd+Shift+Z: やり直し（Redo）", () => {
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const CMD_SHIFT_Z = "{Meta>}{Shift>}z{/Shift}{/Meta}";
+
+    it("Undo したノードの追加を、やり直す（そのノードが選択される）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "企画");
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(1);
+
+      await user.keyboard(CMD_SHIFT_Z);
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.getByText("企画")).toBeInTheDocument();
+      expect(selectedText(container)).toBe("企画");
+    });
+
+    it("複数回 Undo した後、1つずつ順番にやり直せる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+      await user.keyboard(`${CMD_Z}${CMD_Z}`);
+      expect(nodes(container)).toHaveLength(1);
+
+      await user.keyboard(CMD_SHIFT_Z);
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.queryByText("b")).not.toBeInTheDocument();
+
+      await user.keyboard(CMD_SHIFT_Z);
+      expect(nodes(container)).toHaveLength(3);
+      expect(selectedText(container)).toBe("b");
+    });
+
+    it("テキスト編集の確定をやり直す", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{F2}");
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("新テーマ{Enter}");
+      await user.keyboard(CMD_Z);
+      expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+
+      await user.keyboard(CMD_SHIFT_Z);
+
+      expect(screen.getByText("新テーマ")).toBeInTheDocument();
+      expect(screen.queryByText("中心テーマ")).not.toBeInTheDocument();
+    });
+
+    it("ノードの削除をやり直す（再び削除され、親が選択される）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{Delete}");
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(2);
+
+      await user.keyboard(CMD_SHIFT_Z);
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(selectedText(container)).toBe("中心テーマ");
+    });
+
+    it("Undo や新しい操作をしていないときは、何も起きない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+
+      await user.keyboard(CMD_SHIFT_Z);
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(selectedText(container)).toBe("a");
+    });
+
+    it("Undo の後に新しい操作をすると、やり直しの履歴は破棄される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_Z);
+      await addChildNamed(user, "b");
+
+      await user.keyboard(CMD_SHIFT_Z);
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.getByText("b")).toBeInTheDocument();
+      expect(screen.queryByText("a")).not.toBeInTheDocument();
+    });
+
+    it("Undo の後にノードを移動（矢印キー）しても、やり直しの履歴は残る", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+      await user.keyboard(CMD_Z);
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("中心テーマ");
+
+      await user.keyboard(CMD_SHIFT_Z);
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(selectedText(container)).toBe("b");
+    });
+
+    it("ブラウザ標準の動作を止める", async () => {
+      render(<App />);
+
+      const notPrevented = fireEvent.keyDown(window, { key: "Z", metaKey: true, shiftKey: true });
+
+      expect(notPrevented).toBe(false);
+    });
+
+    it("ファイルを開くと、やり直しの履歴は破棄される", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "古い子");
+      await user.keyboard(CMD_Z);
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByRole("status");
+
+      await user.keyboard(CMD_SHIFT_Z);
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.queryByText("古い子")).not.toBeInTheDocument();
+    });
+
+    it("テキスト編集中や、Ctrl+Shift+Z ではやり直さない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_Z);
+
+      await user.keyboard("{Control>}{Shift>}z{/Shift}{/Control}");
+      expect(nodes(container)).toHaveLength(1);
+
+      await user.keyboard("{Tab}");
+      await user.keyboard(CMD_SHIFT_Z);
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+      expect(screen.queryByText("a")).not.toBeInTheDocument();
+    });
+  });
 });
