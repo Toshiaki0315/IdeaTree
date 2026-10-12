@@ -3661,4 +3661,204 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.queryByText("c")).not.toBeInTheDocument(); // c の追加が、1手で戻る
     });
   });
+
+  describe("ズーム・パン", () => {
+    const svgEl = (container: HTMLElement) => container.querySelector("svg.mindmap") as SVGSVGElement;
+    /** 表示範囲（viewBox）を [x, y, width, height] で返す */
+    const viewBox = (container: HTMLElement) =>
+      svgEl(container).getAttribute("viewBox")!.split(" ").map(Number);
+    /** 画面上の幅を 900px に固定する（jsdom には、レイアウトがないため） */
+    const fixScreenWidth = (container: HTMLElement) => {
+      svgEl(container).getBoundingClientRect = () =>
+        ({ width: 900, height: 900, left: 0, top: 0, right: 900, bottom: 900, x: 0, y: 0 }) as DOMRect;
+    };
+    const zoomState = () => document.querySelector(".zoom-state")?.textContent;
+
+    it("起動直後は、拡大率 100% で、原点が中心。拡大率の表示は出ない", () => {
+      const { container } = render(<App />);
+
+      expect(viewBox(container)).toEqual([-450, -450, 900, 900]);
+      expect(zoomState()).toBeUndefined();
+    });
+
+    it("Cmd+= / Cmd++ で拡大し、Cmd+- で縮小し、Cmd+0 で、拡大率と位置を元に戻す", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard("{Meta>}={/Meta}");
+      expect(viewBox(container)[2]).toBeCloseTo(720); // 900 ÷ 1.25
+      expect(zoomState()).toBe("125%");
+
+      await user.keyboard("{Meta>}{Shift>}+{/Shift}{/Meta}");
+      expect(viewBox(container)[2]).toBeCloseTo(576);
+
+      await user.keyboard("{Meta>}-{/Meta}{Meta>}-{/Meta}{Meta>}-{/Meta}");
+      expect(viewBox(container)[2]).toBeCloseTo(1125);
+      expect(zoomState()).toBe("80%");
+
+      await user.keyboard("{Meta>}0{/Meta}");
+      expect(viewBox(container)).toEqual([-450, -450, 900, 900]);
+      expect(zoomState()).toBeUndefined();
+    });
+
+    it("拡大率には、上限（400%）と下限（25%）がある", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      for (let i = 0; i < 12; i++) await user.keyboard("{Meta>}={/Meta}");
+      expect(viewBox(container)[2]).toBeCloseTo(225);
+      expect(zoomState()).toBe("400%");
+
+      await user.keyboard("{Meta>}0{/Meta}");
+      for (let i = 0; i < 12; i++) await user.keyboard("{Meta>}-{/Meta}");
+      expect(viewBox(container)[2]).toBeCloseTo(3600);
+      expect(zoomState()).toBe("25%");
+    });
+
+    it("ブラウザ標準の動作を止める。Ctrl との組み合わせや、テキスト編集中は、拡大・縮小しない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      expect(fireEvent.keyDown(window, { key: "=", metaKey: true })).toBe(false);
+      expect(fireEvent.keyDown(window, { key: "-", metaKey: true })).toBe(false);
+      expect(fireEvent.keyDown(window, { key: "0", metaKey: true })).toBe(false);
+      await user.keyboard("{Meta>}0{/Meta}");
+
+      await user.keyboard("{Control>}={/Control}");
+      await user.keyboard("{F2}");
+      await user.keyboard("{Meta>}={/Meta}");
+
+      expect(viewBox(container)).toEqual([-450, -450, 900, 900]);
+    });
+
+    describe("マウスホイール・トラックパッド", () => {
+      it("Ctrl（ピンチ）や Cmd を押しながら回すと、拡大・縮小する", () => {
+        const { container } = render(<App />);
+        const svg = svgEl(container);
+
+        expect(fireEvent.wheel(svg, { deltaY: -100, ctrlKey: true })).toBe(false);
+        expect(viewBox(container)[2]).toBeCloseTo(720);
+
+        fireEvent.wheel(svg, { deltaY: 100, metaKey: true });
+        fireEvent.wheel(svg, { deltaY: 100, ctrlKey: true });
+        expect(viewBox(container)[2]).toBeCloseTo(1125);
+      });
+
+      it("そのまま回す（2本指のスクロール）と、表示位置が動く（パン）", () => {
+        const { container } = render(<App />);
+        fixScreenWidth(container);
+
+        const notPrevented = fireEvent.wheel(svgEl(container), { deltaX: 30, deltaY: 100 });
+
+        expect(notPrevented).toBe(false);
+        expect(viewBox(container).slice(0, 2)).toEqual([-420, -350]);
+        expect(viewBox(container)[2]).toBe(900); // 拡大率は変わらない
+      });
+
+      it("拡大しているときは、画面上の移動量が、マップの座標では小さくなる", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await user.keyboard("{Meta>}={/Meta}");
+        fixScreenWidth(container); // 画面 900px に、マップの 720 が映っている
+
+        fireEvent.wheel(svgEl(container), { deltaX: 0, deltaY: 100 });
+
+        expect(viewBox(container)[1]).toBeCloseTo(-360 + 80); // 100px × (720÷900)
+      });
+    });
+
+    describe("何もない場所のドラッグ", () => {
+      it("何もない場所をドラッグすると、その分だけ、表示位置が動く（パン）", () => {
+        const { container } = render(<App />);
+        fixScreenWidth(container);
+        const svg = svgEl(container);
+
+        fireEvent.mouseDown(svg, { button: 0, clientX: 100, clientY: 100 });
+        fireEvent.mouseMove(window, { clientX: 150, clientY: 130 });
+        fireEvent.mouseUp(window);
+
+        // 内容を右下に引くと、見ている範囲は、左上へ動く
+        expect(viewBox(container).slice(0, 2)).toEqual([-500, -480]);
+      });
+
+      it("ボタンを離したあとは、マウスを動かしても、動かない", () => {
+        const { container } = render(<App />);
+        fixScreenWidth(container);
+        fireEvent.mouseDown(svgEl(container), { button: 0, clientX: 100, clientY: 100 });
+        fireEvent.mouseMove(window, { clientX: 150, clientY: 130 });
+        fireEvent.mouseUp(window);
+
+        fireEvent.mouseMove(window, { clientX: 300, clientY: 300 });
+
+        expect(viewBox(container).slice(0, 2)).toEqual([-500, -480]);
+      });
+
+      it("ノードの上や、左ボタン以外では、パンにならない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await addChildNamed(user, "a");
+        fixScreenWidth(container);
+
+        fireEvent.mouseDown(svgEl(container), { button: 2, clientX: 100, clientY: 100 });
+        fireEvent.mouseMove(window, { clientX: 150, clientY: 130 });
+        fireEvent.mouseUp(window);
+        fireEvent.mouseDown(screen.getByText("a"), { button: 0, clientX: 100, clientY: 100 });
+        fireEvent.mouseMove(window, { clientX: 150, clientY: 130 });
+        fireEvent.mouseUp(window);
+
+        expect(viewBox(container).slice(0, 2)).toEqual([-450, -450]);
+      });
+
+      it("動かさずに離す（クリック）だけでは、何も変わらない", () => {
+        const { container } = render(<App />);
+        fixScreenWidth(container);
+
+        fireEvent.mouseDown(svgEl(container), { button: 0, clientX: 100, clientY: 100 });
+        fireEvent.mouseUp(window);
+
+        expect(viewBox(container)).toEqual([-450, -450, 900, 900]);
+      });
+    });
+
+    describe("選択の追従", () => {
+      it("拡大していて、選んだノードが見える範囲の外に出たら、そのノードが中心になるよう動く", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        for (let i = 0; i < 6; i++) await user.keyboard("{Meta>}={/Meta}");
+        expect(viewBox(container)[2]).toBeCloseTo(900 / 1.25 ** 6);
+        const before = viewBox(container);
+
+        await addChildNamed(user, "a"); // 最初のメインブランチは、右へ 180px の位置
+
+        const after = viewBox(container);
+        expect(after[0] + after[2] / 2).toBeCloseTo(180);
+        expect(after[1] + after[3] / 2).toBeCloseTo(0);
+        expect(after[2]).toBeCloseTo(before[2]); // 拡大率は変わらない
+      });
+
+      it("見える範囲の中のノードを選んだときは、動かない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await addChildNamed(user, "a");
+        const before = viewBox(container);
+
+        await user.keyboard("{ArrowLeft}");
+
+        expect(viewBox(container)).toEqual(before);
+      });
+    });
+
+    it("ファイルを開くと、拡大率と表示位置は、元に戻る", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard("{Meta>}={/Meta}");
+      expect(zoomState()).toBe("125%");
+
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByText(/開きました/);
+
+      expect(zoomState()).toBeUndefined();
+      expect(viewBox(container)).toEqual([-450, -450, 900, 900]);
+    });
+  });
 });
