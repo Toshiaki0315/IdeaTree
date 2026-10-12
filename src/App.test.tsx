@@ -6,16 +6,19 @@ import { BRANCH_COLORS } from "./domain/branchColor";
 import { addChild } from "./domain/addChild";
 import { createMindMap } from "./domain/mindmap";
 import { setNodeStyle } from "./domain/nodeStyle";
+import { confirmDiscard } from "./files/confirmDiscard";
 import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
 
 vi.mock("./files/saveFile", () => ({ saveFile: vi.fn() }));
 vi.mock("./files/loadFile", () => ({ loadFile: vi.fn() }));
+vi.mock("./files/confirmDiscard", () => ({ confirmDiscard: vi.fn() }));
 vi.mock("./files/svgExportFile", () => ({ svgExportFile: vi.fn() }));
 
 const mockedSaveFile = vi.mocked(saveFile);
 const mockedLoadFile = vi.mocked(loadFile);
+const mockedConfirmDiscard = vi.mocked(confirmDiscard);
 const mockedSvgExportFile = vi.mocked(svgExportFile);
 
 /** 読み込み用のマップ（中心「読込」の下に「子A」「子B」） */
@@ -27,6 +30,7 @@ function loadedMap() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mockedConfirmDiscard.mockResolvedValue(true); // 既定では、破棄してよいと答える
 });
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -2164,6 +2168,188 @@ describe("App（マインドマップ編集UI）", () => {
       await user.keyboard("d{Enter}");
 
       expect(screen.getByText("d").getAttribute("fill")).toBe(BRANCH_COLORS[0]);
+    });
+  });
+
+  describe("未保存の変更の確認", () => {
+    const CMD_O = "{Meta>}o{/Meta}";
+    const CMD_S = "{Meta>}s{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const docState = () => document.querySelector(".doc-state")?.textContent ?? "";
+
+    it("変更がないときは、ファイルを開く前に確認しない", async () => {
+      mockedLoadFile.mockResolvedValue(null);
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_O);
+      await waitFor(() => expect(mockedLoadFile).toHaveBeenCalledTimes(1));
+
+      expect(mockedConfirmDiscard).not.toHaveBeenCalled();
+    });
+
+    it("変更があるときは、ファイルを開く前に確認する。破棄を選ぶと開く", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "古い子");
+
+      await user.keyboard(CMD_O);
+
+      expect(await screen.findByText("子A")).toBeInTheDocument();
+      expect(mockedConfirmDiscard).toHaveBeenCalledTimes(1);
+      expect(nodes(container)).toHaveLength(3);
+    });
+
+    it("確認でキャンセルすると、ファイルを開かず、編集中のマップも変えない", async () => {
+      mockedConfirmDiscard.mockResolvedValue(false);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "古い子");
+
+      await user.keyboard(CMD_O);
+      await waitFor(() => expect(mockedConfirmDiscard).toHaveBeenCalledTimes(1));
+
+      expect(mockedLoadFile).not.toHaveBeenCalled();
+      expect(screen.getByText("古い子")).toBeInTheDocument();
+      expect(nodes(container)).toHaveLength(2);
+    });
+
+    it("確認のダイアログで失敗したときは、エラーを表示して、ファイルを開かない", async () => {
+      mockedConfirmDiscard.mockRejectedValue(new Error("ダイアログを開けません"));
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "古い子");
+
+      await user.keyboard(CMD_O);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("ダイアログを開けません");
+      expect(mockedLoadFile).not.toHaveBeenCalled();
+    });
+
+    it("保存に成功すると、変更なしの状態に戻り、確認されない", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      mockedLoadFile.mockResolvedValue(null);
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_S);
+      await screen.findByRole("status");
+
+      await user.keyboard(CMD_O);
+      await waitFor(() => expect(mockedLoadFile).toHaveBeenCalledTimes(1));
+
+      expect(mockedConfirmDiscard).not.toHaveBeenCalled();
+    });
+
+    it("保存後に、さらに変更すると、再び確認される", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      mockedLoadFile.mockResolvedValue(null);
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_S);
+      await screen.findByRole("status");
+      await addSiblingNamed(user, "b");
+
+      await user.keyboard(CMD_O);
+      await waitFor(() => expect(mockedConfirmDiscard).toHaveBeenCalledTimes(1));
+    });
+
+    it("保存したときの状態まで元に戻すと、変更なしと見なされる（保存前の状態まで戻すと、変更ありになる）", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      mockedLoadFile.mockResolvedValue(null);
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_S);
+      await screen.findByRole("status");
+      await addSiblingNamed(user, "b");
+      await user.keyboard(CMD_Z);
+
+      expect(docState()).not.toContain("未保存");
+
+      await user.keyboard(CMD_Z);
+      expect(docState()).toContain("未保存");
+    });
+
+    it("保存に失敗したときや、保存ダイアログをキャンセルしたときは、変更ありのまま", async () => {
+      mockedSaveFile.mockRejectedValueOnce(new Error("保存に失敗しました: x")).mockResolvedValueOnce(null);
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+
+      await user.keyboard(CMD_S);
+      await screen.findByRole("alert");
+      expect(docState()).toContain("未保存");
+
+      await user.keyboard(CMD_S);
+      await waitFor(() => expect(mockedSaveFile).toHaveBeenCalledTimes(2));
+      expect(docState()).toContain("未保存");
+    });
+
+    it("名前を付けて保存（Cmd+Shift+S）でも、変更なしの状態になる", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/copy.json");
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+
+      await user.keyboard("{Meta>}{Shift>}s{/Shift}{/Meta}");
+      await screen.findByRole("status");
+
+      expect(docState()).not.toContain("未保存");
+    });
+
+    it("ファイルを開いた直後は変更なしで、SVGの書き出しは変更に影響しない", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      mockedSvgExportFile.mockResolvedValue("/Users/me/map.svg");
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "古い子");
+      await user.keyboard(CMD_O);
+      await screen.findByRole("status");
+      expect(docState()).not.toContain("未保存");
+
+      await user.keyboard("{Meta>}{Shift>}e{/Shift}{/Meta}");
+      await screen.findByText(/書き出しました/);
+
+      expect(docState()).not.toContain("未保存");
+    });
+
+    it("選択の移動やコピーは、変更として扱わない。ノードの編集・折りたたみ・スタイル変更は、変更として扱う", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await user.keyboard(CMD_S);
+      await screen.findByRole("status");
+
+      await user.keyboard("{ArrowLeft}{ArrowLeft}{ArrowRight}");
+      await user.keyboard("{Meta>}c{/Meta}");
+      expect(docState()).not.toContain("未保存");
+
+      await user.keyboard(" "); // 折りたたみ
+      expect(docState()).toContain("未保存");
+      await user.keyboard(CMD_Z);
+      expect(docState()).not.toContain("未保存");
+
+      await user.keyboard("{Meta>}b{/Meta}"); // 太字
+      expect(docState()).toContain("未保存");
+    });
+
+    it("ファイル名と、変更の有無を表示する（保存前は「無題」）", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/Documents/ideas.json");
+      const user = userEvent.setup();
+      render(<App />);
+      expect(docState()).toBe("無題");
+
+      await addChildNamed(user, "a");
+      expect(docState()).toBe("無題 ● 未保存");
+
+      await user.keyboard(CMD_S);
+      await screen.findByRole("status");
+      expect(docState()).toBe("ideas.json");
     });
   });
 });
