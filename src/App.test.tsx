@@ -1206,4 +1206,140 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
   });
+
+  describe("Cmd+X: カット", () => {
+    const CMD_X = "{Meta>}x{/Meta}";
+    const CMD_V = "{Meta>}v{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+
+    /** 中心 ─ a(a1) / b を作り、a を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await user.keyboard("{ArrowLeft}");
+      await addSiblingNamed(user, "b");
+      await user.keyboard("{ArrowUp}");
+    }
+
+    it("選択ノードをサブツリーごと削除し、親を選択する", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user); // 選択: a
+
+      await user.keyboard(CMD_X);
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.queryByText("a")).not.toBeInTheDocument();
+      expect(screen.queryByText("a1")).not.toBeInTheDocument();
+      expect(selectedText(container)).toBe("中心テーマ");
+    });
+
+    it("カットした内容を、別のノードの子として貼り付けられる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.keyboard(CMD_X);
+      await user.keyboard("{ArrowRight}"); // 残った子 b を選択
+      expect(selectedText(container)).toBe("b");
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(4);
+      expect(screen.getByText("a")).toBeInTheDocument();
+      expect(screen.getByText("a1")).toBeInTheDocument();
+      expect(selectedText(container)).toBe("a");
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("b");
+    });
+
+    it("カットは1手の履歴になり、元に戻すとサブツリーごと復活する", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_X);
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(4);
+      expect(screen.getByText("a1")).toBeInTheDocument();
+      expect(selectedText(container)).toBe("a");
+    });
+
+    it("カットした後に何度でも貼り付けられる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_X);
+
+      await user.keyboard(CMD_V);
+      await user.keyboard("{ArrowLeft}");
+      await user.keyboard(CMD_V);
+
+      expect(nodes(container)).toHaveLength(6);
+      expect(screen.getAllByText("a")).toHaveLength(2);
+    });
+
+    it("前にコピーした内容は、カットした内容で置き換わる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user); // 選択: a
+      await user.keyboard("{ArrowDown}"); // b
+      await user.keyboard("{Meta>}c{/Meta}"); // b をコピー
+      await user.keyboard("{ArrowUp}"); // a
+      await user.keyboard(CMD_X); // a をカット
+
+      await user.keyboard(CMD_V);
+
+      expect(screen.getAllByText("b")).toHaveLength(1);
+      expect(screen.getByText("a")).toBeInTheDocument();
+    });
+
+    it("中心ノードはカットできない（何も起きず、コピーの内容も変わらない）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{Meta>}c{/Meta}"); // a をコピー
+      await user.keyboard("{ArrowLeft}"); // 中心ノード
+
+      await user.keyboard(CMD_X);
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(selectedText(container)).toBe("中心テーマ");
+      await user.keyboard(CMD_V); // 貼り付けるのは、前にコピーした a
+      expect(screen.getAllByText("a")).toHaveLength(2);
+    });
+
+    it("中心ノードでカットを試みても、履歴には残らない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{ArrowLeft}");
+      await user.keyboard(CMD_X);
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(1);
+    });
+
+    it("ブラウザ標準の動作を止める", async () => {
+      render(<App />);
+
+      expect(fireEvent.keyDown(window, { key: "x", metaKey: true })).toBe(false);
+    });
+
+    it("テキスト編集中や、Ctrl+X では、カットしない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{Control>}x{/Control}");
+      expect(nodes(container)).toHaveLength(2);
+
+      await user.keyboard("{Tab}");
+      await user.keyboard(CMD_X);
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+      expect(screen.getByText("a")).toBeInTheDocument();
+    });
+  });
 });
