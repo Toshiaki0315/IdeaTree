@@ -1,5 +1,67 @@
 //! 画像ファイルを読み込み、ノードに設定できる、base64 のデータURLにする。
 
+use base64::Engine;
+use std::fs;
+use std::io::ErrorKind;
+use std::path::Path;
+
+/// 読み込める画像の大きさの上限（フロントエンドの `MAX_IMAGE_BYTES` と同じ値）
+pub const MAX_IMAGE_BYTES: u64 = 2 * 1024 * 1024;
+
+/// ファイルの先頭のバイト列（マジックナンバー）から、画像の種類を判定する。拡張子は見ない
+fn detect_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
+}
+
+/// 画像ファイル（PNG・JPEG・GIF・WebP）を読み込み、データURLにする。
+/// 画像でない・大きすぎる場合は、エラーにする。
+pub fn read_image_data_url(path: &Path) -> Result<String, String> {
+    if path.as_os_str().is_empty() {
+        return Err("読み込み元のパスが空です".to_string());
+    }
+    let metadata = fs::metadata(path).map_err(|e| match e.kind() {
+        ErrorKind::NotFound => format!("ファイルが見つかりません: {}", path.display()),
+        _ => format!("ファイルを読み込めません: {}: {e}", path.display()),
+    })?;
+    if metadata.is_dir() {
+        return Err(format!("ファイルを読み込めません: {}", path.display()));
+    }
+    if metadata.len() > MAX_IMAGE_BYTES {
+        return Err(format!(
+            "画像が大きすぎます（上限 {} MB）: {}",
+            MAX_IMAGE_BYTES / 1024 / 1024,
+            path.display()
+        ));
+    }
+
+    let bytes = fs::read(path)
+        .map_err(|e| format!("ファイルを読み込めません: {}: {e}", path.display()))?;
+    let mime = detect_mime(&bytes).ok_or_else(|| {
+        format!(
+            "画像ファイルではありません（PNG・JPEG・GIF・WebP のみ）: {}",
+            path.display()
+        )
+    })?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{mime};base64,{encoded}"))
+}
+
+/// フロントエンドの `invoke("load_image", { path })` から呼ばれるコマンド。
+#[tauri::command]
+pub fn load_image(path: String) -> Result<String, String> {
+    read_image_data_url(Path::new(&path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
