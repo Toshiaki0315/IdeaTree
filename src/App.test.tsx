@@ -6,6 +6,7 @@ import { BRANCH_COLORS } from "./domain/branchColor";
 import { addChild } from "./domain/addChild";
 import { createMindMap } from "./domain/mindmap";
 import { setNodeStyle } from "./domain/nodeStyle";
+import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
@@ -14,11 +15,14 @@ import { svgExportFile } from "./files/svgExportFile";
 vi.mock("./files/saveFile", () => ({ saveFile: vi.fn() }));
 vi.mock("./files/loadFile", () => ({ loadFile: vi.fn() }));
 vi.mock("./files/confirmDiscard", () => ({ confirmDiscard: vi.fn() }));
+vi.mock("./files/closeGuard", () => ({ registerCloseGuard: vi.fn() }));
 vi.mock("./files/svgExportFile", () => ({ svgExportFile: vi.fn() }));
 
 const mockedSaveFile = vi.mocked(saveFile);
 const mockedLoadFile = vi.mocked(loadFile);
 const mockedConfirmDiscard = vi.mocked(confirmDiscard);
+const mockedRegisterCloseGuard = vi.mocked(registerCloseGuard);
+const unlistenCloseGuard = vi.fn();
 const mockedSvgExportFile = vi.mocked(svgExportFile);
 
 /** 読み込み用のマップ（中心「読込」の下に「子A」「子B」） */
@@ -31,6 +35,7 @@ function loadedMap() {
 beforeEach(() => {
   vi.resetAllMocks();
   mockedConfirmDiscard.mockResolvedValue(true); // 既定では、破棄してよいと答える
+  mockedRegisterCloseGuard.mockResolvedValue(unlistenCloseGuard);
 });
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -2350,6 +2355,68 @@ describe("App（マインドマップ編集UI）", () => {
       await user.keyboard(CMD_S);
       await screen.findByRole("status");
       expect(docState()).toBe("ideas.json");
+    });
+  });
+
+  describe("ウィンドウを閉じるときの確認", () => {
+    /** 登録された、未保存かどうかを返す関数 */
+    const isDirty = () => {
+      const calls = mockedRegisterCloseGuard.mock.calls;
+      return calls[calls.length - 1][0]();
+    };
+
+    it("起動時に、閉じる操作の監視を登録し、確認には confirmDiscard を使う", async () => {
+      render(<App />);
+
+      await waitFor(() => expect(mockedRegisterCloseGuard).toHaveBeenCalled());
+      expect(mockedRegisterCloseGuard.mock.calls[0][1]).toBe(confirmDiscard);
+    });
+
+    it("未保存かどうかは、現在の状態を反映する（変更で未保存になり、保存で戻る）", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+      await waitFor(() => expect(mockedRegisterCloseGuard).toHaveBeenCalled());
+      expect(isDirty()).toBe(false);
+
+      await addChildNamed(user, "a");
+      expect(isDirty()).toBe(true);
+
+      await user.keyboard("{Meta>}s{/Meta}");
+      await screen.findByRole("status");
+      expect(isDirty()).toBe(false);
+    });
+
+    it("画面を閉じるときに、監視を解除する", async () => {
+      const { unmount } = render(<App />);
+      await waitFor(() => expect(mockedRegisterCloseGuard).toHaveBeenCalled());
+
+      unmount();
+
+      await waitFor(() => expect(unlistenCloseGuard).toHaveBeenCalledTimes(1));
+    });
+
+    it("登録の完了前に画面が閉じられても、後から確実に解除される", async () => {
+      let finish: (unlisten: () => void) => void = () => {};
+      mockedRegisterCloseGuard.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      const { unmount } = render(<App />);
+      unmount();
+
+      finish(unlistenCloseGuard);
+
+      await waitFor(() => expect(unlistenCloseGuard).toHaveBeenCalledTimes(1));
+    });
+
+    it("Tauri の外（ブラウザでの開発など）で登録に失敗しても、アプリは動き続ける", async () => {
+      mockedRegisterCloseGuard.mockRejectedValue(new Error("Tauri が利用できません"));
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await waitFor(() => expect(mockedRegisterCloseGuard).toHaveBeenCalled());
+
+      await addChildNamed(user, "a");
+
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
   });
 });
