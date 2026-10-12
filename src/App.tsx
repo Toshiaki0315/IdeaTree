@@ -17,7 +17,7 @@ import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
-import { canMoveTo, moveNode } from "./domain/moveNode";
+import { canMoveTo, canReorderTo, dropNode, moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
@@ -121,7 +121,7 @@ export default function App() {
   const [styleOpen, setStyleOpen] = useState(false);
   const dragRef = useRef<Drag | null>(null);
   /** ドラッグ中に、離すとつなぎ替えられるノード（強調表示する） */
-  const [dropTarget, setDropTarget] = useState<NodeId | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: NodeId; mode: "child" | "reorder" } | null>(null);
   /** コピーしたサブツリー。ファイルを開いても保持する */
   const [clipboard, setClipboard] = useState<Subtree | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,10 +135,17 @@ export default function App() {
 
   // ノードのドラッグ移動: 押したノードを、別のノードの上で離すと、そのノードの子につなぎ替える
   useEffect(() => {
-    /** マウスの下にあるノードのうち、ドラッグ中のノードを、子としてつなぎ替えられるもの */
-    const dropTargetAt = (target: EventTarget | null, nodeId: NodeId): NodeId | null => {
-      const id = (target as Element).closest("g[data-node-id]")?.getAttribute("data-node-id");
-      return id !== undefined && id !== null && canMoveTo(mapRef.current, nodeId, id) ? id : null;
+    /**
+     * マウスの下にあるノードのうち、離したときに移動できるもの。
+     * Shift を押していて、兄弟のノードなら、入れ替え（reorder）。そうでなければ、その子につなぎ替える（child）。
+     */
+    const dropTargetAt = (event: MouseEvent, nodeId: NodeId) => {
+      const id = (event.target as Element).closest("g[data-node-id]")?.getAttribute("data-node-id");
+      if (id === undefined || id === null) return null;
+      if (event.shiftKey && canReorderTo(mapRef.current, nodeId, id)) {
+        return { id, mode: "reorder" as const };
+      }
+      return canMoveTo(mapRef.current, nodeId, id) ? { id, mode: "child" as const } : null;
     };
     const cancel = () => {
       dragRef.current = null;
@@ -155,16 +162,19 @@ export default function App() {
         drag.active = true;
         setHistory((h) => ({ ...h, present: { ...h.present, selectedId: drag.nodeId } }));
       }
-      setDropTarget(dropTargetAt(event.target, drag.nodeId));
+      setDropTarget(dropTargetAt(event, drag.nodeId));
     };
     const onMouseUp = (event: MouseEvent) => {
       const drag = dragRef.current;
       if (drag === null) return;
-      const target = drag.active ? dropTargetAt(event.target, drag.nodeId) : null;
+      const target = drag.active ? dropTargetAt(event, drag.nodeId) : null;
       cancel();
       if (target !== null) {
         setHistory((h) =>
-          record(h, { map: moveNode(h.present.map, drag.nodeId, target), selectedId: drag.nodeId }),
+          record(h, {
+            map: dropNode(h.present.map, drag.nodeId, target.id, target.mode),
+            selectedId: drag.nodeId,
+          }),
         );
       }
     };
@@ -525,7 +535,8 @@ export default function App() {
               key={node.id}
               data-node-id={node.id}
               data-selected={selected}
-              data-drop-target={dropTarget === node.id}
+              data-drop-target={dropTarget?.id === node.id}
+              data-drop-mode={dropTarget?.id === node.id ? dropTarget.mode : undefined}
               onMouseDown={(event) => {
                 // 左ボタンで、中心ノード以外を押したときだけ、ドラッグの候補にする（入力欄の操作は除く）
                 if (event.button !== 0 || isRoot || event.target instanceof HTMLInputElement) return;

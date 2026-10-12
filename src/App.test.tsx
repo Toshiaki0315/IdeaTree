@@ -3582,6 +3582,8 @@ describe("App（マインドマップ編集UI）", () => {
       await user.keyboard("{/Shift}");
 
       expect(order(container)).toEqual(["中心テーマ", "b", "c", "a", "a1"]);
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("中心テーマ"); // 中心ノードの子のまま（c の子にはなっていない）
     });
 
     it("入れ替えは、メインブランチの色を変えず、1手の履歴で元に戻せる", async () => {
