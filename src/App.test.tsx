@@ -8,6 +8,7 @@ import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
 import { copyNode } from "./domain/copyNode";
 import { hitAreaSize } from "./domain/hitArea";
 import { createMindMap } from "./domain/mindmap";
+import { ICON_PRESETS, setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle } from "./domain/nodeStyle";
 import { readClipboardText, writeClipboardText } from "./files/clipboard";
@@ -3879,6 +3880,163 @@ describe("App（マインドマップ編集UI）", () => {
 
       expect(zoomState()).toBeUndefined();
       expect(viewBox(container)).toEqual([-450, -450, 900, 900]);
+    });
+  });
+
+  describe("スタイルパネル: アイコン", () => {
+    const CMD_K = "{Meta>}k{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const panel = () => screen.getByRole("dialog", { name: "スタイル" });
+    const iconSelect = () => within(panel()).getByRole("combobox", { name: "アイコン" });
+    const star = ICON_PRESETS[0];
+    const idea = ICON_PRESETS[4];
+    const icons = (container: HTMLElement) =>
+      [...container.querySelectorAll("text[data-icon-for]")].map((e) => e.textContent);
+    const iconOf = (container: HTMLElement, nodeText: string) => {
+      const id = screen.getByText(nodeText).closest("g[data-node-id]")?.getAttribute("data-node-id");
+      return container.querySelector(`text[data-icon-for="${id}"]`)?.textContent;
+    };
+
+    /** 中心 ─ a / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+    }
+
+    it("「なし」と、選択肢のアイコンを選べ、初期状態では「なし」が選ばれている", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard(CMD_K);
+
+      const options = within(iconSelect()).getAllByRole("option").map((o) => o.textContent);
+
+      expect(options).toEqual(["なし", ...ICON_PRESETS.map((p) => p.name)]);
+      expect(iconSelect()).toHaveDisplayValue("なし");
+    });
+
+    it("アイコンを選ぶと、選択ノードにだけ表示され、「なし」で外れる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+
+      await user.selectOptions(iconSelect(), star.name);
+      expect(iconOf(container, "b")).toBe(star.value);
+      expect(iconOf(container, "a")).toBeUndefined();
+      expect(iconSelect()).toHaveDisplayValue(star.name);
+
+      await user.selectOptions(iconSelect(), "なし");
+      expect(icons(container)).toEqual([]);
+    });
+
+    it("中心ノードにも付けられる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard(CMD_K);
+
+      await user.selectOptions(iconSelect(), idea.name);
+
+      expect(iconOf(container, "中心テーマ")).toBe(idea.value);
+    });
+
+    it("パネルは、選択しているノードのアイコンを表示し、別のノードを選ぶと切り替わる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      await user.selectOptions(iconSelect(), star.name);
+
+      await user.click(screen.getByText("a"));
+      expect(iconSelect()).toHaveDisplayValue("なし");
+
+      await user.click(screen.getByText("b"));
+      expect(iconSelect()).toHaveDisplayValue(star.name);
+    });
+
+    it("アイコンの変更は1手の履歴で、同じアイコンを選び直しても、増えない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      await user.selectOptions(iconSelect(), star.name);
+      await user.selectOptions(iconSelect(), star.name);
+      await user.selectOptions(iconSelect(), idea.name);
+      await user.keyboard("{Escape}");
+
+      await user.keyboard(CMD_Z);
+      expect(iconOf(container, "b")).toBe(star.value);
+
+      await user.keyboard(CMD_Z);
+      expect(icons(container)).toEqual([]);
+      expect(screen.getByText("b")).toBeInTheDocument(); // b の追加は、まだ戻っていない
+    });
+
+    it("アイコンは、保存されるファイルの内容に含まれ、開いたファイルでも表示される", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      await user.selectOptions(iconSelect(), star.name);
+      await user.keyboard("{Escape}");
+      await user.keyboard("{Meta>}s{/Meta}");
+      await screen.findByRole("status");
+      const [saved] = mockedSaveFile.mock.calls[0];
+      expect(Object.values(saved.nodes).find((n) => n.text === "b")?.icon).toBe(star.value);
+
+      const base = loadedMap();
+      mockedLoadFile.mockResolvedValue({
+        map: setNodeIcon(base, base.rootId, idea.value),
+        path: "/Users/me/other.json",
+      });
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByText(/開きました/);
+
+      expect(iconOf(container, "読込")).toBe(idea.value);
+    });
+
+    it("コピー＆ペーストで、アイコンも引き継がれる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      await user.selectOptions(iconSelect(), star.name);
+      await user.keyboard("{Escape}");
+      await user.keyboard("{Meta>}c{/Meta}");
+      await user.keyboard("{ArrowUp}");
+      await user.keyboard("{Meta>}v{/Meta}");
+
+      await waitFor(() => expect(icons(container)).toEqual([star.value, star.value]));
+    });
+
+    it("折りたたまれて見えないノードのアイコンは、描かれない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "親");
+      await addChildNamed(user, "子");
+      await user.keyboard(CMD_K);
+      await user.selectOptions(iconSelect(), star.name);
+      await user.keyboard("{Escape}");
+      await user.keyboard("{ArrowLeft}");
+      expect(icons(container)).toEqual([star.value]);
+
+      await user.keyboard(" ");
+
+      expect(icons(container)).toEqual([]);
+    });
+
+    it("アイコンをクリックすると、そのノードが選択される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_K);
+      await user.selectOptions(iconSelect(), star.name);
+      await user.keyboard("{Escape}");
+      await user.click(screen.getByText("a"));
+
+      await user.click(container.querySelector("text[data-icon-for]")!);
+
+      expect(selectedText(container)).toBe("b");
     });
   });
 });
