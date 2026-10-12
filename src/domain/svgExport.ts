@@ -36,6 +36,48 @@ export function nodeLabel(node: MindMapNode): string {
   return node.collapsed && node.childIds.length > 0 ? `${node.text}…` : node.text;
 }
 
+/** 中心ノードの画像（セントラルイメージ）を収める枠の大きさ */
+export const CENTRAL_IMAGE = { width: 160, height: 120 };
+/** メインブランチなどの画像を収める枠の大きさ */
+export const BRANCH_IMAGE = { width: 64, height: 48 };
+
+/** ラベルの中心から、画像の枠の下端までの距離（画像はラベルの上に置く） */
+const BRANCH_IMAGE_GAP = 12;
+/** 中心ノードの画像の下端から、テキストの中心までの距離 */
+const CENTRAL_LABEL_GAP = 20;
+
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** ブランチのラベルを置く位置（親と子を結ぶ枝の中点）。中心ノード以外に使う */
+export function labelPosition(map: MindMap, node: MindMapNode): { x: number; y: number } {
+  const parent = map.nodes[node.parentId as NodeId];
+  return {
+    x: (parent.position.x + node.position.x) / 2,
+    y: (parent.position.y + node.position.y) / 2,
+  };
+}
+
+/** ノードの画像を描く枠。中心ノードは、位置の中心。それ以外は、ラベルの上 */
+export function imageBox(map: MindMap, node: MindMapNode): Box {
+  if (node.parentId === null) {
+    const { width, height } = CENTRAL_IMAGE;
+    return { x: node.position.x - width / 2, y: node.position.y - height / 2, width, height };
+  }
+  const { x, y } = labelPosition(map, node);
+  const { width, height } = BRANCH_IMAGE;
+  return { x: x - width / 2, y: y - BRANCH_IMAGE_GAP - height, width, height };
+}
+
+/** 中心ノードの画像があるときの、テキストの位置（画像の下）。なければ、ノードの位置 */
+export function centralLabelY(node: MindMapNode): number {
+  return node.image ? node.position.y + CENTRAL_IMAGE.height / 2 + CENTRAL_LABEL_GAP : node.position.y;
+}
+
 /** テキストと枝の見た目（スタイルの指定があればそれを、なければ既定値を使う） */
 export interface NodeTextStyle {
   color: string;
@@ -99,6 +141,7 @@ export function exportSvg(map: MindMap): string {
 
   const branches: string[] = [];
   const shapes: string[] = [];
+  const images: string[] = [];
   const labels: string[] = [];
 
   for (const node of nodes) {
@@ -109,12 +152,22 @@ export function exportSvg(map: MindMap): string {
     const look = nodeTextStyle(map, node);
     const font = `font-family="${escapeXml(look.fontFamily)}" font-size="${look.fontSize}" font-weight="${look.fontWeight}" font-style="${look.fontStyle}"`;
 
-    if (node.parentId === null) {
-      shapes.push(
-        `<ellipse data-node-id="${id}" cx="${fmt(x)}" cy="${fmt(y)}" rx="${CENTRAL_RX}" ry="${CENTRAL_RY}" fill="${BACKGROUND}" stroke="${look.color}" stroke-width="4"/>`,
+    if (node.image) {
+      const box = imageBox(map, node);
+      images.push(
+        `<image data-node-id="${id}" href="${escapeXml(node.image)}" preserveAspectRatio="xMidYMid meet" x="${fmt(box.x)}" y="${fmt(box.y)}" width="${box.width}" height="${box.height}"/>`,
       );
+    }
+
+    if (node.parentId === null) {
+      // 画像があるときは、楕円の代わりに画像を描く
+      if (!node.image) {
+        shapes.push(
+          `<ellipse data-node-id="${id}" cx="${fmt(x)}" cy="${fmt(y)}" rx="${CENTRAL_RX}" ry="${CENTRAL_RY}" fill="${BACKGROUND}" stroke="${look.color}" stroke-width="4"/>`,
+        );
+      }
       labels.push(
-        `<text data-node-id="${id}" x="${fmt(x)}" y="${fmt(y)}" text-anchor="middle" dominant-baseline="central" ${font} fill="${look.color}">${escapeXml(nodeLabel(node))}</text>`,
+        `<text data-node-id="${id}" x="${fmt(x)}" y="${fmt(centralLabelY(node))}" text-anchor="middle" dominant-baseline="central" ${font} fill="${look.color}">${escapeXml(nodeLabel(node))}</text>`,
       );
       continue;
     }
@@ -125,9 +178,7 @@ export function exportSvg(map: MindMap): string {
       `<path data-node-id="${id}" d="${branchPath(map.nodes[node.parentId], node)}" fill="none" stroke="${color}" stroke-width="${fmt(strokeWidth)}" stroke-linecap="round"/>`,
     );
     // ブランチのテキストは枝の中点に置く（枝の先で子ブランチと重ならない）
-    const parent = map.nodes[node.parentId];
-    const labelX = (parent.position.x + x) / 2;
-    const labelY = (parent.position.y + y) / 2;
+    const { x: labelX, y: labelY } = labelPosition(map, node);
     labels.push(
       `<text data-node-id="${id}" x="${fmt(labelX)}" y="${fmt(labelY)}" text-anchor="middle" dominant-baseline="central" ${font} fill="${color}" stroke="${BACKGROUND}" stroke-width="${LABEL_HALO_WIDTH}" paint-order="stroke" stroke-linejoin="round">${escapeXml(nodeLabel(node))}</text>`,
     );
@@ -139,6 +190,7 @@ export function exportSvg(map: MindMap): string {
     `<rect data-role="background" x="${fmt(minX)}" y="${fmt(minY)}" width="${fmt(width)}" height="${fmt(height)}" fill="${BACKGROUND}"/>`,
     ...branches,
     ...shapes,
+    ...images,
     ...labels,
     "</svg>",
   ].join("\n");
