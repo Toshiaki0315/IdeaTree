@@ -1,4 +1,4 @@
-import type { MindMap, NodeId, NodeStyle } from "./mindmap";
+import type { MindMap, MindMapNode, NodeId, NodeStyle } from "./mindmap";
 
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 200;
@@ -50,7 +50,7 @@ export function setNodeStyle(map: MindMap, nodeId: NodeId, patch: Partial<NodeSt
     keys.every((key) => next[key] === (current as Record<string, unknown>)[key]);
   if (unchanged) return map;
 
-  const updated = { ...node, style: next as NodeStyle };
+  const updated: MindMapNode = { ...node, style: next as NodeStyle };
   if (keys.length === 0) delete updated.style;
   return { ...map, nodes: { ...map.nodes, [nodeId]: updated } };
 }
