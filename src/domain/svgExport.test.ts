@@ -243,6 +243,16 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       expect(byNodeId(doc, "text", ids.root).textContent).toBe("アイデア");
     });
 
+    it("子を持たないノードに残った折りたたみ状態では、「…」を付けない", () => {
+      const { map, ids } = buildMap();
+      const stale: MindMap = {
+        ...map,
+        nodes: { ...map.nodes, [ids.b]: { ...map.nodes[ids.b], collapsed: true } },
+      };
+
+      expect(byNodeId(parse(exportSvg(stale)), "text", ids.b).textContent).toBe("予算");
+    });
+
     it("展開すると、すべてのノードが再び出力される", () => {
       const { map, ids } = buildMap();
       const reopened = toggleCollapse(toggleCollapse(map, ids.a), ids.a);

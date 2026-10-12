@@ -1,5 +1,6 @@
 import { getBranchColor } from "./branchColor";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
+import { visibleNodeIds } from "./visibleNodeIds";
 
 export const FONT_FAMILY = "'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Yu Gothic', sans-serif";
 const MARGIN = 120;
@@ -30,6 +31,11 @@ function escapeXml(text: string): string {
     .replace(/'/g, "&apos;");
 }
 
+/** 表示するラベル。子を隠している（折りたたまれた）ノードには末尾に「…」を付ける */
+export function nodeLabel(node: MindMapNode): string {
+  return node.collapsed && node.childIds.length > 0 ? `${node.text}…` : node.text;
+}
+
 export function depthOf(map: MindMap, node: MindMapNode): number {
   let depth = 0;
   for (let n = node; n.parentId !== null; n = map.nodes[n.parentId]) depth++;
@@ -52,7 +58,7 @@ export function branchPath(from: MindMapNode, to: MindMapNode): string {
 
 /** レイアウト済みのマインドマップを、SVG文書（文字列）に変換する */
 export function exportSvg(map: MindMap): string {
-  const nodes = Object.values(map.nodes);
+  const nodes = visibleNodeIds(map).map((id) => map.nodes[id]);
   const xs = nodes.map((n) => n.position.x);
   const ys = nodes.map((n) => n.position.y);
   const minX = Math.min(...xs) - MARGIN;
@@ -74,7 +80,7 @@ export function exportSvg(map: MindMap): string {
         `<ellipse data-node-id="${id}" cx="${fmt(x)}" cy="${fmt(y)}" rx="${CENTRAL_RX}" ry="${CENTRAL_RY}" fill="${BACKGROUND}" stroke="${CENTRAL_STROKE}" stroke-width="4"/>`,
       );
       labels.push(
-        `<text data-node-id="${id}" x="${fmt(x)}" y="${fmt(y)}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="24" font-weight="bold" fill="${CENTRAL_STROKE}">${escapeXml(node.text)}</text>`,
+        `<text data-node-id="${id}" x="${fmt(x)}" y="${fmt(y)}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="24" font-weight="bold" fill="${CENTRAL_STROKE}">${escapeXml(nodeLabel(node))}</text>`,
       );
       continue;
     }
@@ -89,7 +95,7 @@ export function exportSvg(map: MindMap): string {
     const labelX = (parent.position.x + x) / 2;
     const labelY = (parent.position.y + y) / 2;
     labels.push(
-      `<text data-node-id="${id}" x="${fmt(labelX)}" y="${fmt(labelY)}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="${depth === 1 ? 20 : 16}" font-weight="bold" fill="${color}" stroke="${BACKGROUND}" stroke-width="${LABEL_HALO_WIDTH}" paint-order="stroke" stroke-linejoin="round">${escapeXml(node.text)}</text>`,
+      `<text data-node-id="${id}" x="${fmt(labelX)}" y="${fmt(labelY)}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="${depth === 1 ? 20 : 16}" font-weight="bold" fill="${color}" stroke="${BACKGROUND}" stroke-width="${LABEL_HALO_WIDTH}" paint-order="stroke" stroke-linejoin="round">${escapeXml(nodeLabel(node))}</text>`,
     );
   }
 
