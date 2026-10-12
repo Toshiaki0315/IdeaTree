@@ -1,7 +1,17 @@
-/** ウィンドウを閉じるときに、未保存の変更を確認する（未実装） */
-export async function registerCloseGuard(
-  _isDirty: () => boolean,
-  _confirm: () => Promise<boolean>,
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+/**
+ * ウィンドウを閉じる操作を監視し、未保存の変更があれば、確認してから閉じる。
+ * 「キャンセル」を選んだとき、確認のダイアログが失敗したときは、変更を失わないよう、閉じるのを止める。
+ * 戻り値は、監視を解除する関数。
+ */
+export function registerCloseGuard(
+  isDirty: () => boolean,
+  confirm: () => Promise<boolean>,
 ): Promise<() => void> {
-  throw new Error("未実装");
+  return getCurrentWindow().onCloseRequested(async (event) => {
+    if (!isDirty()) return;
+    const proceed = await confirm().catch(() => false);
+    if (!proceed) event.preventDefault();
+  });
 }

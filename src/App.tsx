@@ -29,6 +29,7 @@ import {
 } from "./domain/svgExport";
 import { updateText } from "./domain/updateText";
 import { visibleNodeIds } from "./domain/visibleNodeIds";
+import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
@@ -95,6 +96,21 @@ export default function App() {
 
   const { map, selectedId } = history.present;
   const dirty = map !== savedMap;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+
+  // ウィンドウを閉じるときに、未保存の変更を確認する（Tauri の外では登録に失敗するが、無視する）
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    registerCloseGuard(() => dirtyRef.current, confirmDiscard)
+      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
   // 入力欄のフォーカス外れで、すでに確定・取り消し済みの編集を二重に処理しないための参照
   const editingRef = useRef(editing);
   editingRef.current = editing;
