@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { BRANCH_COLORS } from "./branchColor";
+import { toggleCollapse } from "./collapse";
 import { layout } from "./layout";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
@@ -207,5 +208,99 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
 
     expect(exportSvg(map)).toBe(exportSvg(map));
     expect(map).toEqual(before);
+  });
+
+  describe("折りたたみへの対応", () => {
+    it("折りたたまれたノードの子孫は、ブランチもテキストも出力しない", () => {
+      const { map, ids } = buildMap();
+
+      const doc = parse(exportSvg(toggleCollapse(map, ids.a)));
+
+      expect(doc.querySelector(`path[data-node-id="${ids.a1}"]`)).toBeNull();
+      expect(doc.querySelector(`text[data-node-id="${ids.a1}"]`)).toBeNull();
+      expect(doc.querySelector(`path[data-node-id="${ids.a11}"]`)).toBeNull();
+      expect(doc.querySelector(`text[data-node-id="${ids.a11}"]`)).toBeNull();
+      // 表示されるのは 中心・a・b の3ノード（ブランチは a と b の2本）
+      expect(doc.querySelectorAll("text")).toHaveLength(3);
+      expect(doc.querySelectorAll("path")).toHaveLength(2);
+    });
+
+    it("折りたたまれたノード自身とそのブランチは出力し、ラベルの末尾に「…」を付ける", () => {
+      const { map, ids } = buildMap();
+
+      const doc = parse(exportSvg(toggleCollapse(map, ids.a)));
+
+      expect(byNodeId(doc, "path", ids.a)).toBeTruthy();
+      expect(byNodeId(doc, "text", ids.a).textContent).toBe("企画…");
+    });
+
+    it("折りたたまれていないノードのラベルには、「…」を付けない", () => {
+      const { map, ids } = buildMap();
+
+      const doc = parse(exportSvg(toggleCollapse(map, ids.a)));
+
+      expect(byNodeId(doc, "text", ids.b).textContent).toBe("予算");
+      expect(byNodeId(doc, "text", ids.root).textContent).toBe("アイデア");
+    });
+
+    it("展開すると、すべてのノードが再び出力される", () => {
+      const { map, ids } = buildMap();
+      const reopened = toggleCollapse(toggleCollapse(map, ids.a), ids.a);
+
+      const doc = parse(exportSvg(reopened));
+
+      expect(doc.querySelectorAll("text")).toHaveLength(Object.keys(map.nodes).length);
+      expect(byNodeId(doc, "text", ids.a).textContent).toBe("企画");
+    });
+
+    it("中心ノードを折りたたむと、中心ノードだけを出力する", () => {
+      const { map, ids } = buildMap();
+
+      const doc = parse(exportSvg(toggleCollapse(map, ids.root)));
+
+      expect(doc.querySelectorAll("path")).toHaveLength(0);
+      expect(doc.querySelectorAll("text")).toHaveLength(1);
+      expect(byNodeId(doc, "text", ids.root).textContent).toBe("アイデア…");
+    });
+
+    it("「…」を付けても、XML特殊文字はエスケープされ、正しいSVGのままである", () => {
+      const { map, ids } = buildMap();
+      const renamed = toggleCollapse(updateText(map, ids.a, "A&B<"), ids.a);
+
+      const doc = parse(exportSvg(renamed));
+
+      expect(doc.querySelector("parsererror")).toBeNull();
+      expect(byNodeId(doc, "text", ids.a).textContent).toBe("A&B<…");
+    });
+
+    it("表示範囲（viewBox）は、表示されるノードだけから計算する", () => {
+      const { map, ids } = buildMap();
+      const far: MindMap = {
+        ...map,
+        nodes: {
+          ...map.nodes,
+          [ids.a1]: { ...map.nodes[ids.a1], position: { x: 5000, y: 5000 } },
+          [ids.a11]: { ...map.nodes[ids.a11], position: { x: -5000, y: -5000 } },
+        },
+      };
+
+      const viewBox = (m: MindMap) =>
+        parse(exportSvg(m)).documentElement.getAttribute("viewBox")!.split(" ").map(Number);
+      const [, , wide] = viewBox(far);
+      const [, , narrow] = viewBox(toggleCollapse(far, ids.a));
+
+      expect(wide).toBeGreaterThan(9000);
+      expect(narrow).toBeLessThan(2000);
+    });
+
+    it("折りたたまれたブランチの線の色と太さは、折りたたまれていないときと同じ", () => {
+      const { map, ids } = buildMap();
+
+      const normal = byNodeId(parse(exportSvg(map)), "path", ids.a);
+      const folded = byNodeId(parse(exportSvg(toggleCollapse(map, ids.a))), "path", ids.a);
+
+      expect(folded.getAttribute("stroke")).toBe(normal.getAttribute("stroke"));
+      expect(folded.getAttribute("stroke-width")).toBe(normal.getAttribute("stroke-width"));
+    });
   });
 });
