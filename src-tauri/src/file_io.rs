@@ -137,4 +137,100 @@ mod tests {
 
         assert_eq!(fs::read_to_string(&path).unwrap(), "コマンド");
     }
+
+    #[test]
+    fn 書き込んだファイルをそのまま読み込める() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("map.json");
+        write_text_file(&path, "{\"version\":1}").unwrap();
+
+        assert_eq!(read_text_file(&path).unwrap(), "{\"version\":1}");
+    }
+
+    #[test]
+    fn 日本語をutf8のまま読み込める() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("map.json");
+        fs::write(&path, "アイデア").unwrap();
+
+        assert_eq!(read_text_file(&path).unwrap(), "アイデア");
+    }
+
+    #[test]
+    fn 空のファイルは空文字列として読み込める() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("empty.json");
+        fs::write(&path, "").unwrap();
+
+        assert_eq!(read_text_file(&path).unwrap(), "");
+    }
+
+    #[test]
+    fn 読み込み元のファイルが存在しなければエラーになる() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("missing.json");
+
+        let err = read_text_file(&path).unwrap_err();
+
+        assert!(err.contains("ファイルが見つかりません"), "{err}");
+    }
+
+    #[test]
+    fn 読み込み元のパスが空ならエラーになる() {
+        let err = read_text_file(Path::new("")).unwrap_err();
+
+        assert!(err.contains("読み込み元のパスが空です"), "{err}");
+    }
+
+    #[test]
+    fn 読み込み元がフォルダならエラーになる() {
+        let dir = tempdir().unwrap();
+
+        let err = read_text_file(dir.path()).unwrap_err();
+
+        assert!(err.contains("ファイルを読み込めません"), "{err}");
+    }
+
+    #[test]
+    fn utf8として読めない内容ならエラーになる() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("binary.json");
+        fs::write(&path, [0xff, 0xfe, 0x00, 0x80]).unwrap();
+
+        let err = read_text_file(&path).unwrap_err();
+
+        assert!(err.contains("UTF-8のテキストではありません"), "{err}");
+    }
+
+    #[test]
+    fn 上限を超える大きなファイルは読み込まずエラーになる() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("huge.json");
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(MAX_READ_BYTES + 1).unwrap();
+
+        let err = read_text_file(&path).unwrap_err();
+
+        assert!(err.contains("ファイルが大きすぎます"), "{err}");
+    }
+
+    #[test]
+    fn 上限ちょうどの大きさのファイルは読み込める() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("limit.json");
+        fs::write(&path, vec![b'a'; MAX_READ_BYTES as usize]).unwrap();
+
+        assert_eq!(read_text_file(&path).unwrap().len(), MAX_READ_BYTES as usize);
+    }
+
+    #[test]
+    fn 読み込みコマンドはパス文字列を受け取って内容を返す() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cmd.json");
+        fs::write(&path, "コマンド").unwrap();
+
+        let contents = load_file(path.to_string_lossy().into_owned()).unwrap();
+
+        assert_eq!(contents, "コマンド");
+    }
 }
