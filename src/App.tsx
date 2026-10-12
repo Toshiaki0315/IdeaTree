@@ -11,6 +11,7 @@ import type { Subtree } from "./domain/copyNode";
 import { deleteNode } from "./domain/deleteNode";
 import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
+import { hitAreaSize } from "./domain/hitArea";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
@@ -96,6 +97,12 @@ const VIEW_MARGIN = 160;
 /** 折りたたまれているノードを展開する（子を追加・貼り付けしても、見えなくならないように） */
 function expanded(map: MindMap, nodeId: NodeId): MindMap {
   return map.nodes[nodeId].collapsed ? toggleCollapse(map, nodeId) : map;
+}
+
+/** ラベルを中心にした、クリック範囲の長方形 */
+function hitRect(centerX: number, centerY: number, label: string, fontSize: number) {
+  const { width, height } = hitAreaSize(label, fontSize);
+  return { x: centerX - width / 2, y: centerY - height / 2, width, height };
 }
 
 function initialSnapshot(): Snapshot {
@@ -532,6 +539,14 @@ export default function App() {
               onClick={() => select(node.id)}
               onDoubleClick={() => startEdit(node.id)}
             >
+              {!isRoot && (
+                // 文字だけでは小さくて押しにくいので、まわりに透明なクリック範囲を置く
+                <rect
+                  data-role="hit-area"
+                  {...hitRect(labelX, labelY, nodeLabel(node), look.fontSize)}
+                  fill="transparent"
+                />
+              )}
               {isRoot && !node.image && (
                 <ellipse
                   cx={node.position.x}
