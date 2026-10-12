@@ -3,7 +3,6 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import "./App.css";
 import { addChild } from "./domain/addChild";
 import { addSibling } from "./domain/addSibling";
-import { getBranchColor } from "./domain/branchColor";
 import { toggleCollapse } from "./domain/collapse";
 import { copyNode } from "./domain/copyNode";
 import type { Subtree } from "./domain/copyNode";
@@ -13,6 +12,7 @@ import type { History } from "./domain/history";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId } from "./domain/mindmap";
+import { toggleStyle } from "./domain/nodeStyle";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
@@ -20,12 +20,11 @@ import {
   BACKGROUND,
   CENTRAL_RX,
   CENTRAL_RY,
-  CENTRAL_STROKE,
-  FONT_FAMILY,
   LABEL_HALO_WIDTH,
   branchPath,
   depthOf,
   nodeLabel,
+  nodeTextStyle,
   strokeWidthAt,
 } from "./domain/svgExport";
 import { updateText } from "./domain/updateText";
@@ -212,6 +211,12 @@ export default function App() {
           setClipboard(copyNode(map, selectedId));
           return;
         }
+        if ((key === "b" || key === "i") && !event.shiftKey) {
+          event.preventDefault();
+          const toggled = toggleStyle(map, selectedId, key === "b" ? "bold" : "italic");
+          commit({ map: toggled, selectedId });
+          return;
+        }
         if (key === "x") {
           event.preventDefault();
           if (!isRoot) {
@@ -303,7 +308,7 @@ export default function App() {
               key={node.id}
               d={branchPath(laidOut.nodes[node.parentId], node)}
               fill="none"
-              stroke={getBranchColor(laidOut, node.id) as string}
+              stroke={nodeTextStyle(laidOut, node).color}
               strokeWidth={strokeWidthAt(depthOf(laidOut, node))}
               strokeLinecap="round"
             />
@@ -311,21 +316,21 @@ export default function App() {
         })}
         {nodes.map((node) => {
           const isRoot = node.parentId === null;
-          const color = isRoot ? CENTRAL_STROKE : (getBranchColor(laidOut, node.id) as string);
+          const look = nodeTextStyle(laidOut, node);
           const parent = isRoot ? node : laidOut.nodes[node.parentId as NodeId];
           const labelX = (parent.position.x + node.position.x) / 2;
           const labelY = (parent.position.y + node.position.y) / 2;
           const isEditing = editing?.nodeId === node.id;
           const selected = node.id === selectedId;
-  
+
           return (
             <g
-            key={node.id}
-            data-node-id={node.id}
-            data-selected={selected}
-            onClick={() => select(node.id)}
-            onDoubleClick={() => startEdit(node.id)}
-          >
+              key={node.id}
+              data-node-id={node.id}
+              data-selected={selected}
+              onClick={() => select(node.id)}
+              onDoubleClick={() => startEdit(node.id)}
+            >
               {isRoot && (
                 <ellipse
                   cx={node.position.x}
@@ -333,7 +338,7 @@ export default function App() {
                   rx={CENTRAL_RX}
                   ry={CENTRAL_RY}
                   fill={BACKGROUND}
-                  stroke={selected ? "#1A7FD1" : CENTRAL_STROKE}
+                  stroke={selected ? "#1A7FD1" : look.color}
                   strokeWidth={selected ? 6 : 4}
                 />
               )}
@@ -343,10 +348,11 @@ export default function App() {
                   y={labelY}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontFamily={FONT_FAMILY}
-                  fontSize={isRoot ? 24 : depthOf(laidOut, node) === 1 ? 20 : 16}
-                  fontWeight="bold"
-                  fill={color}
+                  fontFamily={look.fontFamily}
+                  fontSize={look.fontSize}
+                  fontWeight={look.fontWeight}
+                  fontStyle={look.fontStyle}
+                  fill={look.color}
                   {...(isRoot
                     ? {}
                     : {
@@ -368,9 +374,9 @@ export default function App() {
                     value={editing.draft}
                     onChange={(event) => setEditing({ ...editing, draft: event.target.value })}
                     onKeyDown={(event) => onInputKeyDown(event, editing)}
-                  onBlur={() => editingRef.current !== null && commitEdit(editing)}
-                  onClick={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
+                    onBlur={() => editingRef.current !== null && commitEdit(editing)}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
                   />
                 </foreignObject>
               )}
