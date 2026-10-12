@@ -35,3 +35,18 @@ export function undo<T>(history: History<T>): History<T> {
     future: [history.present, ...history.future],
   };
 }
+
+export function canRedo<T>(history: History<T>): boolean {
+  return history.future.length > 0;
+}
+
+/** Undo で戻った状態に進み直す。進めないときは同じ履歴を返す */
+export function redo<T>(history: History<T>): History<T> {
+  if (!canRedo(history)) return history;
+  const [next, ...future] = history.future;
+  return {
+    past: [...history.past, history.present].slice(-HISTORY_LIMIT),
+    present: next,
+    future,
+  };
+}
