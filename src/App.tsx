@@ -4,6 +4,7 @@ import "./App.css";
 import { addChild } from "./domain/addChild";
 import { addSibling } from "./domain/addSibling";
 import { getBranchColor } from "./domain/branchColor";
+import { toggleCollapse } from "./domain/collapse";
 import { copyNode } from "./domain/copyNode";
 import type { Subtree } from "./domain/copyNode";
 import { deleteNode } from "./domain/deleteNode";
@@ -24,9 +25,11 @@ import {
   LABEL_HALO_WIDTH,
   branchPath,
   depthOf,
+  nodeLabel,
   strokeWidthAt,
 } from "./domain/svgExport";
 import { updateText } from "./domain/updateText";
+import { visibleNodeIds } from "./domain/visibleNodeIds";
 import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
@@ -65,6 +68,11 @@ const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
 /** 表示領域の最小の半径。マップが小さい間は拡大しすぎないようにする */
 const MIN_HALF_EXTENT = 450;
 const VIEW_MARGIN = 160;
+
+/** 折りたたまれているノードを展開する（子を追加・貼り付けしても、見えなくならないように） */
+function expanded(map: MindMap, nodeId: NodeId): MindMap {
+  return map.nodes[nodeId].collapsed ? toggleCollapse(map, nodeId) : map;
+}
 
 function initialSnapshot(): Snapshot {
   const map = createMindMap("中心テーマ");
@@ -205,7 +213,7 @@ export default function App() {
         if (key === "v") {
           event.preventDefault();
           if (clipboard !== null) {
-            const pasted = pasteNode(map, selectedId, clipboard);
+            const pasted = pasteNode(expanded(map, selectedId), selectedId, clipboard);
             commit({ map: pasted.map, selectedId: pasted.nodeId });
           }
           return;
@@ -223,9 +231,13 @@ export default function App() {
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
-      if (event.key === "Tab") {
+      if (event.key === " ") {
         event.preventDefault();
-        startNewNode(addChild(map, selectedId, ""));
+        const toggled = toggleCollapse(map, selectedId);
+        if (toggled !== map) commit({ map: toggled, selectedId });
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        startNewNode(addChild(expanded(map, selectedId), selectedId, ""));
       } else if (event.key === "Enter") {
         event.preventDefault();
         if (isRoot) return;
@@ -259,7 +271,7 @@ export default function App() {
     }
   };
 
-  const nodes = Object.values(laidOut.nodes);
+  const nodes = visibleNodeIds(laidOut).map((id) => laidOut.nodes[id]);
   const half = Math.max(
     MIN_HALF_EXTENT,
     ...nodes.map((n) => Math.max(Math.abs(n.position.x), Math.abs(n.position.y)) + VIEW_MARGIN),
@@ -328,7 +340,7 @@ export default function App() {
                         strokeLinejoin: "round" as const,
                       })}
                 >
-                  {node.text}
+                  {nodeLabel(node)}
                 </text>
               )}
               {isEditing && editing && (
