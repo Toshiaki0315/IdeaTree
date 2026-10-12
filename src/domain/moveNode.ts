@@ -76,15 +76,36 @@ export function moveNode(map: MindMap, nodeId: NodeId, newParentId: NodeId, inde
   return { ...map, nodes };
 }
 
-export function canReorderTo(_map: MindMap, _nodeId: NodeId, _targetId: NodeId): boolean {
-  return false;
+/**
+ * ドラッグで、兄弟のノードの位置に入れ替えられるか。
+ * 同じ親を持つ、別のノードの上だけ。中心ノード・自分自身・存在しないノードは、できない。
+ */
+export function canReorderTo(map: MindMap, nodeId: NodeId, targetId: NodeId): boolean {
+  const node = map.nodes[nodeId];
+  const target = map.nodes[targetId];
+  return (
+    node !== undefined &&
+    target !== undefined &&
+    node.parentId !== null &&
+    node.parentId === target.parentId &&
+    nodeId !== targetId
+  );
 }
 
+/**
+ * ドラッグで離したときの移動。
+ * child: ドロップ先の子の末尾につなぎ替える。reorder: 兄弟の上で離し、そのノードがあった位置に入れる。
+ */
 export function dropNode(
-  _map: MindMap,
-  _nodeId: NodeId,
-  _targetId: NodeId,
-  _mode: "child" | "reorder",
+  map: MindMap,
+  nodeId: NodeId,
+  targetId: NodeId,
+  mode: "child" | "reorder",
 ): MindMap {
-  throw new Error("未実装");
+  if (mode === "child") return moveNode(map, nodeId, targetId);
+  if (!canReorderTo(map, nodeId, targetId)) {
+    throw new Error("兄弟のノードの上でのみ、入れ替えられます");
+  }
+  const parent = map.nodes[nodeId].parentId as NodeId;
+  return moveNode(map, nodeId, parent, map.nodes[parent].childIds.indexOf(targetId));
 }
