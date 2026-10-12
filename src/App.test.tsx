@@ -746,7 +746,7 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.queryByText("新テーマ")).not.toBeInTheDocument();
     });
 
-    it("ノードの削除を元に戻す（サブツリーごと復活し、直前に記録した時点の選択に戻る）", async () => {
+    it("ノードの削除を元に戻す（サブツリーごと復活し、削除したノードが選択される）", async () => {
       const user = userEvent.setup();
       const { container } = render(<App />);
       await addChildNamed(user, "a");
@@ -759,8 +759,7 @@ describe("App（マインドマップ編集UI）", () => {
 
       expect(nodes(container)).toHaveLength(3);
       expect(screen.getByText("a1")).toBeInTheDocument();
-      // 履歴は「記録した時点の状態」に戻る。矢印キーの移動は記録されないので、a1 の追加直後の選択
-      expect(selectedText(container)).toBe("a1");
+      expect(selectedText(container)).toBe("a");
     });
 
     it("何も操作していないときは、何も起きない", async () => {
@@ -806,6 +805,18 @@ describe("App（マインドマップ編集UI）", () => {
       await user.keyboard("{ArrowLeft}");
       await user.keyboard("{Delete}");
       await user.keyboard("{Enter}");
+
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.queryByText("a")).not.toBeInTheDocument();
+    });
+
+    it("テキストを変えずに確定した編集は、履歴に残らない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{F2}{Enter}");
 
       await user.keyboard(CMD_Z);
 

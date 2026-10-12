@@ -5,6 +5,8 @@ import { addChild } from "./domain/addChild";
 import { addSibling } from "./domain/addSibling";
 import { getBranchColor } from "./domain/branchColor";
 import { deleteNode } from "./domain/deleteNode";
+import { createHistory, record, undo } from "./domain/history";
+import type { History } from "./domain/history";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId } from "./domain/mindmap";
@@ -26,12 +28,18 @@ import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
 
+/** 履歴の1件分の状態（マップと、そのとき選択していたノード） */
+interface Snapshot {
+  map: MindMap;
+  selectedId: NodeId;
+}
+
 /** 編集中のノードと入力途中のテキスト */
 interface Editing {
   nodeId: NodeId;
   draft: string;
-  /** Tab/Enter で追加した直後のノードか（取り消し・空確定で破棄する） */
-  isNew: boolean;
+  /** Tab/Enter で追加した直後のノードなら、追加前の状態（取り消し・空確定で、これに戻す）。既存ノードの編集なら null */
+  base: Snapshot | null;
 }
 
 /** 画面下部に表示する、保存結果などのメッセージ */
@@ -55,18 +63,19 @@ const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
 const MIN_HALF_EXTENT = 450;
 const VIEW_MARGIN = 160;
 
-function initialMap(): MindMap {
-  return createMindMap("中心テーマ");
+function initialSnapshot(): Snapshot {
+  const map = createMindMap("中心テーマ");
+  return { map, selectedId: map.rootId };
 }
 
 export default function App() {
-  const [map, setMap] = useState<MindMap>(initialMap);
-  const [selectedId, setSelectedId] = useState<NodeId>(() => map.rootId);
+  const [history, setHistory] = useState<History<Snapshot>>(() => createHistory(initialSnapshot()));
   const [editing, setEditing] = useState<Editing | null>(null);
   const [filePath, setFilePath] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<Message | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const { map, selectedId } = history.present;
   const laidOut = useMemo(() => layout(map), [map]);
 
   useEffect(() => {
@@ -76,25 +85,40 @@ export default function App() {
     }
   }, [editing?.nodeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** 追加直後のノードを破棄し、親を選択する */
-  const discardNode = (nodeId: NodeId) => {
-    const parentId = map.nodes[nodeId].parentId as NodeId;
-    setMap(deleteNode(map, nodeId));
-    setSelectedId(parentId);
+  /** 現在の状態を、履歴に残さずに置き換える（選択の移動や、確定前のノードの表示に使う） */
+  const replacePresent = (snapshot: Snapshot) => setHistory({ ...history, present: snapshot });
+
+  /** 変更を履歴に記録する */
+  const commit = (snapshot: Snapshot) => setHistory(record(history, snapshot));
+
+  /** ノードを追加して選択し、テキストの入力を始める。確定するまで履歴には残さない */
+  const startNewNode = (added: { map: MindMap; nodeId: NodeId }) => {
+    replacePresent({ map: added.map, selectedId: added.nodeId });
+    setEditing({ nodeId: added.nodeId, draft: "", base: history.present });
   };
 
   const commitEdit = (editing: Editing) => {
     const text = editing.draft.trim();
-    if (text === "") {
-      if (editing.isNew) discardNode(editing.nodeId);
-    } else {
-      setMap(updateText(map, editing.nodeId, text));
+    if (editing.base !== null) {
+      // 追加直後のノード。空なら破棄して追加前に戻し、入力があれば追加＋命名を1件の変更として記録する
+      if (text === "") {
+        replacePresent(editing.base);
+      } else {
+        setHistory(
+          record(
+            { ...history, present: editing.base },
+            { map: updateText(map, editing.nodeId, text), selectedId: editing.nodeId },
+          ),
+        );
+      }
+    } else if (text !== "" && text !== map.nodes[editing.nodeId].text) {
+      commit({ map: updateText(map, editing.nodeId, text), selectedId });
     }
     setEditing(null);
   };
 
   const cancelEdit = (editing: Editing) => {
-    if (editing.isNew) discardNode(editing.nodeId);
+    if (editing.base !== null) replacePresent(editing.base);
     setEditing(null);
   };
 
@@ -122,8 +146,8 @@ export default function App() {
     runFileAction(async () => {
       const loaded = await loadFile();
       if (loaded !== null) {
-        setMap(loaded.map);
-        setSelectedId(loaded.map.rootId);
+        // 別の文書を開くので、元に戻す履歴も新しくする
+        setHistory(createHistory({ map: loaded.map, selectedId: loaded.map.rootId }));
         setFilePath(loaded.path);
         setMessage({ kind: "status", text: `開きました: ${loaded.path}` });
       }
@@ -153,6 +177,11 @@ export default function App() {
           void open();
           return;
         }
+        if (key === "z" && !event.shiftKey) {
+          event.preventDefault();
+          setHistory(undo(history));
+          return;
+        }
         if (key === "e" && event.shiftKey) {
           event.preventDefault();
           void exportImage();
@@ -166,35 +195,28 @@ export default function App() {
 
       if (event.key === "Tab") {
         event.preventDefault();
-        const added = addChild(map, selectedId, "");
-        setMap(added.map);
-        setSelectedId(added.nodeId);
-        setEditing({ nodeId: added.nodeId, draft: "", isNew: true });
+        startNewNode(addChild(map, selectedId, ""));
       } else if (event.key === "Enter") {
         event.preventDefault();
         if (isRoot) return;
-        const added = addSibling(map, selectedId, "");
-        setMap(added.map);
-        setSelectedId(added.nodeId);
-        setEditing({ nodeId: added.nodeId, draft: "", isNew: true });
+        startNewNode(addSibling(map, selectedId, ""));
       } else if (event.key === "F2") {
         event.preventDefault();
-        setEditing({ nodeId: selectedId, draft: node.text, isNew: false });
+        setEditing({ nodeId: selectedId, draft: node.text, base: null });
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         if (isRoot) return;
         const parentId = node.parentId as NodeId;
-        setMap(deleteNode(map, selectedId));
-        setSelectedId(parentId);
+        commit({ map: deleteNode(map, selectedId), selectedId: parentId });
       } else if (event.key in ARROW_DIRECTIONS) {
         event.preventDefault();
-        setSelectedId(navigate(map, selectedId, ARROW_DIRECTIONS[event.key]));
+        replacePresent({ map, selectedId: navigate(map, selectedId, ARROW_DIRECTIONS[event.key]) });
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [map, selectedId, editing, filePath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [history, editing, filePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, editing: Editing) => {
     event.stopPropagation();
