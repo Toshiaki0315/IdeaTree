@@ -1,19 +1,22 @@
 # IdeaTree
 
-A macOS Mindmap tool built with TypeScript and Rust (Tauri), fully compliant with Tony Buzan's mind mapping laws.
+TypeScript と Rust (Tauri) で開発する、macOS 向けのマインドマップツールです。トニー・ブザンのマインドマップの法則に忠実な描画と操作性を目指します。
 
-## Repository
+## リポジトリ
 https://github.com/Toshiaki0315/IdeaTree.git
 
-## Features
-- **Tony Buzan's Rules**: Organic curving branches, single keywords, colorful branches, central images.
-- **Keyboard First**: Navigate and build mind maps entirely without a mouse.
-- **Save & Export**: Save projects as JSON for re-editing, and export mind maps as SVG vector graphics.
-- **High Quality**: Built with strict TDD, aiming for 100% test coverage.
+## 特徴
+- **トニー・ブザンの法則**: 有機的な曲線のブランチ、1ブランチ1ワード、カラフルな配色、セントラルイメージ（中央画像）を再現します。
+- **キーボードファースト**: マウスを使わず、キーボードだけでマインドマップを作成・操作できます。
+- **保存とエクスポート**: JSON 形式でプロジェクトを保存して再編集でき、SVG 形式のベクター画像として書き出せます。
+- **高い品質**: TDD（テスト駆動開発）を徹底し、カバレッジ 100% を目標とします（最低 95%）。
 
-## Tech Stack
-- Frontend: TypeScript, React, Vite
-- Backend: Rust, Tauri
+## 技術スタック
+- フロントエンド: TypeScript, React, Vite
+- バックエンド: Rust, Tauri
+- テスト: Vitest / React Testing Library（フロントエンド）、Cargo test（バックエンド）
 
-## Development
-See `claude.md` for AI agent instructions and `docs/spec.md` for detailed specifications.
+## 開発
+- AI エージェント向けの開発ルールは `claude.md` を参照してください。
+- 詳細な仕様は `docs/spec.md` を参照してください。
+- ドキュメントはすべて日本語で記述します。
