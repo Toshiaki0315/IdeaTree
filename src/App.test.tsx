@@ -5,6 +5,7 @@ import App from "./App";
 import { BRANCH_COLORS } from "./domain/branchColor";
 import { addChild } from "./domain/addChild";
 import { createMindMap } from "./domain/mindmap";
+import { setNodeStyle } from "./domain/nodeStyle";
 import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
@@ -1671,6 +1672,163 @@ describe("App（マインドマップ編集UI）", () => {
       await user.click(screen.getByRole("textbox"));
 
       expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+  });
+
+  describe("Cmd+B / Cmd+I: 太字・斜体", () => {
+    const CMD_B = "{Meta>}b{/Meta}";
+    const CMD_I = "{Meta>}i{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+
+    const weightOf = (text: string) => screen.getByText(text).getAttribute("font-weight");
+    const fontStyleOf = (text: string) => screen.getByText(text).getAttribute("font-style");
+
+    /** 中心 ─ a / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+    }
+
+    it("Cmd+B で選択ノードを太字にし、もう一度で標準に戻す", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      expect(weightOf("b")).toBe("normal");
+
+      await user.keyboard(CMD_B);
+      expect(weightOf("b")).toBe("bold");
+
+      await user.keyboard(CMD_B);
+      expect(weightOf("b")).toBe("normal");
+    });
+
+    it("Cmd+I で選択ノードを斜体にし、もう一度で標準に戻す", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+
+      await user.keyboard(CMD_I);
+      expect(fontStyleOf("b")).toBe("italic");
+
+      await user.keyboard(CMD_I);
+      expect(fontStyleOf("b")).toBe("normal");
+    });
+
+    it("太字と斜体は独立していて、選択していない他のノードは変わらない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+
+      await user.keyboard(CMD_B);
+      await user.keyboard(CMD_I);
+      await user.keyboard(CMD_B);
+
+      expect(weightOf("b")).toBe("normal");
+      expect(fontStyleOf("b")).toBe("italic");
+      expect(weightOf("a")).toBe("normal");
+      expect(fontStyleOf("a")).toBe("normal");
+    });
+
+    it("中心ノードにも設定できる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_B);
+
+      expect(weightOf("中心テーマ")).toBe("bold");
+    });
+
+    it("スタイルの変更は1手の履歴になり、元に戻したりやり直したりできる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_B);
+
+      await user.keyboard(CMD_Z);
+      expect(weightOf("b")).toBe("normal");
+
+      await user.keyboard("{Meta>}{Shift>}z{/Shift}{/Meta}");
+      expect(weightOf("b")).toBe("bold");
+    });
+
+    it("スタイルはファイルに保存される内容に含まれる", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_B);
+      await user.keyboard(CMD_I);
+
+      await user.keyboard("{Meta>}s{/Meta}");
+
+      const [map] = mockedSaveFile.mock.calls[0];
+      const saved = Object.values(map.nodes).find((n) => n.text === "b");
+      expect(saved?.style).toEqual({ bold: true, italic: true });
+    });
+
+    it("スタイルを持つファイルを開くと、画面に反映される", async () => {
+      const base = loadedMap();
+      const rootId = base.rootId;
+      mockedLoadFile.mockResolvedValue({
+        map: setNodeStyle(base, rootId, { bold: true, italic: true }),
+        path: "/Users/me/map.json",
+      });
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByRole("status");
+
+      expect(weightOf("読込")).toBe("bold");
+      expect(fontStyleOf("読込")).toBe("italic");
+    });
+
+    it("コピー＆ペーストで、スタイルも引き継がれる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_B);
+      await user.keyboard("{Meta>}c{/Meta}");
+      await user.keyboard("{ArrowUp}"); // a
+      await user.keyboard("{Meta>}v{/Meta}");
+
+      const bolds = screen.getAllByText("b").map((el) => el.getAttribute("font-weight"));
+
+      expect(bolds).toEqual(["bold", "bold"]);
+    });
+
+    it("ブラウザ標準の動作を止める", async () => {
+      render(<App />);
+
+      expect(fireEvent.keyDown(window, { key: "b", metaKey: true })).toBe(false);
+      expect(fireEvent.keyDown(window, { key: "i", metaKey: true })).toBe(false);
+    });
+
+    it("テキスト編集中は、ノードのスタイルを変えない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard("{F2}");
+
+      await user.keyboard(CMD_B);
+      await user.keyboard(CMD_I);
+      await user.keyboard("{Escape}");
+
+      expect(weightOf("b")).toBe("normal");
+      expect(fontStyleOf("b")).toBe("normal");
+    });
+
+    it("Ctrl や Shift との組み合わせ（Ctrl+B・Cmd+Shift+B など）では変えない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+
+      await user.keyboard("{Control>}b{/Control}");
+      await user.keyboard("{Meta>}{Shift>}b{/Shift}{/Meta}");
+      await user.keyboard("{Meta>}{Shift>}i{/Shift}{/Meta}");
+
+      expect(weightOf("b")).toBe("normal");
+      expect(fontStyleOf("b")).toBe("normal");
     });
   });
 });
