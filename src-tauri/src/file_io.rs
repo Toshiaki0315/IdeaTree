@@ -1,7 +1,11 @@
 //! マインドマップ（JSON）のファイル入出力。
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
+
+/// 読み込めるファイルの上限（想定外の巨大ファイルでメモリを使い切らないため）
+pub const MAX_READ_BYTES: u64 = 50 * 1024 * 1024;
 
 /// 一時ファイルに書き込んでから置き換えることで、保存の途中で失敗しても元のファイルを壊さない。
 pub fn write_text_file(path: &Path, contents: &str) -> Result<(), String> {
@@ -33,6 +37,38 @@ pub fn write_text_file(path: &Path, contents: &str) -> Result<(), String> {
 #[tauri::command]
 pub fn save_file(path: String, contents: String) -> Result<(), String> {
     write_text_file(Path::new(&path), &contents)
+}
+
+/// UTF-8 のテキストファイルを読み込む。存在しない・巨大すぎる・テキストでない場合はエラーにする。
+pub fn read_text_file(path: &Path) -> Result<String, String> {
+    if path.as_os_str().is_empty() {
+        return Err("読み込み元のパスが空です".to_string());
+    }
+    let metadata = fs::metadata(path).map_err(|e| match e.kind() {
+        ErrorKind::NotFound => format!("ファイルが見つかりません: {}", path.display()),
+        _ => format!("ファイルを読み込めません: {}: {e}", path.display()),
+    })?;
+    if metadata.is_dir() {
+        return Err(format!("ファイルを読み込めません: {}", path.display()));
+    }
+    if metadata.len() > MAX_READ_BYTES {
+        return Err(format!(
+            "ファイルが大きすぎます（上限 {} MB）: {}",
+            MAX_READ_BYTES / 1024 / 1024,
+            path.display()
+        ));
+    }
+
+    let bytes = fs::read(path)
+        .map_err(|e| format!("ファイルを読み込めません: {}: {e}", path.display()))?;
+    String::from_utf8(bytes)
+        .map_err(|_| format!("ファイルがUTF-8のテキストではありません: {}", path.display()))
+}
+
+/// フロントエンドの `invoke("load_file", { path })` から呼ばれるコマンド。
+#[tauri::command]
+pub fn load_file(path: String) -> Result<String, String> {
+    read_text_file(Path::new(&path))
 }
 
 #[cfg(test)]
