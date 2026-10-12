@@ -5,7 +5,7 @@ import { addChild } from "./domain/addChild";
 import { addSibling } from "./domain/addSibling";
 import { getBranchColor } from "./domain/branchColor";
 import { deleteNode } from "./domain/deleteNode";
-import { createHistory, record, undo } from "./domain/history";
+import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
@@ -177,9 +177,9 @@ export default function App() {
           void open();
           return;
         }
-        if (key === "z" && !event.shiftKey) {
+        if (key === "z") {
           event.preventDefault();
-          setHistory(undo(history));
+          setHistory(event.shiftKey ? redo(history) : undo(history));
           return;
         }
         if (key === "e" && event.shiftKey) {
