@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { NodeStyle } from "./domain/mindmap";
+import { ICON_PRESETS } from "./domain/nodeIcon";
 import { isColor } from "./domain/nodeStyle";
 import { COLOR_PRESETS, FONT_PRESETS, FONT_SIZE_PRESETS } from "./domain/stylePresets";
 
@@ -13,10 +14,13 @@ interface Props {
   nodeText: string;
   /** 選択中のノードの現在のスタイル */
   style: NodeStyle;
+  /** 選択中のノードのアイコン */
+  icon: string | undefined;
   /** 選択中のノードが画像を持っているか */
   hasImage: boolean;
   /** 項目を変更する（undefined は「自動」に戻す） */
   onChange: (patch: Partial<NodeStyle>) => void;
+  onChangeIcon: (icon: string | undefined) => void;
   onChooseImage: () => void;
   onRemoveImage: () => void;
   onClose: () => void;
@@ -33,8 +37,10 @@ export default function StylePanel({
   defaultColor,
   nodeText,
   style,
+  icon,
   hasImage,
   onChange,
+  onChangeIcon,
   onChooseImage,
   onRemoveImage,
   onClose,
@@ -175,6 +181,22 @@ export default function StylePanel({
           {sizes.map((size) => (
             <option key={size.value} value={size.value}>
               {size.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="style-panel-field">
+        アイコン
+        <select
+          aria-label="アイコン"
+          value={icon ?? ""}
+          onChange={(event) => onChangeIcon(event.target.value || undefined)}
+        >
+          <option value="">なし</option>
+          {ICON_PRESETS.map((preset) => (
+            <option key={preset.value} value={preset.value}>
+              {preset.name}
             </option>
           ))}
         </select>

@@ -4036,7 +4036,7 @@ describe("App（マインドマップ編集UI）", () => {
 
       await user.click(container.querySelector("text[data-icon-for]")!);
 
-      expect(selectedText(container)).toBe("b");
+      expect(selectedText(container)).toBe(`b${star.value}`); // ノードの文字には、アイコンの記号も含まれる
     });
   });
 });

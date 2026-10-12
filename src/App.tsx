@@ -15,6 +15,7 @@ import { hitAreaSize } from "./domain/hitArea";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
+import { setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { canMoveTo, canReorderTo, dropNode, moveNode } from "./domain/moveNode";
@@ -30,6 +31,7 @@ import {
   branchPath,
   centralLabelY,
   depthOf,
+  iconPlacement,
   imageBox,
   labelPosition,
   nodeLabel,
@@ -108,6 +110,11 @@ const FOLLOW_MARGIN = 40;
 /** 折りたたまれているノードを展開する（子を追加・貼り付けしても、見えなくならないように） */
 function expanded(map: MindMap, nodeId: NodeId): MindMap {
   return map.nodes[nodeId].collapsed ? toggleCollapse(map, nodeId) : map;
+}
+
+/** アイコンの位置を、SVG の属性にする */
+function iconProps(place: { x: number; y: number; fontSize: number; anchor: "end" | "middle" }) {
+  return { x: place.x, y: place.y, fontSize: place.fontSize, textAnchor: place.anchor };
 }
 
 /** ラベルを中心にした、クリック範囲の長方形 */
@@ -385,6 +392,12 @@ export default function App() {
   /** 選択ノードをサブツリーごと削除し、親を選択する（履歴に1件記録） */
   const deleteSelected = (parentId: NodeId) =>
     commit({ map: deleteNode(map, selectedId), selectedId: parentId });
+
+  /** スタイルパネルでのアイコンの変更を、1手の履歴として記録する（変化がなければ記録しない） */
+  const changeIcon = (icon: string | undefined) => {
+    const updated = setNodeIcon(map, selectedId, icon);
+    if (updated !== map) commit({ map: updated, selectedId });
+  };
 
   /** スタイルパネルでの変更を、1手の履歴として記録する（変化がなければ記録しない） */
   const changeStyle = (patch: Partial<NodeStyle>) => {
@@ -706,6 +719,16 @@ export default function App() {
                   {nodeLabel(node)}
                 </text>
               )}
+              {node.icon && !isEditing && (
+                <text
+                  data-icon-for={node.id}
+                  {...iconProps(iconPlacement(laidOut, node))}
+                  dominantBaseline="central"
+                  fontFamily={look.fontFamily}
+                >
+                  {node.icon}
+                </text>
+              )}
               {isEditing && editing && (
                 <foreignObject x={labelX - 80} y={labelY - 18} width={160} height={36}>
                   <input
@@ -738,8 +761,10 @@ export default function App() {
           defaultColor={nodeTextStyle(map, map.nodes[selectedId]).color}
           nodeText={map.nodes[selectedId].text}
           style={map.nodes[selectedId].style ?? {}}
+          icon={map.nodes[selectedId].icon}
           hasImage={map.nodes[selectedId].image !== undefined}
           onChange={changeStyle}
+          onChangeIcon={changeIcon}
           onChooseImage={() => void chooseImage()}
           onRemoveImage={removeImage}
           onClose={() => setStyleOpen(false)}
