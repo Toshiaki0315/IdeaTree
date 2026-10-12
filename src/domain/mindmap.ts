@@ -27,6 +27,8 @@ export interface MindMapNode {
   style?: NodeStyle;
   /** メインブランチ（中心ノードの子）に割り当てた色（#RRGGBB）。子孫はこの色を引き継ぐ */
   branchColor?: string;
+  /** ノードの画像（PNG・JPEG・GIF・WebP の base64 のデータURL）。中心ノードに置くとセントラルイメージになる */
+  image?: string;
 }
 
 export interface MindMap {
