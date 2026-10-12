@@ -1,5 +1,40 @@
 //! マインドマップ（JSON）のファイル入出力。
 
+use std::fs;
+use std::path::Path;
+
+/// 一時ファイルに書き込んでから置き換えることで、保存の途中で失敗しても元のファイルを壊さない。
+pub fn write_text_file(path: &Path, contents: &str) -> Result<(), String> {
+    if path.as_os_str().is_empty() {
+        return Err("保存先のパスが空です".to_string());
+    }
+    let parent = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => Path::new("."),
+    };
+    if !parent.is_dir() {
+        return Err(format!("保存先のフォルダが存在しません: {}", parent.display()));
+    }
+    let name = match path.file_name() {
+        Some(name) if !path.is_dir() => name.to_string_lossy().into_owned(),
+        _ => return Err(format!("ファイルを書き込めません: {}", path.display())),
+    };
+
+    let temp = parent.join(format!(".{name}.tmp"));
+    let result = fs::write(&temp, contents).and_then(|_| fs::rename(&temp, path));
+    if let Err(e) = result {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("ファイルを書き込めません: {}: {e}", path.display()));
+    }
+    Ok(())
+}
+
+/// フロントエンドの `invoke("save_file", { path, contents })` から呼ばれるコマンド。
+#[tauri::command]
+pub fn save_file(path: String, contents: String) -> Result<(), String> {
+    write_text_file(Path::new(&path), &contents)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
