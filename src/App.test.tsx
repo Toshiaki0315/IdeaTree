@@ -3529,4 +3529,134 @@ describe("App（マインドマップ編集UI）", () => {
       expect(selectedText(container)).toBe("b");
     });
   });
+
+  describe("ドラッグでの兄弟の順序の指定（Shift を押しながら、兄弟の上で離す）", () => {
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const at = (x: number, y: number) => ({ clientX: x, clientY: y });
+    const order = (container: HTMLElement) =>
+      [...nodes(container)].map((g) => g.textContent);
+    const nodeG = (text: string) => screen.getByText(text).closest("g[data-node-id]") as Element;
+
+    async function dragOver(user: User, from: string, to: string) {
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: screen.getByText(from), coords: at(100, 100) },
+        { target: screen.getByText(from), coords: at(130, 130) },
+        { target: screen.getByText(to), coords: at(300, 300) },
+      ]);
+    }
+    async function drop(user: User, to: string) {
+      await user.pointer({ keys: "[/MouseLeft]", target: screen.getByText(to), coords: at(300, 300) });
+    }
+
+    /** 中心 ─ a(a1) / b / c を作る */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await user.keyboard("{ArrowLeft}");
+      await addSiblingNamed(user, "b");
+      await addSiblingNamed(user, "c");
+    }
+
+    it("Shift を押しながら、後ろの兄弟を前の兄弟の上で離すと、その位置に入る", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.keyboard("{Shift>}");
+      await dragOver(user, "c", "a");
+      await drop(user, "a");
+      await user.keyboard("{/Shift}");
+
+      expect(order(container)).toEqual(["中心テーマ", "c", "a", "a1", "b"]);
+      expect(selectedText(container)).toBe("c");
+    });
+
+    it("前の兄弟を、後ろの兄弟の上で離すと、その位置に入る", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.keyboard("{Shift>}");
+      await dragOver(user, "a", "c");
+      await drop(user, "c");
+      await user.keyboard("{/Shift}");
+
+      expect(order(container)).toEqual(["中心テーマ", "b", "c", "a", "a1"]);
+    });
+
+    it("入れ替えは、メインブランチの色を変えず、1手の履歴で元に戻せる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard("{Shift>}");
+      await dragOver(user, "c", "a");
+      await drop(user, "a");
+      await user.keyboard("{/Shift}");
+      expect(screen.getByText("c").getAttribute("fill")).toBe(BRANCH_COLORS[2]);
+
+      await user.keyboard(CMD_Z);
+
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b", "c"]);
+    });
+
+    it("Shift を押さずに兄弟の上で離すと、これまでどおり、その子につなぎ替える", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await dragOver(user, "c", "b");
+      await drop(user, "b");
+
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b", "c"]);
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("b"); // c は b の子になった
+    });
+
+    it("Shift を押していても、兄弟でないノードの上では、子につなぎ替える", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.keyboard("{Shift>}");
+      await dragOver(user, "c", "a1");
+      await drop(user, "a1");
+      await user.keyboard("{/Shift}");
+
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("a1");
+    });
+
+    it("ドラッグ中は、離したときの動作（入れ替え・つなぎ替え）が、強調表示に示される", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+
+      await dragOver(user, "c", "a");
+      expect(nodeG("a")).toHaveAttribute("data-drop-mode", "child");
+      await drop(user, "a");
+
+      await user.keyboard("{Shift>}");
+      await dragOver(user, "b", "a");
+      expect(nodeG("a")).toHaveAttribute("data-drop-mode", "reorder");
+      expect(nodeG("a")).toHaveAttribute("data-drop-target", "true");
+      await drop(user, "a");
+      await user.keyboard("{/Shift}");
+      expect(document.querySelector("[data-drop-mode]")?.getAttribute("data-drop-mode")).not.toBe("reorder");
+    });
+
+    it("自分自身の上や、何もない場所では、Shift を押していても、何も起きない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.keyboard("{Shift>}");
+      await dragOver(user, "b", "b");
+      await drop(user, "b");
+      await user.keyboard("{/Shift}");
+
+      expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b", "c"]);
+      await user.keyboard(CMD_Z);
+      expect(screen.queryByText("c")).not.toBeInTheDocument(); // c の追加が、1手で戻る
+    });
+  });
 });
