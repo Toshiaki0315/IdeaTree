@@ -3,7 +3,7 @@ import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 /** 階層ごとの、親ノードからの距離（px） */
 export const LEVEL_DISTANCE = 180;
 
-/** 中心ノードに画像があるときに、ブランチを外側へずらす距離（px） */
+/** 中心ノードに画像（倍率 1）があるときに、ブランチを外側へずらす距離（px）。倍率に比例して変える */
 export const CENTRAL_IMAGE_EXTRA = 80;
 
 export interface LayoutOptions {
@@ -29,7 +29,8 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
     throw new Error("levelDistance は正の数でなければなりません");
   }
 
-  const imageExtra = map.nodes[map.rootId].image ? CENTRAL_IMAGE_EXTRA : 0;
+  const rootNode = map.nodes[map.rootId];
+  const imageExtra = rootNode.image ? CENTRAL_IMAGE_EXTRA * (rootNode.style?.imageScale ?? 1) : 0;
   const nodes: Record<NodeId, MindMapNode> = {};
 
   const place = (id: NodeId, depth: number, start: number, end: number): void => {

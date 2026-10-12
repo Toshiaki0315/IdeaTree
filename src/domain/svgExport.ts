@@ -63,20 +63,30 @@ export function labelPosition(map: MindMap, node: MindMapNode): { x: number; y: 
   };
 }
 
-/** ノードの画像を描く枠。中心ノードは、位置の中心。それ以外は、ラベルの上 */
+/** ノードの画像の倍率（指定がなければ 1） */
+export function imageScaleOf(node: MindMapNode): number {
+  return node.style?.imageScale ?? 1;
+}
+
+/** ノードの画像を描く枠（倍率を反映する）。中心ノードは、位置の中心。それ以外は、ラベルの上 */
 export function imageBox(map: MindMap, node: MindMapNode): Box {
+  const scale = imageScaleOf(node);
   if (node.parentId === null) {
-    const { width, height } = CENTRAL_IMAGE;
+    const width = CENTRAL_IMAGE.width * scale;
+    const height = CENTRAL_IMAGE.height * scale;
     return { x: node.position.x - width / 2, y: node.position.y - height / 2, width, height };
   }
   const { x, y } = labelPosition(map, node);
-  const { width, height } = BRANCH_IMAGE;
+  const width = BRANCH_IMAGE.width * scale;
+  const height = BRANCH_IMAGE.height * scale;
   return { x: x - width / 2, y: y - BRANCH_IMAGE_GAP - height, width, height };
 }
 
 /** 中心ノードの画像があるときの、テキストの位置（画像の下）。なければ、ノードの位置 */
 export function centralLabelY(node: MindMapNode): number {
-  return node.image ? node.position.y + CENTRAL_IMAGE.height / 2 + CENTRAL_LABEL_GAP : node.position.y;
+  return node.image
+    ? node.position.y + (CENTRAL_IMAGE.height * imageScaleOf(node)) / 2 + CENTRAL_LABEL_GAP
+    : node.position.y;
 }
 
 const ICON_GAP = 6;
@@ -96,7 +106,9 @@ export function iconPlacement(map: MindMap, node: MindMapNode): IconPlacement {
   const look = nodeTextStyle(map, node);
   const fontSize = look.fontSize * ICON_SCALE;
   if (node.parentId === null) {
-    const top = node.image ? node.position.y - CENTRAL_IMAGE.height / 2 : node.position.y - CENTRAL_RY;
+    const top = node.image
+      ? node.position.y - (CENTRAL_IMAGE.height * imageScaleOf(node)) / 2
+      : node.position.y - CENTRAL_RY;
     return { x: node.position.x, y: top - ROOT_ICON_GAP, fontSize, anchor: "middle" };
   }
   const { x, y } = labelPosition(map, node);
