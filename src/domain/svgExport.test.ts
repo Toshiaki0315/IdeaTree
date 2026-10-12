@@ -515,12 +515,12 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
     const star = ICON_PRESETS[0].value;
     const heart = ICON_PRESETS[8].value;
     const icon = (map: MindMap, id: NodeId) =>
-      parse(exportSvg(map)).querySelector(`text[data-role="icon"][data-node-id="${id}"]`);
+      parse(exportSvg(map)).querySelector(`text[data-icon-for="${id}"]`);
 
     it("アイコンのないノードには、アイコンの要素を出力しない", () => {
       const { map } = buildMap();
 
-      expect(parse(exportSvg(map)).querySelectorAll('text[data-role="icon"]')).toHaveLength(0);
+      expect(parse(exportSvg(map)).querySelectorAll("text[data-icon-for]")).toHaveLength(0);
     });
 
     it("ブランチのアイコンは、ラベルの左側に、同じ高さで、文字の幅を空けて描かれる", () => {
@@ -528,7 +528,7 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       const withIcon = setNodeIcon(map, ids.a1, star);
       const doc = parse(exportSvg(withIcon));
 
-      const el = doc.querySelector(`text[data-role="icon"][data-node-id="${ids.a1}"]`)!;
+      const el = doc.querySelector(`text[data-icon-for="${ids.a1}"]`)!;
       const label = byNodeId(doc, "text", ids.a1);
       const labelWidth = estimateTextWidth("調査", Number(label.getAttribute("font-size")));
       expect(el.textContent).toBe(star);
@@ -559,7 +559,7 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       const { map, ids } = buildMap();
       const doc = parse(exportSvg(setNodeIcon(map, ids.root, heart)));
 
-      const el = doc.querySelector(`text[data-role="icon"][data-node-id="${ids.root}"]`)!;
+      const el = doc.querySelector(`text[data-icon-for="${ids.root}"]`)!;
       const ellipse = byNodeId(doc, "ellipse", ids.root);
       expect(el.textContent).toBe(heart);
       expect(el.getAttribute("text-anchor")).toBe("middle");
@@ -575,7 +575,7 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
       const doc = parse(exportSvg(setNodeIcon(setNodeImage(map, ids.root, png), ids.root, star)));
 
-      const el = doc.querySelector(`text[data-role="icon"][data-node-id="${ids.root}"]`)!;
+      const el = doc.querySelector(`text[data-icon-for="${ids.root}"]`)!;
       const image = doc.querySelector(`image[data-node-id="${ids.root}"]`)!;
       expect(Number(el.getAttribute("y"))).toBeLessThan(Number(image.getAttribute("y")));
     });

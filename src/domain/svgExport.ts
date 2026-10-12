@@ -1,4 +1,5 @@
 import { getBranchColor } from "./branchColor";
+import { estimateTextWidth } from "./hitArea";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 import { visibleNodeIds } from "./visibleNodeIds";
 
@@ -76,6 +77,31 @@ export function imageBox(map: MindMap, node: MindMapNode): Box {
 /** 中心ノードの画像があるときの、テキストの位置（画像の下）。なければ、ノードの位置 */
 export function centralLabelY(node: MindMapNode): number {
   return node.image ? node.position.y + CENTRAL_IMAGE.height / 2 + CENTRAL_LABEL_GAP : node.position.y;
+}
+
+const ICON_GAP = 6;
+const ICON_SCALE = 1.1;
+/** 中心ノードのアイコンの中心から、楕円（画像）の上端までの距離 */
+const ROOT_ICON_GAP = 16;
+
+export interface IconPlacement {
+  x: number;
+  y: number;
+  fontSize: number;
+  anchor: "end" | "middle";
+}
+
+/** アイコンの位置。ブランチは、ラベルの左側。中心ノードは、楕円（画像）の上に、中央揃え */
+export function iconPlacement(map: MindMap, node: MindMapNode): IconPlacement {
+  const look = nodeTextStyle(map, node);
+  const fontSize = look.fontSize * ICON_SCALE;
+  if (node.parentId === null) {
+    const top = node.image ? node.position.y - CENTRAL_IMAGE.height / 2 : node.position.y - CENTRAL_RY;
+    return { x: node.position.x, y: top - ROOT_ICON_GAP, fontSize, anchor: "middle" };
+  }
+  const { x, y } = labelPosition(map, node);
+  const labelWidth = estimateTextWidth(nodeLabel(node), look.fontSize);
+  return { x: x - labelWidth / 2 - ICON_GAP, y, fontSize, anchor: "end" };
 }
 
 /** テキストと枝の見た目（スタイルの指定があればそれを、なければ既定値を使う） */
@@ -156,6 +182,13 @@ export function exportSvg(map: MindMap): string {
       const box = imageBox(map, node);
       images.push(
         `<image data-node-id="${id}" href="${escapeXml(node.image)}" preserveAspectRatio="xMidYMid meet" x="${fmt(box.x)}" y="${fmt(box.y)}" width="${box.width}" height="${box.height}"/>`,
+      );
+    }
+
+    if (node.icon) {
+      const place = iconPlacement(map, node);
+      labels.push(
+        `<text data-icon-for="${id}" x="${fmt(place.x)}" y="${fmt(place.y)}" text-anchor="${place.anchor}" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="${fmt(place.fontSize)}">${escapeXml(node.icon)}</text>`,
       );
     }
 
