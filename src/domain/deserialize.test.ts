@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
 import { toggleCollapse } from "./collapse";
+import { MAX_IMAGE_BYTES } from "./nodeImage";
+import { setNodeImage } from "./nodeImage";
 import { setNodeStyle } from "./nodeStyle";
 import { deserialize } from "./deserialize";
 import { createMindMap } from "./mindmap";
@@ -323,3 +325,47 @@ describe("deserialize（branchColor: メインブランチの色）", () => {
     },
   );
 });
+
+describe("deserialize（image: ノードの画像）", () => {
+  const PNG =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+
+  it("画像を、保存して読み込んでも保てる（往復）", () => {
+    const { data, ids } = validData();
+    const base = deserialize(JSON.stringify(data));
+    const withImage = setNodeImage(setNodeImage(base, ids.root, PNG), ids.a, PNG);
+
+    const restored = deserialize(serialize(withImage));
+
+    expect(restored.nodes[ids.root].image).toBe(PNG);
+    expect(restored).toEqual(withImage);
+  });
+
+  it("image がないノード（従来のファイル）も、そのまま読み込める", () => {
+    const { data, ids } = validData();
+
+    expect(deserialize(JSON.stringify(data)).nodes[ids.a].image).toBeUndefined();
+  });
+
+  it.each([
+    ["SVG", "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="],
+    ["外部のURL", "https://example.com/a.png"],
+    ["スクリプト", "javascript:alert(1)"],
+    ["base64 でない", "data:image/png,raw"],
+    ["文字列でない", 123],
+    ["null", null],
+  ])("不正な image（%s）はエラーになる", (_name, value) => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].image = value;
+
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+  });
+
+  it("大きすぎる画像を含むファイルは、エラーになる", () => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].image = `data:image/png;base64,${"A".repeat(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 8)}`;
+
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+  });
+});
+
