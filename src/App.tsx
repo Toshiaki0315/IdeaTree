@@ -11,8 +11,8 @@ import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
-import type { MindMap, NodeId } from "./domain/mindmap";
-import { toggleStyle } from "./domain/nodeStyle";
+import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
+import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
@@ -32,6 +32,7 @@ import { visibleNodeIds } from "./domain/visibleNodeIds";
 import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
+import StylePanel from "./StylePanel";
 
 /** 履歴の1件分の状態（マップと、そのとき選択していたノード） */
 interface Snapshot {
@@ -83,6 +84,7 @@ export default function App() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [filePath, setFilePath] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<Message | null>(null);
+  const [styleOpen, setStyleOpen] = useState(false);
   /** コピーしたサブツリー。ファイルを開いても保持する */
   const [clipboard, setClipboard] = useState<Subtree | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -147,6 +149,12 @@ export default function App() {
   /** 選択ノードをサブツリーごと削除し、親を選択する（履歴に1件記録） */
   const deleteSelected = (parentId: NodeId) =>
     commit({ map: deleteNode(map, selectedId), selectedId: parentId });
+
+  /** スタイルパネルでの変更を、1手の履歴として記録する（変化がなければ記録しない） */
+  const changeStyle = (patch: Partial<NodeStyle>) => {
+    const updated = setNodeStyle(map, selectedId, patch);
+    if (updated !== map) commit({ map: updated, selectedId });
+  };
 
   /** ファイル操作を実行し、失敗したらエラーメッセージを表示する */
   const runFileAction = async (action: () => Promise<void>) => {
@@ -215,6 +223,11 @@ export default function App() {
           event.preventDefault();
           const toggled = toggleStyle(map, selectedId, key === "b" ? "bold" : "italic");
           commit({ map: toggled, selectedId });
+          return;
+        }
+        if (key === "k" && !event.shiftKey) {
+          event.preventDefault();
+          setStyleOpen((open) => !open);
           return;
         }
         if (key === "x") {
@@ -306,6 +319,7 @@ export default function App() {
           return (
             <path
               key={node.id}
+              data-node-id={node.id}
               d={branchPath(laidOut.nodes[node.parentId], node)}
               fill="none"
               stroke={nodeTextStyle(laidOut, node).color}
@@ -384,6 +398,14 @@ export default function App() {
           );
         })}
       </svg>
+      {styleOpen && (
+        <StylePanel
+          nodeText={map.nodes[selectedId].text}
+          style={map.nodes[selectedId].style ?? {}}
+          onChange={changeStyle}
+          onClose={() => setStyleOpen(false)}
+        />
+      )}
       {message && (
         <div className={`message message-${message.kind}`} role={message.kind}>
           {message.text}
