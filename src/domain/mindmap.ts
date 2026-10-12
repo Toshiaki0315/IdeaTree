@@ -5,6 +5,16 @@ export interface Position {
   y: number;
 }
 
+/** ノードの見た目の設定。省略した項目は、既定の見た目（メインブランチの色など）になる */
+export interface NodeStyle {
+  bold?: boolean;
+  italic?: boolean;
+  /** 文字と枝の色（#RRGGBB）。省略時はメインブランチの色 */
+  color?: string;
+  fontFamily?: string;
+  fontSize?: number;
+}
+
 export interface MindMapNode {
   id: NodeId;
   kind: "central" | "branch";
@@ -14,6 +24,7 @@ export interface MindMapNode {
   position: Position;
   /** 子孫を非表示にしているか（省略時は展開状態） */
   collapsed?: boolean;
+  style?: NodeStyle;
 }
 
 export interface MindMap {
