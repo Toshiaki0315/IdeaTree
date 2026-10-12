@@ -7,16 +7,19 @@ import { addChild } from "./domain/addChild";
 import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
 import { copyNode } from "./domain/copyNode";
 import { createMindMap } from "./domain/mindmap";
+import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle } from "./domain/nodeStyle";
 import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { loadFile } from "./files/loadFile";
+import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
 
 vi.mock("./files/saveFile", () => ({ saveFile: vi.fn() }));
 vi.mock("./files/loadFile", () => ({ loadFile: vi.fn() }));
+vi.mock("./files/pickImage", () => ({ pickImage: vi.fn() }));
 vi.mock("./files/confirmDiscard", () => ({ confirmDiscard: vi.fn() }));
 vi.mock("./files/closeGuard", () => ({ registerCloseGuard: vi.fn() }));
 vi.mock("./files/clipboard", () => ({ readClipboardText: vi.fn(), writeClipboardText: vi.fn() }));
@@ -24,6 +27,7 @@ vi.mock("./files/svgExportFile", () => ({ svgExportFile: vi.fn() }));
 
 const mockedSaveFile = vi.mocked(saveFile);
 const mockedLoadFile = vi.mocked(loadFile);
+const mockedPickImage = vi.mocked(pickImage);
 const mockedConfirmDiscard = vi.mocked(confirmDiscard);
 const mockedRegisterCloseGuard = vi.mocked(registerCloseGuard);
 const unlistenCloseGuard = vi.fn();
@@ -42,6 +46,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mockedConfirmDiscard.mockResolvedValue(true); // 既定では、破棄してよいと答える
   mockedRegisterCloseGuard.mockResolvedValue(unlistenCloseGuard);
+  mockedPickImage.mockResolvedValue(null);
   // 既定では、システムのクリップボードを読み書きできない（アプリの中のコピーだけを使う）状態にする
   mockedWriteClipboard.mockResolvedValue(undefined);
   mockedReadClipboard.mockRejectedValue(new Error("クリップボードを読み込めません: 利用できません"));
@@ -3069,6 +3074,227 @@ describe("App（マインドマップ編集UI）", () => {
       ]);
 
       expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b"]);
+    });
+  });
+
+  describe("ノードの画像（Cmd+Shift+I）", () => {
+    const PNG =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+    const GIF = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+    const CMD_SHIFT_I = "{Meta>}{Shift>}i{/Shift}{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const images = (container: HTMLElement) => container.querySelectorAll("image");
+
+    /** 中心 ─ a / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+    }
+
+    it("Cmd+Shift+I で画像を選ぶダイアログを開き、選んだ画像が、選択ノードに設定されて表示される", async () => {
+      mockedPickImage.mockResolvedValue(PNG);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.keyboard(CMD_SHIFT_I);
+
+      await waitFor(() => expect(images(container)).toHaveLength(1));
+      expect(mockedPickImage).toHaveBeenCalledTimes(1);
+      expect(images(container)[0].getAttribute("href")).toBe(PNG);
+      expect(images(container)[0].closest("g[data-node-id]")?.textContent).toBe("b");
+    });
+
+    it("中心ノードに設定すると、楕円の代わりに画像（セントラルイメージ）が表示され、テキストも残る", async () => {
+      mockedPickImage.mockResolvedValue(PNG);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      expect(container.querySelector("ellipse")).not.toBeNull();
+
+      await user.keyboard(CMD_SHIFT_I);
+
+      await waitFor(() => expect(images(container)).toHaveLength(1));
+      expect(container.querySelector("ellipse")).toBeNull();
+      expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+    });
+
+    it("ダイアログをキャンセルしたら、何も起きず、履歴にも残らない", async () => {
+      mockedPickImage.mockResolvedValue(null);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.keyboard(CMD_SHIFT_I);
+      await waitFor(() => expect(mockedPickImage).toHaveBeenCalledTimes(1));
+      await user.keyboard(CMD_Z);
+
+      expect(images(container)).toHaveLength(0);
+      expect(screen.queryByText("b")).not.toBeInTheDocument(); // b の追加が、1手で戻る
+    });
+
+    it("画像を読み込めなかったときは、エラーを表示し、ノードは変わらない", async () => {
+      mockedPickImage.mockRejectedValue(new Error("画像を読み込めません: 画像が大きすぎます（上限 2 MB）"));
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+
+      await user.keyboard(CMD_SHIFT_I);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("画像が大きすぎます");
+      expect(images(container)).toHaveLength(0);
+    });
+
+    it("不正な形式の画像が返されたときも、エラーを表示し、設定しない", async () => {
+      mockedPickImage.mockResolvedValue("data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=");
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_SHIFT_I);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("画像の形式が不正です");
+    });
+
+    it("画像の設定は1手の履歴で、元に戻したり、やり直したりできる", async () => {
+      mockedPickImage.mockResolvedValue(PNG);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard(CMD_SHIFT_I);
+      await waitFor(() => expect(images(container)).toHaveLength(1));
+
+      await user.keyboard(CMD_Z);
+      expect(images(container)).toHaveLength(0);
+
+      await user.keyboard("{Meta>}{Shift>}z{/Shift}{/Meta}");
+      expect(images(container)).toHaveLength(1);
+    });
+
+    it("同じ画像をもう一度設定しても、履歴は増えない", async () => {
+      mockedPickImage.mockResolvedValue(PNG);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_SHIFT_I);
+      await waitFor(() => expect(images(container)).toHaveLength(1));
+
+      await user.keyboard(CMD_SHIFT_I);
+      await waitFor(() => expect(mockedPickImage).toHaveBeenCalledTimes(2));
+      await user.keyboard(CMD_Z); // 画像の設定が、1手で戻る
+      expect(images(container)).toHaveLength(0);
+      expect(screen.getByText("a")).toBeInTheDocument();
+    });
+
+    it("画像は、ファイルに保存される内容に含まれ、開いたファイルでも表示される", async () => {
+      mockedPickImage.mockResolvedValue(PNG);
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard(CMD_SHIFT_I);
+      await waitFor(() => expect(images(container)).toHaveLength(1));
+      await user.keyboard("{Meta>}s{/Meta}");
+      await screen.findByRole("status");
+      const [saved] = mockedSaveFile.mock.calls[0];
+      expect(Object.values(saved.nodes).filter((n) => n.image === PNG)).toHaveLength(1);
+
+      const base = loadedMap();
+      mockedLoadFile.mockResolvedValue({
+        map: setNodeImage(base, base.rootId, GIF),
+        path: "/Users/me/other.json",
+      });
+      await user.keyboard("{Meta>}o{/Meta}");
+      await screen.findByText(/開きました/);
+
+      expect(images(container)[0].getAttribute("href")).toBe(GIF);
+    });
+
+    it("画像をクリックすると、そのノードが選択される", async () => {
+      mockedPickImage.mockResolvedValue(PNG);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_SHIFT_I);
+      await waitFor(() => expect(images(container)).toHaveLength(1));
+      await user.click(screen.getByText("a"));
+      expect(selectedText(container)).toBe("a");
+
+      await user.click(images(container)[0]);
+
+      expect(selectedText(container)).toBe("b");
+    });
+
+    it("コピー＆ペーストで、画像も引き継がれる", async () => {
+      mockedPickImage.mockResolvedValue(PNG);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_SHIFT_I);
+      await waitFor(() => expect(images(container)).toHaveLength(1));
+      await user.keyboard("{Meta>}c{/Meta}");
+      await user.keyboard("{ArrowUp}");
+      await user.keyboard("{Meta>}v{/Meta}");
+
+      await waitFor(() => expect(images(container)).toHaveLength(2));
+    });
+
+    it("ブラウザ標準の動作を止める。Ctrl+Shift+I や Cmd+I（斜体）、テキスト編集中では、画像を選ばない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      expect(fireEvent.keyDown(window, { key: "I", metaKey: true, shiftKey: true })).toBe(false);
+      await waitFor(() => expect(mockedPickImage).toHaveBeenCalledTimes(1));
+      mockedPickImage.mockClear();
+
+      await user.keyboard("{Control>}{Shift>}i{/Shift}{/Control}");
+      await user.keyboard("{Meta>}i{/Meta}");
+      await user.keyboard("{F2}");
+      await user.keyboard(CMD_SHIFT_I);
+
+      expect(mockedPickImage).not.toHaveBeenCalled();
+    });
+
+    describe("スタイルパネルからの操作", () => {
+      const panel = () => screen.getByRole("dialog", { name: "スタイル" });
+
+      it("「画像を選ぶ…」で、画像を設定できる（Cmd+Shift+I と同じ）", async () => {
+        mockedPickImage.mockResolvedValue(PNG);
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await user.keyboard("{Meta>}k{/Meta}");
+
+        await user.click(within(panel()).getByRole("button", { name: "画像を選ぶ…" }));
+
+        await waitFor(() => expect(images(container)).toHaveLength(1));
+      });
+
+      it("「画像を外す」で画像を外せる。画像がないときは、押せない", async () => {
+        mockedPickImage.mockResolvedValue(PNG);
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await user.keyboard("{Meta>}k{/Meta}");
+        const remove = () => within(panel()).getByRole("button", { name: "画像を外す" });
+        expect(remove()).toBeDisabled();
+
+        await user.click(within(panel()).getByRole("button", { name: "画像を選ぶ…" }));
+        await waitFor(() => expect(images(container)).toHaveLength(1));
+        expect(remove()).toBeEnabled();
+
+        await user.click(remove());
+        expect(images(container)).toHaveLength(0);
+        expect(container.querySelector("ellipse")).not.toBeNull();
+        expect(remove()).toBeDisabled();
+      });
+
+      it("画像を外す操作も、1手の履歴になる", async () => {
+        mockedPickImage.mockResolvedValue(PNG);
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await user.keyboard("{Meta>}k{/Meta}");
+        await user.click(within(panel()).getByRole("button", { name: "画像を選ぶ…" }));
+        await waitFor(() => expect(images(container)).toHaveLength(1));
+        await user.click(within(panel()).getByRole("button", { name: "画像を外す" }));
+        await user.keyboard("{Escape}");
+
+        await user.keyboard(CMD_Z);
+
+        expect(images(container)).toHaveLength(1);
+      });
     });
   });
 });
