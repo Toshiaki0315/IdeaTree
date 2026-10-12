@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
+import { toggleCollapse } from "./collapse";
 import { createMindMap } from "./mindmap";
 import { navigate } from "./navigate";
 
@@ -86,5 +87,53 @@ describe("navigate（矢印キーによるノード間移動）", () => {
     const t = buildMap();
 
     expect(() => navigate(t.map, "missing", "parent")).toThrow("ノードが存在しません: missing");
+  });
+
+  describe("折りたたみへの対応", () => {
+    it("firstChild: 折りたたまれたノードでは、子へ進まず自分自身を返す", () => {
+      const t = buildMap();
+      const folded = toggleCollapse(t.map, t.a);
+
+      expect(navigate(folded, t.a, "firstChild")).toBe(t.a);
+    });
+
+    it("firstChild: 展開すると、再び子へ進める", () => {
+      const t = buildMap();
+      const reopened = toggleCollapse(toggleCollapse(t.map, t.a), t.a);
+
+      expect(navigate(reopened, t.a, "firstChild")).toBe(t.a1);
+    });
+
+    it("折りたたまれた中心ノードからは、子へ進めない", () => {
+      const t = buildMap();
+      const folded = toggleCollapse(t.map, t.root);
+
+      expect(navigate(folded, t.root, "firstChild")).toBe(t.root);
+    });
+
+    it("折りたたまれたノードも、親・兄弟の移動の対象になる", () => {
+      const t = buildMap();
+      const folded = toggleCollapse(t.map, t.a);
+
+      expect(navigate(folded, t.a, "nextSibling")).toBe(t.b);
+      expect(navigate(folded, t.b, "prevSibling")).toBe(t.a);
+      expect(navigate(folded, t.a, "parent")).toBe(t.root);
+    });
+
+    it("折りたたまれたノードの兄弟や親からの移動は、変わらない", () => {
+      const t = buildMap();
+      const folded = toggleCollapse(t.map, t.a);
+
+      expect(navigate(folded, t.root, "firstChild")).toBe(t.a);
+      expect(navigate(folded, t.c, "prevSibling")).toBe(t.b);
+    });
+
+    it("折りたたみを解除した後は、子孫同士の移動も元どおりにできる", () => {
+      const t = buildMap();
+      const reopened = toggleCollapse(toggleCollapse(t.map, t.a), t.a);
+
+      expect(navigate(reopened, t.a1, "nextSibling")).toBe(t.a2);
+      expect(navigate(reopened, t.a2, "parent")).toBe(t.a);
+    });
   });
 });
