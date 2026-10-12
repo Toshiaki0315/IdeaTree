@@ -25,6 +25,8 @@ export interface MindMapNode {
   /** 子孫を非表示にしているか（省略時は展開状態） */
   collapsed?: boolean;
   style?: NodeStyle;
+  /** メインブランチ（中心ノードの子）に割り当てた色（#RRGGBB）。子孫はこの色を引き継ぐ */
+  branchColor?: string;
 }
 
 export interface MindMap {

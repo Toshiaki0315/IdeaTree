@@ -13,7 +13,7 @@ const INVALID_MESSAGES: Record<keyof NodeStyle, string> = {
 
 const COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
-const isColor = (value: unknown): value is string =>
+export const isColor = (value: unknown): value is string =>
   typeof value === "string" && COLOR_PATTERN.test(value);
 
 const isFontSize = (value: unknown): value is number =>

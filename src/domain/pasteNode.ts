@@ -1,3 +1,4 @@
+import { nextBranchColor } from "./branchColor";
 import type { Subtree } from "./copyNode";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 
@@ -19,16 +20,21 @@ export function pasteNode(
   const clone = (oldId: NodeId, parentId: NodeId): NodeId => {
     const source = subtree.nodes[oldId];
     const id = crypto.randomUUID();
-    pasted[id] = {
+    const node: MindMapNode = {
       ...structuredClone(source),
       id,
       kind: "branch",
       parentId,
       childIds: source.childIds.map((childId) => clone(childId, id)),
     };
+    // 元の色は引き継がない（貼り付け先で、メインブランチかどうかが変わるため）
+    delete node.branchColor;
+    pasted[id] = node;
     return id;
   };
   const nodeId = clone(subtree.rootId, targetId);
+  // 中心ノードの子として貼り付けた根は、新しいメインブランチとして色を割り当てる
+  if (target.parentId === null) pasted[nodeId].branchColor = nextBranchColor(map);
 
   return {
     nodeId,

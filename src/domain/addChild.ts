@@ -1,3 +1,4 @@
+import { nextBranchColor } from "./branchColor";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 
 /** 指定した親ノードの末尾に子ブランチを追加する（元のマップは変更しない） */
@@ -20,6 +21,8 @@ export function addChild(
     childIds: [],
     position: { ...parent.position },
   };
+  // 中心ノードの子（メインブランチ）には、色を割り当てて保存する
+  if (parent.parentId === null) child.branchColor = nextBranchColor(map);
 
   return {
     nodeId,
