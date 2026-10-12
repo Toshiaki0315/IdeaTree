@@ -15,6 +15,7 @@ import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
+import { moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
@@ -204,6 +205,27 @@ export default function App() {
     });
   };
 
+  /**
+   * 選択ノードを、矢印キーの向きに移動する（中心ノード以外）。
+   * ↑↓: 兄弟の順序を入れ替える。→: 前の兄弟の最後の子にする。←: 親の直後の兄弟にする。
+   * 動かせないとき（先頭・末尾、前の兄弟がない、親が中心ノードなど）は、何もしない。
+   */
+  const moveSelected = (key: string) => {
+    const parentId = map.nodes[selectedId].parentId as NodeId;
+    const siblings = map.nodes[parentId].childIds;
+    const index = siblings.indexOf(selectedId);
+    const grandparentId = map.nodes[parentId].parentId;
+    let moved = map;
+    if (key === "ArrowUp") moved = moveNode(map, selectedId, parentId, index - 1);
+    else if (key === "ArrowDown") moved = moveNode(map, selectedId, parentId, index + 1);
+    else if (key === "ArrowRight" && index > 0) moved = moveNode(map, selectedId, siblings[index - 1]);
+    else if (key === "ArrowLeft" && grandparentId !== null) {
+      const parentIndex = map.nodes[grandparentId].childIds.indexOf(parentId);
+      moved = moveNode(map, selectedId, grandparentId, parentIndex + 1);
+    }
+    if (moved !== map) commit({ map: moved, selectedId });
+  };
+
   /** 選択ノードをサブツリーごと削除し、親を選択する（履歴に1件記録） */
   const deleteSelected = (parentId: NodeId) =>
     commit({ map: deleteNode(map, selectedId), selectedId: parentId });
@@ -263,6 +285,12 @@ export default function App() {
     const onKeyDown = (event: KeyboardEvent) => {
       const node = map.nodes[selectedId];
       const isRoot = node.parentId === null;
+
+      if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.key in ARROW_DIRECTIONS) {
+        event.preventDefault();
+        if (!isRoot) moveSelected(event.key);
+        return;
+      }
 
       if (event.metaKey && !event.ctrlKey && !event.altKey) {
         const key = event.key.toLowerCase();

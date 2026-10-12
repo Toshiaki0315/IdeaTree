@@ -2866,6 +2866,7 @@ describe("App（マインドマップ編集UI）", () => {
         await user.keyboard("{Alt>}{Meta>}{ArrowUp}{/Meta}{/Alt}");
         await user.keyboard("{F2}");
         await user.keyboard(ALT_UP);
+        await user.keyboard("{Escape}"); // 編集を取り消す（編集中は、ノードのテキストが入力欄に置き換わるため）
 
         expect(order(container)).toEqual(["中心テーマ", "a", "b", "c"]);
       });
