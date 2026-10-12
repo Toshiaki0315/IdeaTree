@@ -1662,6 +1662,18 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.queryByText("変更後")).not.toBeInTheDocument();
     });
 
+    it("入力欄の中でダブルクリックしても、入力途中のテキストは失われない（単語選択などに使える）", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{F2}");
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("入力途中");
+
+      await user.dblClick(screen.getByRole("textbox"));
+
+      expect(screen.getByRole("textbox")).toHaveValue("入力途中");
+    });
+
     it("入力欄そのものをクリックしても、編集は続く", async () => {
       const user = userEvent.setup();
       render(<App />);

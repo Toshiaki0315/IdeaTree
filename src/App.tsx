@@ -89,6 +89,9 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { map, selectedId } = history.present;
+  // 入力欄のフォーカス外れで、すでに確定・取り消し済みの編集を二重に処理しないための参照
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
   const laidOut = useMemo(() => layout(map), [map]);
 
   useEffect(() => {
@@ -103,6 +106,13 @@ export default function App() {
 
   /** 変更を履歴に記録する */
   const commit = (snapshot: Snapshot) => setHistory(record(history, snapshot));
+
+  /** ノードを選択する（履歴には残さない） */
+  const select = (nodeId: NodeId) => replacePresent({ map, selectedId: nodeId });
+
+  /** 既存のノードのテキスト編集を始める */
+  const startEdit = (nodeId: NodeId) =>
+    setEditing({ nodeId, draft: map.nodes[nodeId].text, base: null });
 
   /** ノードを追加して選択し、テキストの入力を始める。確定するまで履歴には残さない */
   const startNewNode = (added: { map: MindMap; nodeId: NodeId }) => {
@@ -125,7 +135,7 @@ export default function App() {
         );
       }
     } else if (text !== "" && text !== map.nodes[editing.nodeId].text) {
-      commit({ map: updateText(map, editing.nodeId, text), selectedId });
+      commit({ map: updateText(map, editing.nodeId, text), selectedId: editing.nodeId });
     }
     setEditing(null);
   };
@@ -244,7 +254,7 @@ export default function App() {
         startNewNode(addSibling(map, selectedId, ""));
       } else if (event.key === "F2") {
         event.preventDefault();
-        setEditing({ nodeId: selectedId, draft: node.text, base: null });
+        startEdit(selectedId);
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         if (!isRoot) deleteSelected(node.parentId as NodeId);
@@ -309,7 +319,13 @@ export default function App() {
           const selected = node.id === selectedId;
   
           return (
-            <g key={node.id} data-node-id={node.id} data-selected={selected}>
+            <g
+            key={node.id}
+            data-node-id={node.id}
+            data-selected={selected}
+            onClick={() => select(node.id)}
+            onDoubleClick={() => startEdit(node.id)}
+          >
               {isRoot && (
                 <ellipse
                   cx={node.position.x}
@@ -352,6 +368,9 @@ export default function App() {
                     value={editing.draft}
                     onChange={(event) => setEditing({ ...editing, draft: event.target.value })}
                     onKeyDown={(event) => onInputKeyDown(event, editing)}
+                  onBlur={() => editingRef.current !== null && commitEdit(editing)}
+                  onClick={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
                   />
                 </foreignObject>
               )}

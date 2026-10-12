@@ -44,3 +44,7 @@ body,
 .message-alert {
   background: #d62839;
 }
+
+.mindmap g[data-node-id] {
+  cursor: pointer;
+}
