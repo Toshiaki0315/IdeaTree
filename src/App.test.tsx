@@ -6,6 +6,7 @@ import { BRANCH_COLORS } from "./domain/branchColor";
 import { addChild } from "./domain/addChild";
 import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
 import { copyNode } from "./domain/copyNode";
+import { hitAreaSize } from "./domain/hitArea";
 import { createMindMap } from "./domain/mindmap";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle } from "./domain/nodeStyle";
@@ -3295,6 +3296,97 @@ describe("App（マインドマップ編集UI）", () => {
 
         expect(images(container)).toHaveLength(1);
       });
+    });
+  });
+
+  describe("クリックできる範囲の拡大", () => {
+    const hitArea = (text: string) =>
+      screen.getByText(text).closest("g[data-node-id]")!.querySelector('rect[data-role="hit-area"]');
+
+    /** 中心 ─ a(a1) / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await user.keyboard("{ArrowLeft}");
+      await addSiblingNamed(user, "b");
+    }
+
+    it("中心ノード以外の各ノードに、文字のまわりの、透明なクリック範囲がある", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      expect(container.querySelectorAll('rect[data-role="hit-area"]')).toHaveLength(3);
+      expect(screen.getByText("中心テーマ").closest("g")!.querySelector('rect[data-role="hit-area"]')).toBeNull();
+      expect(hitArea("a")!.getAttribute("fill")).toBe("transparent");
+    });
+
+    it("クリック範囲は、ラベルと同じ位置を中心にし、文字の大きさに見合う大きさである", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+
+      for (const [text, size] of [["a", 20], ["a1", 16], ["b", 20]] as const) {
+        const rect = hitArea(text)!;
+        const label = screen.getByText(text);
+        const { width, height } = hitAreaSize(text, size);
+        expect(Number(rect.getAttribute("width"))).toBeCloseTo(width);
+        expect(Number(rect.getAttribute("height"))).toBeCloseTo(height);
+        expect(Number(rect.getAttribute("x")) + width / 2).toBeCloseTo(Number(label.getAttribute("x")));
+        expect(Number(rect.getAttribute("y")) + height / 2).toBeCloseTo(Number(label.getAttribute("y")));
+      }
+    });
+
+    it("文字を大きくすると、クリック範囲も大きくなる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      const before = Number(hitArea("b")!.getAttribute("width"));
+
+      await user.keyboard("{Meta>}k{/Meta}");
+      await user.selectOptions(screen.getByRole("combobox", { name: "文字サイズ" }), "48");
+
+      expect(Number(hitArea("b")!.getAttribute("width"))).toBeGreaterThan(before);
+    });
+
+    it("クリック範囲をクリックすると、そのノードが選択され、ダブルクリックで編集できる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.click(hitArea("a")!);
+      expect(selectedText(container)).toBe("a");
+
+      await user.dblClick(hitArea("a1")!);
+      expect(screen.getByRole("textbox")).toHaveValue("a1");
+    });
+
+    it("クリック範囲からでも、ノードをドラッグしてつなぎ替えられる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.pointer([
+        { keys: "[MouseLeft>]", target: hitArea("b")!, coords: { clientX: 100, clientY: 100 } },
+        { target: hitArea("b")!, coords: { clientX: 130, clientY: 130 } },
+        { target: hitArea("a1")!, coords: { clientX: 300, clientY: 300 } },
+        { keys: "[/MouseLeft]", target: hitArea("a1")!, coords: { clientX: 300, clientY: 300 } },
+      ]);
+
+      await user.keyboard("{ArrowLeft}");
+      expect(selectedText(container)).toBe("a1");
+    });
+
+    it("折りたたまれたノードのクリック範囲は、「…」を含む表示に合わせた大きさになる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.click(screen.getByText("a"));
+      const before = Number(hitArea("a")!.getAttribute("width"));
+
+      await user.keyboard(" ");
+
+      expect(Number(hitArea("a…")!.getAttribute("width"))).toBeGreaterThan(before);
     });
   });
 });
