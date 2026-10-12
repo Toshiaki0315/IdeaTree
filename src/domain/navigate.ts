@@ -2,7 +2,7 @@ import type { MindMap, NodeId } from "./mindmap";
 
 export type NavigateDirection = "parent" | "firstChild" | "prevSibling" | "nextSibling";
 
-/** 木構造上の方向に隣接するノードのIDを返す。移動できない場合は自分自身を返す */
+/** 木構造上の方向に隣接する、表示されているノードのIDを返す。移動できない場合は自分自身を返す */
 export function navigate(map: MindMap, nodeId: NodeId, direction: NavigateDirection): NodeId {
   const node = map.nodes[nodeId];
   if (!node) {
@@ -13,7 +13,8 @@ export function navigate(map: MindMap, nodeId: NodeId, direction: NavigateDirect
     case "parent":
       return node.parentId ?? nodeId;
     case "firstChild":
-      return node.childIds[0] ?? nodeId;
+      // 折りたたまれたノードの子は表示されていないので、進まない
+      return (node.collapsed ? undefined : node.childIds[0]) ?? nodeId;
     case "prevSibling":
     case "nextSibling": {
       if (node.parentId === null) return nodeId;
