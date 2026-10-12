@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { BRANCH_COLORS } from "./domain/branchColor";
 import { addChild } from "./domain/addChild";
+import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
+import { copyNode } from "./domain/copyNode";
 import { createMindMap } from "./domain/mindmap";
 import { setNodeStyle } from "./domain/nodeStyle";
+import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { loadFile } from "./files/loadFile";
@@ -16,6 +19,7 @@ vi.mock("./files/saveFile", () => ({ saveFile: vi.fn() }));
 vi.mock("./files/loadFile", () => ({ loadFile: vi.fn() }));
 vi.mock("./files/confirmDiscard", () => ({ confirmDiscard: vi.fn() }));
 vi.mock("./files/closeGuard", () => ({ registerCloseGuard: vi.fn() }));
+vi.mock("./files/clipboard", () => ({ readClipboardText: vi.fn(), writeClipboardText: vi.fn() }));
 vi.mock("./files/svgExportFile", () => ({ svgExportFile: vi.fn() }));
 
 const mockedSaveFile = vi.mocked(saveFile);
@@ -23,6 +27,8 @@ const mockedLoadFile = vi.mocked(loadFile);
 const mockedConfirmDiscard = vi.mocked(confirmDiscard);
 const mockedRegisterCloseGuard = vi.mocked(registerCloseGuard);
 const unlistenCloseGuard = vi.fn();
+const mockedReadClipboard = vi.mocked(readClipboardText);
+const mockedWriteClipboard = vi.mocked(writeClipboardText);
 const mockedSvgExportFile = vi.mocked(svgExportFile);
 
 /** 読み込み用のマップ（中心「読込」の下に「子A」「子B」） */
@@ -36,6 +42,9 @@ beforeEach(() => {
   vi.resetAllMocks();
   mockedConfirmDiscard.mockResolvedValue(true); // 既定では、破棄してよいと答える
   mockedRegisterCloseGuard.mockResolvedValue(unlistenCloseGuard);
+  // 既定では、システムのクリップボードを読み書きできない（アプリの中のコピーだけを使う）状態にする
+  mockedWriteClipboard.mockResolvedValue(undefined);
+  mockedReadClipboard.mockRejectedValue(new Error("クリップボードを読み込めません: 利用できません"));
 });
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -2417,6 +2426,263 @@ describe("App（マインドマップ編集UI）", () => {
 
       expect(nodes(container)).toHaveLength(2);
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("システムのクリップボードとの連携", () => {
+    const CMD_C = "{Meta>}c{/Meta}";
+    const CMD_V = "{Meta>}v{/Meta}";
+    const CMD_X = "{Meta>}x{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+
+    /** 別のIdeaTreeからコピーされた、「外部」「外部の子」のサブツリーを、クリップボードの文字列にする */
+    function externalSubtreeText(style?: { bold: true }) {
+      const base = createMindMap("別のマップ");
+      const x = addChild(base, base.rootId, "外部");
+      const xChild = addChild(x.map, x.nodeId, "外部の子");
+      const map = style ? setNodeStyle(xChild.map, x.nodeId, style) : xChild.map;
+      return subtreeToText(copyNode(map, x.nodeId));
+    }
+
+    /** 書き込んだ内容を、そのまま読み出せる、システムのクリップボードの代役 */
+    function useWorkingClipboard(initial = "") {
+      let content = initial;
+      mockedWriteClipboard.mockImplementation(async (text) => {
+        content = text;
+      });
+      mockedReadClipboard.mockImplementation(async () => content);
+    }
+
+    describe("コピー・カット", () => {
+      it("Cmd+C で、コピーしたサブツリーを、システムのクリップボードにも書き込む", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await addChildNamed(user, "a");
+        await addChildNamed(user, "a1");
+        await user.keyboard("{ArrowLeft}");
+
+        await user.keyboard(CMD_C);
+
+        expect(mockedWriteClipboard).toHaveBeenCalledTimes(1);
+        const content = parseClipboardText(mockedWriteClipboard.mock.calls[0][0]);
+        expect(content.kind).toBe("subtree");
+        if (content.kind === "subtree") {
+          expect(content.subtree.nodes[content.subtree.rootId].text).toBe("a");
+          expect(Object.keys(content.subtree.nodes)).toHaveLength(2);
+        }
+      });
+
+      it("Cmd+X でも、カットしたサブツリーを、システムのクリップボードに書き込む", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await addChildNamed(user, "a");
+
+        await user.keyboard(CMD_X);
+
+        expect(mockedWriteClipboard).toHaveBeenCalledTimes(1);
+        expect(parseClipboardText(mockedWriteClipboard.mock.calls[0][0]).kind).toBe("subtree");
+        expect(screen.queryByText("a")).not.toBeInTheDocument();
+      });
+
+      it("書き込みに失敗しても、エラーは表示せず、アプリの中のコピーは使える", async () => {
+        mockedWriteClipboard.mockRejectedValue(new Error("クリップボードに書き込めません: x"));
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await addChildNamed(user, "a");
+        await user.keyboard(CMD_C);
+        await user.keyboard("{ArrowLeft}");
+
+        await user.keyboard(CMD_V);
+
+        await waitFor(() => expect(nodes(container)).toHaveLength(3));
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      });
+
+      it("コピーしたものを、同じマップに貼り付けると、複製される（システムのクリップボード経由）", async () => {
+        useWorkingClipboard();
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await addChildNamed(user, "a");
+        await user.keyboard(CMD_C);
+        await user.keyboard("{ArrowLeft}");
+
+        await user.keyboard(CMD_V);
+
+        await waitFor(() => expect(nodes(container)).toHaveLength(3));
+        expect(screen.getAllByText("a")).toHaveLength(2);
+      });
+    });
+
+    describe("貼り付け: IdeaTree のサブツリー", () => {
+      it("別のアプリや別のウィンドウでコピーしたサブツリーを、選択ノードの子として貼り付け、選択する", async () => {
+        mockedReadClipboard.mockResolvedValue(externalSubtreeText());
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+
+        await user.keyboard(CMD_V);
+
+        expect(await screen.findByText("外部")).toBeInTheDocument();
+        expect(screen.getByText("外部の子")).toBeInTheDocument();
+        expect(nodes(container)).toHaveLength(3);
+        expect(selectedText(container)).toBe("外部");
+      });
+
+      it("サブツリーのスタイルも、引き継がれる", async () => {
+        mockedReadClipboard.mockResolvedValue(externalSubtreeText({ bold: true }));
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.keyboard(CMD_V);
+
+        expect((await screen.findByText("外部")).getAttribute("font-weight")).toBe("bold");
+      });
+
+      it("システムのクリップボードの内容が、アプリの中のコピーより優先される", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await addChildNamed(user, "内部のコピー");
+        await user.keyboard(CMD_C);
+        await user.keyboard("{ArrowLeft}");
+        mockedReadClipboard.mockResolvedValue(externalSubtreeText());
+
+        await user.keyboard(CMD_V);
+
+        expect(await screen.findByText("外部")).toBeInTheDocument();
+        expect(screen.getAllByText("内部のコピー")).toHaveLength(1);
+      });
+
+      it("貼り付けは1手の履歴で、元に戻せる", async () => {
+        mockedReadClipboard.mockResolvedValue(externalSubtreeText());
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await user.keyboard(CMD_V);
+        await screen.findByText("外部");
+
+        await user.keyboard(CMD_Z);
+
+        expect(nodes(container)).toHaveLength(1);
+      });
+    });
+
+    describe("貼り付け: 普通のテキスト", () => {
+      it("複数行のテキストを、1行1ノードで、選択ノードの子として追加し、最初のノードを選択する", async () => {
+        mockedReadClipboard.mockResolvedValue("企画\n\n  予算  \n調査");
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+
+        await user.keyboard(CMD_V);
+
+        expect(await screen.findByText("企画")).toBeInTheDocument();
+        expect(screen.getByText("予算")).toBeInTheDocument();
+        expect(screen.getByText("調査")).toBeInTheDocument();
+        expect(nodes(container)).toHaveLength(4);
+        expect(selectedText(container)).toBe("企画");
+      });
+
+      it("1行のテキストは、1つのノードになる", async () => {
+        mockedReadClipboard.mockResolvedValue("アイデア");
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+
+        await user.keyboard(CMD_V);
+
+        expect(await screen.findByText("アイデア")).toBeInTheDocument();
+        expect(nodes(container)).toHaveLength(2);
+      });
+
+      it("中心ノードに貼り付けた行は、それぞれ別の色のメインブランチになる", async () => {
+        mockedReadClipboard.mockResolvedValue("a\nb");
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.keyboard(CMD_V);
+
+        expect((await screen.findByText("a")).getAttribute("fill")).toBe(BRANCH_COLORS[0]);
+        expect(screen.getByText("b").getAttribute("fill")).toBe(BRANCH_COLORS[1]);
+      });
+
+      it("折りたたまれたノードに貼り付けると、自動で展開される", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await addChildNamed(user, "親");
+        await addChildNamed(user, "子");
+        await user.keyboard("{ArrowLeft}");
+        await user.keyboard(" ");
+        expect(screen.getByText("親…")).toBeInTheDocument();
+        mockedReadClipboard.mockResolvedValue("追加");
+
+        await user.keyboard(CMD_V);
+
+        expect(await screen.findByText("追加")).toBeInTheDocument();
+        expect(screen.getByText("子")).toBeInTheDocument();
+      });
+
+      it("貼り付けは1手の履歴で、複数行をまとめて元に戻せる", async () => {
+        mockedReadClipboard.mockResolvedValue("a\nb\nc");
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await user.keyboard(CMD_V);
+        await screen.findByText("c");
+
+        await user.keyboard(CMD_Z);
+
+        expect(nodes(container)).toHaveLength(1);
+      });
+    });
+
+    describe("貼り付けるものがない・読み込めない場合", () => {
+      it.each([[""], ["   \n  "], ['{"a": 1}'], ["[1, 2]"]])(
+        "クリップボードが空、または貼り付けられない内容（%j）のときは、何もしない（アプリの中のコピーも使わない）",
+        async (content) => {
+          const user = userEvent.setup();
+          const { container } = render(<App />);
+          await addChildNamed(user, "内部のコピー");
+          await user.keyboard(CMD_C);
+          await user.keyboard("{ArrowLeft}");
+          mockedReadClipboard.mockResolvedValue(content);
+
+          await user.keyboard(CMD_V);
+          await waitFor(() => expect(mockedReadClipboard).toHaveBeenCalled());
+
+          expect(nodes(container)).toHaveLength(2);
+          expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        },
+      );
+
+      it("システムのクリップボードを読み込めないときは、アプリの中のコピーを貼り付ける", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await addChildNamed(user, "内部のコピー");
+        await user.keyboard(CMD_C);
+        await user.keyboard("{ArrowLeft}");
+
+        await user.keyboard(CMD_V);
+
+        await waitFor(() => expect(nodes(container)).toHaveLength(3));
+        expect(screen.getAllByText("内部のコピー")).toHaveLength(2);
+      });
+
+      it("読み込めず、アプリの中のコピーもないときは、何もしない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+
+        await user.keyboard(CMD_V);
+        await waitFor(() => expect(mockedReadClipboard).toHaveBeenCalled());
+
+        expect(nodes(container)).toHaveLength(1);
+      });
+    });
+
+    it("テキスト編集中の Cmd+V では、ノードを貼り付けない（入力欄の貼り付けに任せる）", async () => {
+      mockedReadClipboard.mockResolvedValue("貼り付け");
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard("{Tab}");
+
+      await user.keyboard(CMD_V);
+
+      expect(mockedReadClipboard).not.toHaveBeenCalled();
+      expect(nodes(container)).toHaveLength(2);
     });
   });
 });
