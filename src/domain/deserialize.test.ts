@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
 import { toggleCollapse } from "./collapse";
+import { setNodeStyle } from "./nodeStyle";
 import { deserialize } from "./deserialize";
 import { createMindMap } from "./mindmap";
 import { serialize } from "./serialize";
@@ -212,5 +213,85 @@ describe("deserialize（JSON読み込み）", () => {
         );
       },
     );
+  });
+
+  describe("style（ノードのスタイル）", () => {
+    const fullStyle = {
+      bold: true,
+      italic: false,
+      color: "#1A7FD1",
+      fontFamily: "Hiragino Mincho ProN",
+      fontSize: 24,
+    };
+
+    it("スタイルを、保存して読み込んでも保てる（往復）", () => {
+      const { data, ids } = validData();
+      const base = deserialize(JSON.stringify(data));
+      const styled = setNodeStyle(base, ids.a, { bold: true, color: "#112233", fontSize: 30 });
+
+      const restored = deserialize(serialize(styled));
+
+      expect(restored.nodes[ids.a].style).toEqual({ bold: true, color: "#112233", fontSize: 30 });
+      expect(restored).toEqual(styled);
+    });
+
+    it("style がないノード（従来のファイル）も、そのまま読み込める", () => {
+      const { data, ids } = validData();
+      expect("style" in data.nodes[ids.a]).toBe(false);
+
+      expect(deserialize(JSON.stringify(data)).nodes[ids.a].style).toBeUndefined();
+    });
+
+    it("すべての項目を持つスタイル、空のスタイルを読み込める", () => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].style = fullStyle;
+      data.nodes[ids.b].style = {};
+
+      const map = deserialize(JSON.stringify(data));
+
+      expect(map.nodes[ids.a].style).toEqual(fullStyle);
+      expect(map.nodes[ids.b].style).toEqual({});
+    });
+
+    it.each([[8], [200], [12.5]])("範囲内の文字サイズ（%s）を読み込める", (fontSize) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].style = { fontSize };
+
+      expect(deserialize(JSON.stringify(data)).nodes[ids.a].style).toEqual({ fontSize });
+    });
+
+    it.each([
+      ["null", null],
+      ["配列", []],
+      ["文字列", "bold"],
+      ["数値", 1],
+      ["真偽値", true],
+    ])("style がオブジェクトでない（%s）場合はエラーになる", (_label, style) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].style = style;
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+    });
+
+    it.each([
+      ["bold が真偽値でない", { bold: "yes" }],
+      ["italic が真偽値でない", { italic: 1 }],
+      ["color が文字列でない", { color: 123 }],
+      ["color が #RRGGBB でない", { color: "red" }],
+      ["color が短縮形", { color: "#FFF" }],
+      ["fontFamily が文字列でない", { fontFamily: 5 }],
+      ["fontFamily が空", { fontFamily: "" }],
+      ["fontFamily が空白のみ", { fontFamily: "   " }],
+      ["fontSize が数値でない", { fontSize: "20" }],
+      ["fontSize が null", { fontSize: null }],
+      ["fontSize が小さすぎる", { fontSize: 7 }],
+      ["fontSize が大きすぎる", { fontSize: 201 }],
+      ["未知の項目を含む", { underline: true }],
+    ])("不正なスタイル（%s）はエラーになる", (_label, style) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].style = style;
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+    });
   });
 });
