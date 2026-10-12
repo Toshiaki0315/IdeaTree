@@ -4,6 +4,8 @@ import "./App.css";
 import { addChild } from "./domain/addChild";
 import { addSibling } from "./domain/addSibling";
 import { toggleCollapse } from "./domain/collapse";
+import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
+import type { ClipboardContent } from "./domain/clipboardText";
 import { copyNode } from "./domain/copyNode";
 import type { Subtree } from "./domain/copyNode";
 import { deleteNode } from "./domain/deleteNode";
@@ -16,6 +18,7 @@ import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
+import { pasteTexts } from "./domain/pasteTexts";
 import {
   BACKGROUND,
   CENTRAL_RX,
@@ -29,6 +32,7 @@ import {
 } from "./domain/svgExport";
 import { updateText } from "./domain/updateText";
 import { visibleNodeIds } from "./domain/visibleNodeIds";
+import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { loadFile } from "./files/loadFile";
@@ -167,6 +171,39 @@ export default function App() {
     setEditing(null);
   };
 
+  /** 選択ノードのサブツリーをコピーする（アプリの中と、システムのクリップボードの両方に保持する） */
+  const copySelected = () => {
+    const subtree = copyNode(map, selectedId);
+    setClipboard(subtree);
+    // システムのクリップボードに書けなくても、アプリの中のコピーは使えるので、失敗は無視する
+    writeClipboardText(subtreeToText(subtree)).catch(() => {});
+  };
+
+  /**
+   * 貼り付ける。システムのクリップボードを読んで、IdeaTree のサブツリーなら貼り付け、普通のテキストなら
+   * 1行1ノードで追加する。読み込めないときだけ、アプリの中のコピーを使う。
+   * 読み込みを待つ間に状態が変わっても、そのときの状態に貼り付けるよう、更新は関数で行う。
+   */
+  const paste = async () => {
+    let content: ClipboardContent;
+    try {
+      content = parseClipboardText(await readClipboardText());
+    } catch {
+      content = clipboard ? { kind: "subtree", subtree: clipboard } : { kind: "none" };
+    }
+    if (content.kind === "none") return;
+
+    setHistory((h) => {
+      const { map: current, selectedId: target } = h.present;
+      if (content.kind === "subtree") {
+        const pasted = pasteNode(expanded(current, target), target, content.subtree);
+        return record(h, { map: pasted.map, selectedId: pasted.nodeId });
+      }
+      const pasted = pasteTexts(current, target, content.lines);
+      return record(h, { map: pasted.map, selectedId: pasted.nodeIds[0] });
+    });
+  };
+
   /** 選択ノードをサブツリーごと削除し、親を選択する（履歴に1件記録） */
   const deleteSelected = (parentId: NodeId) =>
     commit({ map: deleteNode(map, selectedId), selectedId: parentId });
@@ -241,7 +278,7 @@ export default function App() {
         }
         if (key === "c") {
           event.preventDefault();
-          setClipboard(copyNode(map, selectedId));
+          copySelected();
           return;
         }
         if ((key === "b" || key === "i") && !event.shiftKey) {
@@ -258,17 +295,14 @@ export default function App() {
         if (key === "x") {
           event.preventDefault();
           if (!isRoot) {
-            setClipboard(copyNode(map, selectedId));
+            copySelected();
             deleteSelected(node.parentId as NodeId);
           }
           return;
         }
         if (key === "v") {
           event.preventDefault();
-          if (clipboard !== null) {
-            const pasted = pasteNode(expanded(map, selectedId), selectedId, clipboard);
-            commit({ map: pasted.map, selectedId: pasted.nodeId });
-          }
+          void paste();
           return;
         }
         if (key === "z") {
