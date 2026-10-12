@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
+import { BRANCH_COLORS } from "./branchColor";
 import { createMindMap } from "./mindmap";
 
 describe("addSibling（兄弟ノードの追加 / Enterキー）", () => {
@@ -58,5 +59,26 @@ describe("addSibling（兄弟ノードの追加 / Enterキー）", () => {
     const map = createMindMap("A");
 
     expect(() => addSibling(map, "missing", "x")).toThrow("ノードが存在しません: missing");
+  });
+});
+
+describe("addSibling（メインブランチの色の割り当て）", () => {
+  it("メインブランチの兄弟（新しいメインブランチ）には、次の色が保存される", () => {
+    const map = createMindMap("A");
+    const a = addChild(map, map.rootId, "1");
+
+    const b = addSibling(a.map, a.nodeId, "2");
+
+    expect(b.map.nodes[b.nodeId].branchColor).toBe(BRANCH_COLORS[1]);
+  });
+
+  it("サブブランチの兄弟には、色は保存されない", () => {
+    const map = createMindMap("A");
+    const main = addChild(map, map.rootId, "1");
+    const sub = addChild(main.map, main.nodeId, "1-1");
+
+    const sibling = addSibling(sub.map, sub.nodeId, "1-2");
+
+    expect("branchColor" in sibling.map.nodes[sibling.nodeId]).toBe(false);
   });
 });

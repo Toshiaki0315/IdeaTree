@@ -295,3 +295,31 @@ describe("deserialize（JSON読み込み）", () => {
     });
   });
 });
+
+describe("deserialize（branchColor: メインブランチの色）", () => {
+  it("branchColor を、保存して読み込んでも保てる（往復）", () => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].branchColor = "#123456";
+    const map = deserialize(JSON.stringify(data));
+
+    expect(map.nodes[ids.a].branchColor).toBe("#123456");
+    expect(deserialize(serialize(map))).toEqual(map);
+  });
+
+  it("branchColor がないノード（従来のファイル）も、そのまま読み込める", () => {
+    const { data, ids } = validData();
+    delete data.nodes[ids.a].branchColor;
+
+    expect(deserialize(JSON.stringify(data)).nodes[ids.a].branchColor).toBeUndefined();
+  });
+
+  it.each([[123], ["red"], ["#FFF"], ["#GG0000"], [null], [{}]])(
+    "不正な branchColor（%j）はエラーになる",
+    (value) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].branchColor = value;
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+    },
+  );
+});

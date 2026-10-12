@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
-import { BRANCH_COLORS, getBranchColor } from "./branchColor";
+import { BRANCH_COLORS, getBranchColor, nextBranchColor } from "./branchColor";
+import { deleteNode } from "./deleteNode";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
 
@@ -87,5 +88,102 @@ describe("getBranchColor（メインブランチごとの色割り当て）", ()
     const { map } = withMainBranches(1);
 
     expect(() => getBranchColor(map, "missing")).toThrow("ノードが存在しません: missing");
+  });
+});
+
+describe("メインブランチの色の固定（削除しても他のブランチの色が変わらない）", () => {
+  const colorsOf = (map: MindMap, ids: NodeId[]) => ids.map((id) => getBranchColor(map, id));
+
+  it("メインブランチを追加すると、使われていない色のうち、パレットの先頭に近い色が割り当てられ、ノードに保存される", () => {
+    const { map, mains } = withMainBranches(3);
+
+    expect(mains.map((id) => map.nodes[id].branchColor)).toEqual(BRANCH_COLORS.slice(0, 3));
+  });
+
+  it("途中のメインブランチを削除しても、残りのブランチの色は変わらない", () => {
+    const { map, mains } = withMainBranches(4);
+
+    const next = deleteNode(map, mains[1]);
+
+    expect(colorsOf(next, [mains[0], mains[2], mains[3]])).toEqual([
+      BRANCH_COLORS[0],
+      BRANCH_COLORS[2],
+      BRANCH_COLORS[3],
+    ]);
+  });
+
+  it("削除で空いた色は、次に追加するメインブランチに割り当てられる", () => {
+    const { map, mains, root } = withMainBranches(4);
+    const next = deleteNode(map, mains[1]);
+
+    const added = addChild(next, root, "新");
+
+    expect(getBranchColor(added.map, added.nodeId)).toBe(BRANCH_COLORS[1]);
+  });
+
+  it("サブブランチは、削除後もメインブランチの色を引き継ぐ", () => {
+    const { map, mains } = withMainBranches(3);
+    const sub = addChild(map, mains[2], "子");
+
+    const next = deleteNode(sub.map, mains[0]);
+
+    expect(getBranchColor(next, sub.nodeId)).toBe(BRANCH_COLORS[2]);
+  });
+
+  it("すべての色が使われているときは、最も使われていない色（パレット順で先頭）を再利用する", () => {
+    const { map, root } = withMainBranches(BRANCH_COLORS.length);
+
+    const ninth = addChild(map, root, "9本目");
+    const tenth = addChild(ninth.map, root, "10本目");
+
+    expect(getBranchColor(tenth.map, ninth.nodeId)).toBe(BRANCH_COLORS[0]);
+    expect(getBranchColor(tenth.map, tenth.nodeId)).toBe(BRANCH_COLORS[1]);
+  });
+
+  it("保存された色がないメインブランチ（従来のファイル）は、これまでどおり並び順で色が決まる", () => {
+    const { map, mains } = withMainBranches(3);
+    const legacy: MindMap = {
+      ...map,
+      nodes: Object.fromEntries(
+        Object.entries(map.nodes).map(([id, node]) => {
+          const { branchColor: _color, ...rest } = node;
+          void _color;
+          return [id, rest];
+        }),
+      ),
+    };
+
+    expect(colorsOf(legacy, mains)).toEqual(BRANCH_COLORS.slice(0, 3));
+  });
+
+  it("保存された色が、パレットにない色でも、そのまま使われる", () => {
+    const { map, mains } = withMainBranches(2);
+    const custom: MindMap = {
+      ...map,
+      nodes: { ...map.nodes, [mains[0]]: { ...map.nodes[mains[0]], branchColor: "#123456" } },
+    };
+
+    expect(getBranchColor(custom, mains[0])).toBe("#123456");
+  });
+});
+
+describe("nextBranchColor（次のメインブランチに割り当てる色）", () => {
+  it("メインブランチがなければ、パレットの先頭の色", () => {
+    expect(nextBranchColor(createMindMap("root"))).toBe(BRANCH_COLORS[0]);
+  });
+
+  it("使われていない色のうち、パレットの先頭に近い色を返す", () => {
+    const { map } = withMainBranches(2);
+
+    expect(nextBranchColor(map)).toBe(BRANCH_COLORS[2]);
+  });
+
+  it("元のマップを変更しない", () => {
+    const { map } = withMainBranches(2);
+    const before = structuredClone(map);
+
+    nextBranchColor(map);
+
+    expect(map).toEqual(before);
   });
 });

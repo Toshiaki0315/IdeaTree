@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
 import { copyNode } from "./copyNode";
+import { nextBranchColor } from "./branchColor";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
 import { pasteNode } from "./pasteNode";
@@ -146,3 +147,33 @@ describe("pasteNode（サブツリーの貼り付け / Cmd+V）", () => {
   });
 });
 
+describe("pasteNode（メインブランチの色）", () => {
+  it("中心ノードの子として貼り付けた根は、新しいメインブランチとして、次の色が割り当てられる", () => {
+    const { map, ids } = buildMap();
+    const copied = copyNode(map, ids.a1);
+
+    const { map: next, nodeId } = pasteNode(map, ids.root, copied);
+
+    expect(next.nodes[nodeId].branchColor).toBe(nextBranchColor(map));
+  });
+
+  it("貼り付けたサブツリーの、他のノードには、色は保存されない", () => {
+    const { map, ids } = buildMap();
+    const copied = copyNode(map, ids.root);
+
+    const { map: next, nodeId } = pasteNode(map, ids.root, copied);
+
+    const pastedIds = [nodeId, ...next.nodes[nodeId].childIds];
+    const colored = pastedIds.filter((id) => "branchColor" in next.nodes[id]);
+    expect(colored).toEqual([nodeId]);
+  });
+
+  it("メインブランチをコピーして、中心以外のノードの子として貼り付けると、古い色は残らない", () => {
+    const { map, ids } = buildMap();
+    const copied = copyNode(map, ids.a); // a はメインブランチ（色を持つ）
+
+    const { map: next, nodeId } = pasteNode(map, ids.b, copied);
+
+    expect("branchColor" in next.nodes[nodeId]).toBe(false);
+  });
+});

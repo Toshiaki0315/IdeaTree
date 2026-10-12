@@ -2135,4 +2135,35 @@ describe("App（マインドマップ編集UI）", () => {
       });
     });
   });
+
+  describe("メインブランチの色の固定", () => {
+    it("途中のメインブランチを削除しても、残りのブランチの色は変わらない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+      await addSiblingNamed(user, "c");
+      expect(screen.getByText("c").getAttribute("fill")).toBe(BRANCH_COLORS[2]);
+      await user.click(screen.getByText("b"));
+
+      await user.keyboard("{Delete}");
+
+      expect(screen.getByText("a").getAttribute("fill")).toBe(BRANCH_COLORS[0]);
+      expect(screen.getByText("c").getAttribute("fill")).toBe(BRANCH_COLORS[2]);
+    });
+
+    it("削除で空いた色は、次に追加するメインブランチに使われる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+      await user.click(screen.getByText("a"));
+      await user.keyboard("{Delete}");
+
+      await user.keyboard("{Tab}");
+      await user.keyboard("d{Enter}");
+
+      expect(screen.getByText("d").getAttribute("fill")).toBe(BRANCH_COLORS[0]);
+    });
+  });
 });
