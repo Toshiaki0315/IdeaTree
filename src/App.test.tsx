@@ -2685,4 +2685,190 @@ describe("App（マインドマップ編集UI）", () => {
       expect(nodes(container)).toHaveLength(2);
     });
   });
+
+  describe("Option + 矢印キー: ノードの移動・並べ替え", () => {
+    const ALT_UP = "{Alt>}{ArrowUp}{/Alt}";
+    const ALT_DOWN = "{Alt>}{ArrowDown}{/Alt}";
+    const ALT_LEFT = "{Alt>}{ArrowLeft}{/Alt}";
+    const ALT_RIGHT = "{Alt>}{ArrowRight}{/Alt}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+
+    /** 描かれている順（深さ優先）のノードのテキスト */
+    const order = (container: HTMLElement) =>
+      [...nodes(container)].map((g) => g.textContent);
+
+    /** 中心 ─ a / b / c を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addSiblingNamed(user, "b");
+      await addSiblingNamed(user, "c");
+      await user.keyboard("{ArrowUp}");
+    }
+
+    describe("↑ ↓: 兄弟の順序の入れ替え", () => {
+      it("Option+↑ で1つ前へ、Option+↓ で1つ後ろへ移動する（選択は、移動したノードのまま）", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+
+        await user.keyboard(ALT_UP);
+        expect(order(container)).toEqual(["中心テーマ", "b", "a", "c"]);
+        expect(selectedText(container)).toBe("b");
+
+        await user.keyboard(ALT_DOWN);
+        await user.keyboard(ALT_DOWN);
+        expect(order(container)).toEqual(["中心テーマ", "a", "c", "b"]);
+        expect(selectedText(container)).toBe("b");
+      });
+
+      it("先頭で ↑、末尾で ↓ を押しても、何も起きず、履歴にも残らない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard(ALT_UP);
+
+        await user.keyboard(ALT_UP);
+        expect(order(container)).toEqual(["中心テーマ", "b", "a", "c"]);
+
+        await user.keyboard(CMD_Z); // 1回の移動だけが戻る
+        expect(order(container)).toEqual(["中心テーマ", "a", "b", "c"]);
+      });
+    });
+
+    describe("→: 前の兄弟の子にする（インデント）", () => {
+      it("前の兄弟の、最後の子になる", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+
+        await user.keyboard(ALT_RIGHT);
+
+        expect(order(container)).toEqual(["中心テーマ", "a", "b", "c"]);
+        expect(selectedText(container)).toBe("b");
+        await user.keyboard("{ArrowLeft}");
+        expect(selectedText(container)).toBe("a");
+      });
+
+      it("前の兄弟が折りたたまれていると、自動で展開される", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        await user.keyboard("{ArrowUp}"); // a
+        await addChildNamed(user, "a1");
+        await user.keyboard("{ArrowLeft}");
+        await user.keyboard(" "); // a を折りたたむ
+        await user.keyboard("{ArrowDown}"); // b
+
+        await user.keyboard(ALT_RIGHT);
+
+        expect(screen.getByText("a1")).toBeInTheDocument();
+        expect(screen.getByText("a")).toBeInTheDocument(); // 「a…」ではない
+      });
+
+      it("前の兄弟がいない（先頭の）ノードでは、何も起きない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard("{ArrowUp}"); // a
+
+        await user.keyboard(ALT_RIGHT);
+
+        expect(order(container)).toEqual(["中心テーマ", "a", "b", "c"]);
+        await user.keyboard("{ArrowLeft}");
+        expect(selectedText(container)).toBe("中心テーマ");
+      });
+    });
+
+    describe("←: 親の兄弟にする（アウトデント）", () => {
+      it("親の直後の兄弟になる", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard("{ArrowUp}"); // a
+        await addChildNamed(user, "a1");
+
+        await user.keyboard(ALT_LEFT);
+
+        expect(selectedText(container)).toBe("a1");
+        await user.keyboard("{ArrowLeft}");
+        expect(selectedText(container)).toBe("中心テーマ"); // 親は中心ノードになった
+        await user.keyboard("{ArrowRight}{ArrowDown}");
+        expect(selectedText(container)).toBe("a1"); // a の直後
+      });
+
+      it("中心ノードの子に移動すると、新しいメインブランチとして、色が割り当てられる", async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        await buildTree(user);
+        await user.keyboard("{ArrowUp}");
+        await addChildNamed(user, "a1");
+        expect(screen.getByText("a1").getAttribute("fill")).toBe(BRANCH_COLORS[0]); // a の色を引き継ぐ
+
+        await user.keyboard(ALT_LEFT);
+
+        expect(screen.getByText("a1").getAttribute("fill")).toBe(BRANCH_COLORS[3]); // a, b, c が使用済み
+      });
+
+      it("メインブランチ（中心ノードの子）では、何も起きない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+
+        await user.keyboard(ALT_LEFT);
+
+        expect(order(container)).toEqual(["中心テーマ", "a", "b", "c"]);
+        await user.keyboard("{ArrowLeft}");
+        expect(selectedText(container)).toBe("中心テーマ");
+      });
+    });
+
+    describe("共通", () => {
+      it("移動は1手の履歴で、元に戻したり、やり直したりできる", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+
+        await user.keyboard(ALT_RIGHT);
+        await user.keyboard(CMD_Z);
+        expect(order(container)).toEqual(["中心テーマ", "a", "b", "c"]);
+        await user.keyboard("{ArrowLeft}");
+        expect(selectedText(container)).toBe("中心テーマ"); // 移動前の親（中心ノード）
+
+        await user.keyboard("{Meta>}{Shift>}z{/Shift}{/Meta}");
+        expect(nodes(container)).toHaveLength(4);
+      });
+
+      it("中心ノードでは、何も起きない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+        await user.keyboard("{ArrowLeft}"); // 中心ノード
+
+        await user.keyboard(ALT_UP + ALT_DOWN + ALT_LEFT + ALT_RIGHT);
+
+        expect(order(container)).toEqual(["中心テーマ", "a", "b", "c"]);
+        expect(selectedText(container)).toBe("中心テーマ");
+      });
+
+      it("ブラウザ標準の動作を止める", async () => {
+        render(<App />);
+
+        expect(fireEvent.keyDown(window, { key: "ArrowUp", altKey: true })).toBe(false);
+        expect(fireEvent.keyDown(window, { key: "ArrowRight", altKey: true })).toBe(false);
+      });
+
+      it("Shift や Cmd と組み合わせたとき、テキスト編集中は、移動しない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await buildTree(user);
+
+        await user.keyboard("{Alt>}{Shift>}{ArrowUp}{/Shift}{/Alt}");
+        await user.keyboard("{Alt>}{Meta>}{ArrowUp}{/Meta}{/Alt}");
+        await user.keyboard("{F2}");
+        await user.keyboard(ALT_UP);
+
+        expect(order(container)).toEqual(["中心テーマ", "a", "b", "c"]);
+      });
+    });
+  });
 });
