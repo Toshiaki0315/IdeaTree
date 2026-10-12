@@ -225,6 +225,7 @@ describe("deserialize（JSON読み込み）", () => {
       color: "#1A7FD1",
       fontFamily: "Hiragino Mincho ProN",
       fontSize: 24,
+      imageScale: 1.5,
     };
 
     it("スタイルを、保存して読み込んでも保てる（往復）", () => {
@@ -289,6 +290,9 @@ describe("deserialize（JSON読み込み）", () => {
       ["fontSize が null", { fontSize: null }],
       ["fontSize が小さすぎる", { fontSize: 7 }],
       ["fontSize が大きすぎる", { fontSize: 201 }],
+      ["imageScale が小さすぎる", { imageScale: 0.1 }],
+      ["imageScale が大きすぎる", { imageScale: 5 }],
+      ["imageScale が数値でない", { imageScale: "2" }],
       ["未知の項目を含む", { underline: true }],
     ])("不正なスタイル（%s）はエラーになる", (_label, style) => {
       const { data, ids } = validData();

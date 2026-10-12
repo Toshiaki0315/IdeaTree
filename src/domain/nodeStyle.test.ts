@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { createMindMap } from "./mindmap";
-import { setNodeStyle, toggleStyle } from "./nodeStyle";
+import { MAX_IMAGE_SCALE, MIN_IMAGE_SCALE, setNodeStyle, toggleStyle } from "./nodeStyle";
 
 function buildMap() {
   const base = createMindMap("root");
@@ -196,3 +196,30 @@ describe("toggleStyle（太字・斜体の切り替え / Cmd+B・Cmd+I）", () =
     expect(() => toggleStyle(map, "missing", "bold")).toThrow("ノードが存在しません: missing");
   });
 });
+
+describe("setNodeStyle（画像の倍率: imageScale）", () => {
+  it.each([[MIN_IMAGE_SCALE], [0.5], [1], [2.5], [MAX_IMAGE_SCALE]])("倍率 %s は設定できる", (imageScale) => {
+    const { map, ids } = buildMap();
+
+    expect(setNodeStyle(map, ids.a, { imageScale }).nodes[ids.a].style).toEqual({ imageScale });
+  });
+
+  it.each([[0], [-1], [0.2], [4.1], [Number.NaN], [Number.POSITIVE_INFINITY]])(
+    "範囲外の倍率（%s）はエラーになる",
+    (imageScale) => {
+      const { map, ids } = buildMap();
+
+      expect(() => setNodeStyle(map, ids.a, { imageScale })).toThrow(
+        `画像の倍率は ${MIN_IMAGE_SCALE} 以上 ${MAX_IMAGE_SCALE} 以下の数値で指定してください`,
+      );
+    },
+  );
+
+  it("undefined で解除でき、他のスタイル項目は保たれる", () => {
+    const { map, ids } = buildMap();
+    const styled = setNodeStyle(map, ids.a, { imageScale: 2, bold: true });
+
+    expect(setNodeStyle(styled, ids.a, { imageScale: undefined }).nodes[ids.a].style).toEqual({ bold: true });
+  });
+});
+

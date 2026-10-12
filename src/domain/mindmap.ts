@@ -13,6 +13,8 @@ export interface NodeStyle {
   color?: string;
   fontFamily?: string;
   fontSize?: number;
+  /** ノードの画像の倍率（1 が標準の大きさ） */
+  imageScale?: number;
 }
 
 export interface MindMapNode {

@@ -1,5 +1,7 @@
 import type { MindMap, MindMapNode, NodeId, NodeStyle } from "./mindmap";
 
+export const MIN_IMAGE_SCALE = 0.25;
+export const MAX_IMAGE_SCALE = 4;
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 200;
 
