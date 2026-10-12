@@ -3,11 +3,23 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { BRANCH_COLORS } from "./domain/branchColor";
+import { addChild } from "./domain/addChild";
+import { createMindMap } from "./domain/mindmap";
+import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
 
 vi.mock("./files/saveFile", () => ({ saveFile: vi.fn() }));
+vi.mock("./files/loadFile", () => ({ loadFile: vi.fn() }));
 
 const mockedSaveFile = vi.mocked(saveFile);
+const mockedLoadFile = vi.mocked(loadFile);
+
+/** 読み込み用のマップ（中心「読込」の下に「子A」「子B」） */
+function loadedMap() {
+  const base = createMindMap("読込");
+  const a = addChild(base, base.rootId, "子A");
+  return addChild(a.map, base.rootId, "子B").map;
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -417,6 +429,158 @@ describe("App（マインドマップ編集UI）", () => {
       await user.keyboard("{Meta>}a{/Meta}");
 
       expect(mockedSaveFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Cmd+O: JSON読み込み", () => {
+    const CMD_O = "{Meta>}o{/Meta}";
+
+    it("読み込んだマップで、表示中のマップを置き換え、ルートを選択する", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "古い子");
+
+      await user.keyboard(CMD_O);
+
+      expect(await screen.findByText("子A")).toBeInTheDocument();
+      expect(screen.getByText("子B")).toBeInTheDocument();
+      expect(screen.queryByText("古い子")).not.toBeInTheDocument();
+      expect(screen.queryByText("中心テーマ")).not.toBeInTheDocument();
+      expect(nodes(container)).toHaveLength(3);
+      expect(selectedText(container)).toBe("読込");
+    });
+
+    it("ブラウザ標準の動作（ファイルを開く）を止める", async () => {
+      mockedLoadFile.mockResolvedValue(null);
+      render(<App />);
+
+      const notPrevented = fireEvent.keyDown(window, { key: "o", metaKey: true });
+
+      expect(notPrevented).toBe(false);
+    });
+
+    it("読み込みに成功したら、パスをステータスに表示する", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_O);
+
+      expect(await screen.findByRole("status")).toHaveTextContent(
+        "開きました: /Users/me/map.json",
+      );
+    });
+
+    it("読み込んだファイルが保存先になり、Cmd+S でそのファイルへ上書き保存する", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard(CMD_O);
+      await screen.findByRole("status");
+
+      await user.keyboard("{Meta>}s{/Meta}");
+
+      expect(mockedSaveFile).toHaveBeenCalledTimes(1);
+      const [map, path] = mockedSaveFile.mock.calls[0];
+      expect(Object.values(map.nodes).map((n) => n.text)).toEqual(["読込", "子A", "子B"]);
+      expect(path).toBe("/Users/me/map.json");
+    });
+
+    it("読み込み後のマップを、そのままキーボードで編集できる", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard(CMD_O);
+      await screen.findByRole("status");
+
+      await addChildNamed(user, "追加");
+      await user.keyboard("{ArrowLeft}");
+
+      expect(nodes(container)).toHaveLength(4);
+      expect(selectedText(container)).toBe("読込");
+    });
+
+    it("ダイアログをキャンセルしたら、マップもメッセージも変えない", async () => {
+      mockedLoadFile.mockResolvedValue(null);
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "企画");
+
+      await user.keyboard(CMD_O);
+      await waitFor(() => expect(mockedLoadFile).toHaveBeenCalledTimes(1));
+
+      expect(screen.getByText("企画")).toBeInTheDocument();
+      expect(nodes(container)).toHaveLength(2);
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("読み込みに失敗したら、エラーを表示し、編集中のマップは変えない", async () => {
+      mockedLoadFile.mockRejectedValue(new Error("読み込みに失敗しました: JSONの形式が不正です"));
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "企画");
+
+      await user.keyboard(CMD_O);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "読み込みに失敗しました: JSONの形式が不正です",
+      );
+      expect(screen.getByText("企画")).toBeInTheDocument();
+      expect(nodes(container)).toHaveLength(2);
+    });
+
+    it("失敗しても、保存先は変わらない（前回の保存先が残る）", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/current.json");
+      mockedLoadFile.mockRejectedValue(new Error("読み込みに失敗しました: x"));
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Meta>}s{/Meta}");
+      await screen.findByRole("status");
+      await user.keyboard(CMD_O);
+      await screen.findByRole("alert");
+
+      await user.keyboard("{Meta>}s{/Meta}");
+
+      expect(mockedSaveFile.mock.calls[1][1]).toBe("/Users/me/current.json");
+    });
+
+    it("Error 以外の値で失敗した場合も、その内容を表示する", async () => {
+      mockedLoadFile.mockRejectedValue("boom");
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_O);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+    });
+
+    it("読み込みに成功すると、前回のエラーメッセージは消える", async () => {
+      mockedLoadFile
+        .mockRejectedValueOnce(new Error("読み込みに失敗しました: x"))
+        .mockResolvedValueOnce({ map: loadedMap(), path: "/Users/me/map.json" });
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_O);
+      await screen.findByRole("alert");
+      await user.keyboard(CMD_O);
+
+      expect(await screen.findByRole("status")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("テキスト編集中や、Ctrl+O では読み込まない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard("{Control>}o{/Control}");
+      await user.keyboard("{Tab}");
+      await user.keyboard(CMD_O);
+
+      expect(mockedLoadFile).not.toHaveBeenCalled();
     });
   });
 });
