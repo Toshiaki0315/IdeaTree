@@ -24,6 +24,7 @@ import {
 import { updateText } from "./domain/updateText";
 import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
+import { svgExportFile } from "./files/svgExportFile";
 
 /** 編集中のノードと入力途中のテキスト */
 interface Editing {
@@ -97,22 +98,28 @@ export default function App() {
     setEditing(null);
   };
 
-  /** 保存する。saveAs が true なら保存先を決め直す（名前を付けて保存） */
-  const save = async (saveAs: boolean) => {
+  /** ファイル操作を実行し、失敗したらエラーメッセージを表示する */
+  const runFileAction = async (action: () => Promise<void>) => {
     try {
-      const path = await saveFile(map, saveAs ? undefined : filePath);
-      if (path !== null) {
-        setFilePath(path);
-        setMessage({ kind: "status", text: `保存しました: ${path}` });
-      }
+      await action();
     } catch (error) {
       setMessage(errorMessage(error));
     }
   };
 
+  /** 保存する。saveAs が true なら保存先を決め直す（名前を付けて保存） */
+  const save = (saveAs: boolean) =>
+    runFileAction(async () => {
+      const path = await saveFile(map, saveAs ? undefined : filePath);
+      if (path !== null) {
+        setFilePath(path);
+        setMessage({ kind: "status", text: `保存しました: ${path}` });
+      }
+    });
+
   /** ファイルを開き、表示中のマップを置き換える（保存先も開いたファイルになる） */
-  const open = async () => {
-    try {
+  const open = () =>
+    runFileAction(async () => {
       const loaded = await loadFile();
       if (loaded !== null) {
         setMap(loaded.map);
@@ -120,10 +127,16 @@ export default function App() {
         setFilePath(loaded.path);
         setMessage({ kind: "status", text: `開きました: ${loaded.path}` });
       }
-    } catch (error) {
-      setMessage(errorMessage(error));
-    }
-  };
+    });
+
+  /** SVG画像として書き出す（保存先は変えない） */
+  const exportImage = () =>
+    runFileAction(async () => {
+      const path = await svgExportFile(map);
+      if (path !== null) {
+        setMessage({ kind: "status", text: `書き出しました: ${path}` });
+      }
+    });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -138,6 +151,11 @@ export default function App() {
         if (key === "o") {
           event.preventDefault();
           void open();
+          return;
+        }
+        if (key === "e" && event.shiftKey) {
+          event.preventDefault();
+          void exportImage();
           return;
         }
       }
