@@ -10,6 +10,7 @@ const INVALID_MESSAGES: Record<keyof NodeStyle, string> = {
   italic: "斜体は真偽値で指定してください",
   color: "色は #RRGGBB の形式で指定してください",
   fontFamily: "フォント名が空です",
+  imageScale: `画像の倍率は ${MIN_IMAGE_SCALE} 以上 ${MAX_IMAGE_SCALE} 以下の数値で指定してください`,
   fontSize: `文字サイズは ${MIN_FONT_SIZE} 以上 ${MAX_FONT_SIZE} 以下の数値で指定してください`,
 };
 
@@ -24,6 +25,12 @@ const isFontSize = (value: unknown): value is number =>
   value >= MIN_FONT_SIZE &&
   value <= MAX_FONT_SIZE;
 
+const isImageScale = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isFinite(value) &&
+  value >= MIN_IMAGE_SCALE &&
+  value <= MAX_IMAGE_SCALE;
+
 const isFontFamily = (value: unknown): value is string =>
   typeof value === "string" && value.trim() !== "";
 
@@ -34,6 +41,7 @@ const VALIDATORS: Record<keyof NodeStyle, (value: unknown) => boolean> = {
   color: isColor,
   fontFamily: isFontFamily,
   fontSize: isFontSize,
+  imageScale: isImageScale,
 };
 
 /** 値が、有効な項目だけを持つスタイルか（未知の項目や不正な値は無効） */
