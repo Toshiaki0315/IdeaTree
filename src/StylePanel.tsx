@@ -1,9 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { NodeStyle } from "./domain/mindmap";
+import { isColor } from "./domain/nodeStyle";
 import { COLOR_PRESETS, FONT_PRESETS, FONT_SIZE_PRESETS } from "./domain/stylePresets";
 
 interface Props {
+  /** 選択中のノードのID（選択が変わったら、入力欄の表示を切り替えるため） */
+  nodeId: string;
+  /** スタイルで色を指定していないときの、ノードの色（色の選択ボタンに表示する） */
+  defaultColor: string;
   /** 選択中のノードのテキスト */
   nodeText: string;
   /** 選択中のノードの現在のスタイル */
@@ -24,6 +29,8 @@ function withCurrent<T>(options: { name: string; value: T }[], current: T | unde
 }
 
 export default function StylePanel({
+  nodeId,
+  defaultColor,
   nodeText,
   style,
   hasImage,
@@ -33,6 +40,25 @@ export default function StylePanel({
   onClose,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [colorDraft, setColorDraft] = useState(style.color ?? "");
+  const [colorInvalid, setColorInvalid] = useState(false);
+
+  // 選択ノードや、色が変わったら、色コードの入力欄の表示を合わせる
+  useEffect(() => {
+    setColorDraft(style.color ?? "");
+    setColorInvalid(false);
+  }, [nodeId, style.color]);
+
+  /** 色コードを反映する。空なら「自動」に戻し、形式が正しくなければ、エラーを表示する */
+  const applyColorCode = () => {
+    const code = colorDraft.trim();
+    if (code !== "" && !isColor(code)) {
+      setColorInvalid(true);
+      return;
+    }
+    setColorInvalid(false);
+    onChange({ color: code === "" ? undefined : code.toUpperCase() });
+  };
 
   // 開いたら、現在選ばれている色にフォーカスを移す
   useEffect(() => {
@@ -87,6 +113,38 @@ export default function StylePanel({
           </label>
         ))}
       </fieldset>
+
+      <div className="style-panel-field">
+        <label className="style-panel-color-code">
+          色コード
+          <input
+            type="text"
+            aria-label="色コード"
+            aria-invalid={colorInvalid}
+            aria-describedby={colorInvalid ? "style-panel-color-error" : undefined}
+            placeholder="#RRGGBB"
+            value={colorDraft}
+            onChange={(event) => setColorDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                applyColorCode();
+              }
+            }}
+          />
+        </label>
+        <input
+          type="color"
+          aria-label="色を選ぶ"
+          value={(style.color ?? defaultColor).toLowerCase()}
+          onChange={(event) => onChange({ color: event.target.value.toUpperCase() })}
+        />
+        {colorInvalid && (
+          <p id="style-panel-color-error" className="style-panel-error">
+            色は #RRGGBB の形式で指定してください
+          </p>
+        )}
+      </div>
 
       <label className="style-panel-field">
         フォント

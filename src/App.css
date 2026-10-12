@@ -138,3 +138,15 @@ body,
 .style-panel-image button {
   flex: 1;
 }
+
+.style-panel-color-code {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.style-panel-error {
+  margin: 0;
+  color: #d62839;
+  font-size: 12px;
+}

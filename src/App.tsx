@@ -630,6 +630,8 @@ export default function App() {
       </div>
       {styleOpen && (
         <StylePanel
+          nodeId={selectedId}
+          defaultColor={nodeTextStyle(map, map.nodes[selectedId]).color}
           nodeText={map.nodes[selectedId].text}
           style={map.nodes[selectedId].style ?? {}}
           hasImage={map.nodes[selectedId].image !== undefined}
