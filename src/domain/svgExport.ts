@@ -9,6 +9,7 @@ const CENTRAL_RX = 70;
 const CENTRAL_RY = 40;
 const CENTRAL_STROKE = "#333333";
 const BACKGROUND = "#FFFFFF";
+const LABEL_HALO_WIDTH = 5;
 
 /** 小数第2位に丸め、-0 や指数表記を避けた数値文字列にする */
 function fmt(value: number): string {
@@ -78,8 +79,12 @@ export function exportSvg(map: MindMap): string {
     branches.push(
       `<path data-node-id="${id}" d="${branchPath(map.nodes[node.parentId], node)}" fill="none" stroke="${color}" stroke-width="${fmt(strokeWidth)}" stroke-linecap="round"/>`,
     );
+    // ブランチのテキストは枝の中点に置く（枝の先で子ブランチと重ならない）
+    const parent = map.nodes[node.parentId];
+    const labelX = (parent.position.x + x) / 2;
+    const labelY = (parent.position.y + y) / 2;
     labels.push(
-      `<text data-node-id="${id}" x="${fmt(x)}" y="${fmt(y - 8)}" text-anchor="middle" font-family="${escapeXml(FONT_FAMILY)}" font-size="${depth === 1 ? 20 : 16}" fill="${color}">${escapeXml(node.text)}</text>`,
+      `<text data-node-id="${id}" x="${fmt(labelX)}" y="${fmt(labelY)}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="${depth === 1 ? 20 : 16}" font-weight="bold" fill="${color}" stroke="${BACKGROUND}" stroke-width="${LABEL_HALO_WIDTH}" paint-order="stroke" stroke-linejoin="round">${escapeXml(node.text)}</text>`,
     );
   }
 

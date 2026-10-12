@@ -27,6 +27,23 @@ describe("BRANCH_COLORS（カラーパレット）", () => {
   });
 });
 
+/** WCAG の相対輝度から求める、白背景に対するコントラスト比 */
+function contrastWithWhite(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 1.05 / (0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05);
+}
+
+describe("BRANCH_COLORS の視認性", () => {
+  it("すべての色が、白背景に対してコントラスト比 3:1 以上（線・大きな文字の基準）である", () => {
+    for (const color of BRANCH_COLORS) {
+      expect(contrastWithWhite(color), color).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
 describe("getBranchColor（メインブランチごとの色割り当て）", () => {
   it("ルート（セントラルイメージ）には枝の色がなく null を返す", () => {
     const { map, root } = withMainBranches(2);

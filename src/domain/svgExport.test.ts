@@ -129,7 +129,7 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
     expect(Number(ellipse.getAttribute("ry"))).toBeGreaterThan(0);
   });
 
-  it("すべてのノードのテキストを、ノードの位置に1つずつ描く", () => {
+  it("すべてのノードのテキストを1つずつ描く。ブランチ上のテキストは枝の中点に置く", () => {
     const { map } = buildMap();
 
     const doc = parse(exportSvg(map));
@@ -137,9 +137,29 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
     expect(doc.querySelectorAll("text")).toHaveLength(Object.keys(map.nodes).length);
     for (const node of Object.values(map.nodes)) {
       const text = byNodeId(doc, "text", node.id);
+      const anchor =
+        node.parentId === null
+          ? node.position
+          : {
+              x: (pos(map, node.parentId).x + node.position.x) / 2,
+              y: (pos(map, node.parentId).y + node.position.y) / 2,
+            };
       expect(text.textContent).toBe(node.text);
-      expect(Number(text.getAttribute("x"))).toBeCloseTo(node.position.x, 1);
+      expect(Number(text.getAttribute("x"))).toBeCloseTo(anchor.x, 1);
+      expect(Number(text.getAttribute("y"))).toBeCloseTo(anchor.y, 1);
+      expect(text.getAttribute("text-anchor")).toBe("middle");
+      expect(text.getAttribute("dominant-baseline")).toBe("central");
     }
+  });
+
+  it("枝の上でも読めるよう、ブランチのテキストに白い縁取り（ハロー）を付ける", () => {
+    const { map, ids } = buildMap();
+
+    const text = byNodeId(parse(exportSvg(map)), "text", ids.a1);
+
+    expect(text.getAttribute("stroke")).toBe("#FFFFFF");
+    expect(text.getAttribute("paint-order")).toBe("stroke");
+    expect(Number(text.getAttribute("stroke-width"))).toBeGreaterThan(0);
   });
 
   it("テキストにフォントファミリーを指定し、日本語もそのまま出力する", () => {
