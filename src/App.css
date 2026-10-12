@@ -112,3 +112,12 @@ body,
   flex-direction: column;
   gap: 4px;
 }
+
+.doc-state {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  color: #57606a;
+  font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+  font-size: 13px;
+}

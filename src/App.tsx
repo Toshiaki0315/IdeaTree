@@ -29,6 +29,7 @@ import {
 } from "./domain/svgExport";
 import { updateText } from "./domain/updateText";
 import { visibleNodeIds } from "./domain/visibleNodeIds";
+import { confirmDiscard } from "./files/confirmDiscard";
 import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
@@ -80,7 +81,10 @@ function initialSnapshot(): Snapshot {
 }
 
 export default function App() {
-  const [history, setHistory] = useState<History<Snapshot>>(() => createHistory(initialSnapshot()));
+  const [initial] = useState(initialSnapshot);
+  const [history, setHistory] = useState<History<Snapshot>>(() => createHistory(initial));
+  /** 最後に保存した（または開いた）時点のマップ。これと違えば、未保存の変更がある */
+  const [savedMap, setSavedMap] = useState<MindMap>(initial.map);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [filePath, setFilePath] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<Message | null>(null);
@@ -90,6 +94,7 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { map, selectedId } = history.present;
+  const dirty = map !== savedMap;
   // 入力欄のフォーカス外れで、すでに確定・取り消し済みの編集を二重に処理しないための参照
   const editingRef = useRef(editing);
   editingRef.current = editing;
@@ -171,6 +176,7 @@ export default function App() {
       const path = await saveFile(map, saveAs ? undefined : filePath);
       if (path !== null) {
         setFilePath(path);
+        setSavedMap(map);
         setMessage({ kind: "status", text: `保存しました: ${path}` });
       }
     });
@@ -178,11 +184,14 @@ export default function App() {
   /** ファイルを開き、表示中のマップを置き換える（保存先も開いたファイルになる） */
   const open = () =>
     runFileAction(async () => {
+      // 未保存の変更は、開くと失われるので、先に確認する
+      if (dirty && !(await confirmDiscard())) return;
       const loaded = await loadFile();
       if (loaded !== null) {
         // 別の文書を開くので、元に戻す履歴も新しくする
         setHistory(createHistory({ map: loaded.map, selectedId: loaded.map.rootId }));
         setFilePath(loaded.path);
+        setSavedMap(loaded.map);
         setMessage({ kind: "status", text: `開きました: ${loaded.path}` });
       }
     });
@@ -398,6 +407,10 @@ export default function App() {
           );
         })}
       </svg>
+      <div className="doc-state">
+        {filePath === undefined ? "無題" : (filePath.split("/").pop() as string)}
+        {dirty && " ● 未保存"}
+      </div>
       {styleOpen && (
         <StylePanel
           nodeText={map.nodes[selectedId].text}
