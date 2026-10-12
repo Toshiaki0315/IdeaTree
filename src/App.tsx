@@ -22,6 +22,7 @@ import {
   strokeWidthAt,
 } from "./domain/svgExport";
 import { updateText } from "./domain/updateText";
+import { loadFile } from "./files/loadFile";
 import { saveFile } from "./files/saveFile";
 
 /** 編集中のノードと入力途中のテキスト */
@@ -36,6 +37,10 @@ interface Editing {
 interface Message {
   kind: "status" | "alert";
   text: string;
+}
+
+function errorMessage(error: unknown): Message {
+  return { kind: "alert", text: error instanceof Error ? error.message : String(error) };
 }
 
 const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
@@ -101,17 +106,40 @@ export default function App() {
         setMessage({ kind: "status", text: `保存しました: ${path}` });
       }
     } catch (error) {
-      setMessage({ kind: "alert", text: error instanceof Error ? error.message : String(error) });
+      setMessage(errorMessage(error));
+    }
+  };
+
+  /** ファイルを開き、表示中のマップを置き換える（保存先も開いたファイルになる） */
+  const open = async () => {
+    try {
+      const loaded = await loadFile();
+      if (loaded !== null) {
+        setMap(loaded.map);
+        setSelectedId(loaded.map.rootId);
+        setFilePath(loaded.path);
+        setMessage({ kind: "status", text: `開きました: ${loaded.path}` });
+      }
+    } catch (error) {
+      setMessage(errorMessage(error));
     }
   };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (editing || event.target instanceof HTMLInputElement) return;
-      if (event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        void save(event.shiftKey);
-        return;
+      if (event.metaKey && !event.ctrlKey && !event.altKey) {
+        const key = event.key.toLowerCase();
+        if (key === "s") {
+          event.preventDefault();
+          void save(event.shiftKey);
+          return;
+        }
+        if (key === "o") {
+          event.preventDefault();
+          void open();
+          return;
+        }
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
