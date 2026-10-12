@@ -1342,4 +1342,169 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.getByText("a")).toBeInTheDocument();
     });
   });
+
+  describe("Space: 折りたたみ / 展開", () => {
+    const CMD_Z = "{Meta>}z{/Meta}";
+
+    /** 中心 ─ a(a1, a2) / b を作り、a を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await addSiblingNamed(user, "a2");
+      await user.keyboard("{ArrowLeft}");
+      await addSiblingNamed(user, "b");
+      await user.keyboard("{ArrowUp}");
+    }
+
+    it("選択ノードの子孫を非表示にし、ラベルの末尾に「…」を付ける（選択は変わらない）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      expect(nodes(container)).toHaveLength(5);
+
+      await user.keyboard(" ");
+
+      expect(nodes(container)).toHaveLength(3);
+      expect(screen.queryByText("a1")).not.toBeInTheDocument();
+      expect(screen.queryByText("a2")).not.toBeInTheDocument();
+      expect(screen.getByText("a…")).toBeInTheDocument();
+      expect(selectedText(container)).toBe("a…");
+      expect(container.querySelectorAll("path")).toHaveLength(2);
+    });
+
+    it("もう一度 Space で、子孫が再び表示され、「…」が消える", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(" ");
+
+      await user.keyboard(" ");
+
+      expect(nodes(container)).toHaveLength(5);
+      expect(screen.getByText("a1")).toBeInTheDocument();
+      expect(screen.getByText("a")).toBeInTheDocument();
+      expect(screen.queryByText("a…")).not.toBeInTheDocument();
+    });
+
+    it("折りたたんだノードでは → で子へ進めず、展開すると進める", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(" ");
+
+      await user.keyboard("{ArrowRight}");
+      expect(selectedText(container)).toBe("a…");
+
+      await user.keyboard(" ");
+      await user.keyboard("{ArrowRight}");
+      expect(selectedText(container)).toBe("a1");
+    });
+
+    it("折りたたみ・展開を、元に戻したりやり直したりできる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(" ");
+      expect(nodes(container)).toHaveLength(3);
+
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(5);
+
+      await user.keyboard("{Meta>}{Shift>}z{/Shift}{/Meta}");
+      expect(nodes(container)).toHaveLength(3);
+    });
+
+    it("子を持たないノードでは何も起きず、履歴にも残らない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+
+      await user.keyboard(" ");
+      expect(screen.getByText("a")).toBeInTheDocument();
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(1); // a の追加が1手で戻る
+    });
+
+    it("中心ノードも折りたためる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard("{ArrowLeft}");
+
+      await user.keyboard(" ");
+
+      expect(nodes(container)).toHaveLength(1);
+      expect(screen.getByText("中心テーマ…")).toBeInTheDocument();
+    });
+
+    it("折りたたまれたノードに子を追加（Tab）すると、自動で展開され、新しいノードを編集できる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(" ");
+
+      await user.keyboard("{Tab}");
+
+      expect(screen.getByRole("textbox")).toHaveFocus();
+      expect(screen.getByText("a1")).toBeInTheDocument();
+      expect(nodes(container)).toHaveLength(6);
+      await user.keyboard("a3{Enter}");
+      expect(screen.getByText("a3")).toBeInTheDocument();
+      expect(screen.queryByText("a…")).not.toBeInTheDocument();
+    });
+
+    it("折りたたまれたノードに貼り付けると、自動で展開され、貼り付けたノードが表示・選択される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard("{ArrowDown}"); // b
+      await user.keyboard("{Meta>}c{/Meta}");
+      await user.keyboard("{ArrowUp}"); // a
+      await user.keyboard(" ");
+
+      await user.keyboard("{Meta>}v{/Meta}");
+
+      expect(screen.getByText("a1")).toBeInTheDocument();
+      expect(screen.getAllByText("b")).toHaveLength(2);
+      expect(selectedText(container)).toBe("b");
+    });
+
+    it("折りたたまれたノードをコピーすると、見えていない子孫も含めて複製される", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+      await user.keyboard(" "); // a を折りたたむ
+      await user.keyboard("{Meta>}c{/Meta}");
+      await user.keyboard("{ArrowDown}"); // b
+      await user.keyboard("{Meta>}v{/Meta}"); // 貼り付けたコピー（折りたたみ状態も引き継ぐ）
+
+      expect(screen.getAllByText("a…")).toHaveLength(2);
+      await user.keyboard(" ");
+
+      expect(screen.getByText("a1")).toBeInTheDocument();
+      expect(screen.getByText("a2")).toBeInTheDocument();
+    });
+
+    it("ブラウザ標準の動作（ページのスクロール）を止める", async () => {
+      render(<App />);
+
+      expect(fireEvent.keyDown(window, { key: " " })).toBe(false);
+    });
+
+    it("テキスト編集中は折りたたまず、Cmd+Space などの修飾キー付きでも折りたたまない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard("{Meta>} {/Meta}");
+      expect(nodes(container)).toHaveLength(5);
+
+      await user.keyboard("{F2}");
+      await user.keyboard(" ");
+
+      // Space は入力欄にそのまま入力され（開いた直後は全選択なので置き換わる）、折りたたみは起きない
+      expect((screen.getByRole("textbox") as HTMLInputElement).value).toContain(" ");
+      expect(nodes(container)).toHaveLength(5);
+    });
+  });
 });
