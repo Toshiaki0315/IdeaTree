@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
+import { toggleCollapse } from "./collapse";
 import { deserialize } from "./deserialize";
 import { createMindMap } from "./mindmap";
 import { serialize } from "./serialize";
@@ -165,5 +166,51 @@ describe("deserialize（JSON読み込み）", () => {
     data.nodes[ids.root].childIds.push(ids.a);
 
     expect(deserialize(JSON.stringify(data)).nodes[ids.root].childIds).toHaveLength(3);
+  });
+
+  describe("collapsed（折りたたみ状態）", () => {
+    it("折りたたみ状態を、保存して読み込んでも保てる（往復）", () => {
+      const { data, ids } = validData();
+      const base = deserialize(JSON.stringify(data));
+      const folded = toggleCollapse(base, ids.root);
+
+      const restored = deserialize(serialize(folded));
+
+      expect(restored.nodes[ids.root].collapsed).toBe(true);
+      expect(restored).toEqual(folded);
+    });
+
+    it("collapsed がないノード（従来のファイル）も、そのまま読み込める", () => {
+      const { data, ids } = validData();
+      expect("collapsed" in data.nodes[ids.a]).toBe(false);
+
+      expect(deserialize(JSON.stringify(data)).nodes[ids.a].collapsed).toBeUndefined();
+    });
+
+    it.each([[true], [false]])("真偽値（%s）は、そのまま読み込める", (value) => {
+      const { data, ids } = validData();
+      data.nodes[ids.root].collapsed = value;
+
+      expect(deserialize(JSON.stringify(data)).nodes[ids.root].collapsed).toBe(value);
+    });
+
+    it("子を持たないノードに collapsed があっても、エラーにせず読み込める", () => {
+      const { data, ids } = validData();
+      data.nodes[ids.b].collapsed = true;
+
+      expect(deserialize(JSON.stringify(data)).nodes[ids.b].collapsed).toBe(true);
+    });
+
+    it.each([[1], ["true"], [null], [{}], [[]]])(
+      "真偽値でない値（%j）はエラーになる",
+      (value) => {
+        const { data, ids } = validData();
+        data.nodes[ids.a].collapsed = value;
+
+        expect(() => deserialize(JSON.stringify(data))).toThrow(
+          `ノードの形式が不正です: ${ids.a}`,
+        );
+      },
+    );
   });
 });
