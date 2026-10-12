@@ -1507,4 +1507,169 @@ describe("App（マインドマップ編集UI）", () => {
       expect(nodes(container)).toHaveLength(5);
     });
   });
+
+  describe("マウス操作: クリックで選択、ダブルクリックで編集", () => {
+    const CMD_Z = "{Meta>}z{/Meta}";
+
+    /** 中心 ─ a(a1) / b を作り、b を選択した状態にする */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "a");
+      await addChildNamed(user, "a1");
+      await user.keyboard("{ArrowLeft}");
+      await addSiblingNamed(user, "b");
+    }
+
+    it("ノードをクリックすると、そのノードが選択される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      expect(selectedText(container)).toBe("b");
+
+      await user.click(screen.getByText("a1"));
+      expect(selectedText(container)).toBe("a1");
+
+      await user.click(screen.getByText("中心テーマ"));
+      expect(selectedText(container)).toBe("中心テーマ");
+    });
+
+    it("クリックしただけでは、編集は始まらず、履歴にも残らない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.click(screen.getByText("a"));
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      await user.keyboard(CMD_Z);
+
+      expect(nodes(container)).toHaveLength(3); // b の追加だけが1手で戻る
+      expect(screen.queryByText("b")).not.toBeInTheDocument();
+    });
+
+    it("クリックで選んだノードから、そのままキーボード操作を続けられる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.click(screen.getByText("a"));
+      await addChildNamed(user, "a2");
+      await user.keyboard("{ArrowLeft}");
+
+      expect(nodes(container)).toHaveLength(5);
+      expect(selectedText(container)).toBe("a");
+    });
+
+    it("折りたたまれたノードも、クリックで選択できる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.click(screen.getByText("a"));
+      await user.keyboard(" ");
+      await user.click(screen.getByText("b"));
+
+      await user.click(screen.getByText("a…"));
+
+      expect(selectedText(container)).toBe("a…");
+    });
+
+    it("何もない場所をクリックしても、選択は変わらない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+
+      await user.click(screen.getByRole("application"));
+
+      expect(selectedText(container)).toBe("b");
+    });
+
+    it("ノードをダブルクリックすると、そのノードを選択して編集を始める", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await buildTree(user);
+
+      await user.dblClick(screen.getByText("a1"));
+
+      const input = screen.getByRole("textbox", { name: "ノードのテキスト" });
+      expect(input).toHaveValue("a1");
+      expect(input).toHaveFocus();
+    });
+
+    it("中心ノードもダブルクリックで編集できる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.dblClick(screen.getByText("中心テーマ"));
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("新テーマ{Enter}");
+
+      expect(screen.getByText("新テーマ")).toBeInTheDocument();
+    });
+
+    it("編集中に別のノードをクリックすると、編集を確定し、クリックしたノードを選択する", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.click(screen.getByText("a"));
+      await user.keyboard("{F2}");
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("変更後");
+
+      await user.click(screen.getByText("b"));
+
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(screen.getByText("変更後")).toBeInTheDocument();
+      expect(selectedText(container)).toBe("b");
+    });
+
+    it("編集中に何もない場所をクリックしても、編集を確定する", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{F2}");
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("新テーマ");
+
+      await user.click(screen.getByRole("application"));
+
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(screen.getByText("新テーマ")).toBeInTheDocument();
+    });
+
+    it("追加直後の空のノードは、別の場所をクリックすると破棄される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard("{Tab}");
+      expect(nodes(container)).toHaveLength(5);
+
+      await user.click(screen.getByText("a"));
+
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(nodes(container)).toHaveLength(4);
+      expect(selectedText(container)).toBe("a");
+    });
+
+    it("クリックで確定した編集は、元に戻す操作1回で戻る（二重に記録されない）", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard("{F2}");
+      await user.clear(screen.getByRole("textbox"));
+      await user.keyboard("変更後");
+      await user.click(screen.getByText("中心テーマ"));
+
+      await user.keyboard(CMD_Z);
+
+      expect(screen.getByText("a")).toBeInTheDocument();
+      expect(screen.queryByText("変更後")).not.toBeInTheDocument();
+    });
+
+    it("入力欄そのものをクリックしても、編集は続く", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{F2}");
+
+      await user.click(screen.getByRole("textbox"));
+
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+  });
 });
