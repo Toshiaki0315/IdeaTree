@@ -1,8 +1,17 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { BRANCH_COLORS } from "./domain/branchColor";
+import { saveFile } from "./files/saveFile";
+
+vi.mock("./files/saveFile", () => ({ saveFile: vi.fn() }));
+
+const mockedSaveFile = vi.mocked(saveFile);
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -272,6 +281,132 @@ describe("App（マインドマップ編集UI）", () => {
 
       expect(nodes(container)).toHaveLength(1);
       expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Cmd+S: JSON保存", () => {
+    const CMD_S = "{Meta>}s{/Meta}";
+    const CMD_SHIFT_S = "{Meta>}{Shift>}s{/Shift}{/Meta}";
+
+    it("現在のマインドマップを saveFile に渡して保存する", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+      await addChildNamed(user, "企画");
+
+      await user.keyboard(CMD_S);
+
+      expect(mockedSaveFile).toHaveBeenCalledTimes(1);
+      const [map, path] = mockedSaveFile.mock.calls[0];
+      expect(Object.values(map.nodes).map((n) => n.text)).toEqual(["中心テーマ", "企画"]);
+      expect(path).toBeUndefined();
+    });
+
+    it("ブラウザ標準の動作（ページの保存）を止める", async () => {
+      mockedSaveFile.mockResolvedValue(null);
+      render(<App />);
+
+      const notPrevented = fireEvent.keyDown(window, { key: "s", metaKey: true });
+
+      expect(notPrevented).toBe(false);
+    });
+
+    it("保存に成功したら、保存先のパスをステータスに表示する", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_S);
+
+      expect(await screen.findByRole("status")).toHaveTextContent(
+        "保存しました: /Users/me/map.json",
+      );
+    });
+
+    it("2回目以降は、前回の保存先へ上書き保存する（ダイアログを開かない）", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_S);
+      await screen.findByRole("status");
+      await user.keyboard(CMD_S);
+
+      expect(mockedSaveFile).toHaveBeenCalledTimes(2);
+      expect(mockedSaveFile.mock.calls[1][1]).toBe("/Users/me/map.json");
+    });
+
+    it("Cmd+Shift+S は、保存先を決め直す（名前を付けて保存）", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard(CMD_S);
+      await screen.findByRole("status");
+
+      await user.keyboard(CMD_SHIFT_S);
+
+      expect(mockedSaveFile).toHaveBeenCalledTimes(2);
+      expect(mockedSaveFile.mock.calls[1][1]).toBeUndefined();
+    });
+
+    it("ダイアログをキャンセルしたら、メッセージは出さず、保存先も記憶しない", async () => {
+      mockedSaveFile.mockResolvedValue(null);
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_S);
+      await waitFor(() => expect(mockedSaveFile).toHaveBeenCalledTimes(1));
+      await user.keyboard(CMD_S);
+
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(mockedSaveFile.mock.calls[1][1]).toBeUndefined();
+    });
+
+    it("保存に失敗したら、エラーメッセージをアラートに表示する", async () => {
+      mockedSaveFile.mockRejectedValue(new Error("保存に失敗しました: disk full"));
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_S);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("保存に失敗しました: disk full");
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("保存に成功すると、前回のエラーメッセージは消える", async () => {
+      mockedSaveFile
+        .mockRejectedValueOnce(new Error("保存に失敗しました: disk full"))
+        .mockResolvedValueOnce("/Users/me/map.json");
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_S);
+      await screen.findByRole("alert");
+      await user.keyboard(CMD_S);
+
+      expect(await screen.findByRole("status")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("テキスト編集中は保存しない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}");
+
+      await user.keyboard(CMD_S);
+
+      expect(mockedSaveFile).not.toHaveBeenCalled();
+    });
+
+    it("Ctrl+S や、Cmd と他のキーの組み合わせでは保存しない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard("{Control>}s{/Control}");
+      await user.keyboard("{Meta>}a{/Meta}");
+
+      expect(mockedSaveFile).not.toHaveBeenCalled();
     });
   });
 });
