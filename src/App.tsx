@@ -170,7 +170,7 @@ export default function App() {
   );
 
   return (
-      <>
+    <>
       <svg
         className="mindmap"
         role="application"
@@ -256,6 +256,6 @@ export default function App() {
           {message.text}
         </div>
       )}
-      </>
+    </>
   );
 }
