@@ -37,6 +37,15 @@ import {
   strokeWidthAt,
 } from "./domain/svgExport";
 import { updateText } from "./domain/updateText";
+import {
+  DEFAULT_VIEWPORT,
+  panBy,
+  panToInclude,
+  visibleRect,
+  zoomIn,
+  zoomOut,
+} from "./domain/viewport";
+import type { Viewport } from "./domain/viewport";
 import { visibleNodeIds } from "./domain/visibleNodeIds";
 import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
@@ -93,6 +102,8 @@ const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
 /** 表示領域の最小の半径。マップが小さい間は拡大しすぎないようにする */
 const MIN_HALF_EXTENT = 450;
 const VIEW_MARGIN = 160;
+/** 選択したノードが、見える範囲の端から、これより近いと、表示位置を動かす */
+const FOLLOW_MARGIN = 40;
 
 /** 折りたたまれているノードを展開する（子を追加・貼り付けしても、見えなくならないように） */
 function expanded(map: MindMap, nodeId: NodeId): MindMap {
@@ -140,7 +151,9 @@ export default function App() {
      * Shift を押していて、兄弟のノードなら、入れ替え（reorder）。そうでなければ、その子につなぎ替える（child）。
      */
     const dropTargetAt = (event: MouseEvent, nodeId: NodeId) => {
-      const id = (event.target as Element).closest("g[data-node-id]")?.getAttribute("data-node-id");
+      // ウィンドウの外などで離したときは、ノードではない（target が要素でないことがある）
+      const element = event.target instanceof Element ? event.target.closest("g[data-node-id]") : null;
+      const id = element?.getAttribute("data-node-id");
       if (id === undefined || id === null) return null;
       if (event.shiftKey && canReorderTo(mapRef.current, nodeId, id)) {
         return { id, mode: "reorder" as const };
@@ -153,6 +166,17 @@ export default function App() {
     };
 
     const onMouseMove = (event: MouseEvent) => {
+      const pan = panRef.current;
+      if (pan !== null) {
+        // 内容を引いた向きと逆に、見ている範囲が動く
+        const scale = unitsPerPixel();
+        setViewport((v) => ({
+          ...v,
+          panX: pan.panX - (event.clientX - pan.startX) * scale,
+          panY: pan.panY - (event.clientY - pan.startY) * scale,
+        }));
+        return;
+      }
       const drag = dragRef.current;
       if (drag === null) return;
       if (!drag.active) {
@@ -165,6 +189,7 @@ export default function App() {
       setDropTarget(dropTargetAt(event, drag.nodeId));
     };
     const onMouseUp = (event: MouseEvent) => {
+      panRef.current = null;
       const drag = dragRef.current;
       if (drag === null) return;
       const target = drag.active ? dropTargetAt(event, drag.nodeId) : null;
@@ -208,6 +233,49 @@ export default function App() {
   const editingRef = useRef(editing);
   editingRef.current = editing;
   const laidOut = useMemo(() => layout(map), [map]);
+  const nodes = visibleNodeIds(laidOut).map((id) => laidOut.nodes[id]);
+  /** 拡大率 100% のとき、中心から見える距離。マップが大きくなったら、広げる */
+  const half = Math.max(
+    MIN_HALF_EXTENT,
+    ...nodes.map((n) => Math.max(Math.abs(n.position.x), Math.abs(n.position.y)) + VIEW_MARGIN),
+  );
+
+  // ズームとパン（表示だけの状態で、ファイルには保存しない）
+  const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT);
+  const view = visibleRect(half, viewport);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const viewWidthRef = useRef(view.width);
+  viewWidthRef.current = view.width;
+  const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+
+  /** 画面上の1pxが、マップの座標で、どれだけか（画面の幅が分からないときは、1） */
+  const unitsPerPixel = () => {
+    const width = svgRef.current!.getBoundingClientRect().width;
+    return width > 0 ? viewWidthRef.current / width : 1;
+  };
+
+  // 選択したノードが、見える範囲の外に出たら、そのノードが中心になるよう、表示位置を動かす
+  useEffect(() => {
+    const { position } = laidOut.nodes[selectedId];
+    setViewport((v) => panToInclude(v, half, position, FOLLOW_MARGIN));
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ホイール: Ctrl（ピンチ）か Cmd を押していれば拡大・縮小、そうでなければ、表示位置を動かす
+  useEffect(() => {
+    const svg = svgRef.current!;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        setViewport((v) => (event.deltaY < 0 ? zoomIn(v) : zoomOut(v)));
+      } else {
+        const scale = unitsPerPixel();
+        setViewport((v) => panBy(v, event.deltaX * scale, event.deltaY * scale));
+      }
+    };
+    // 画面のスクロールを止めるため、passive にしない
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []);
 
   useEffect(() => {
     if (editing) {
@@ -367,6 +435,7 @@ export default function App() {
         setHistory(createHistory({ map: loaded.map, selectedId: loaded.map.rootId }));
         setFilePath(loaded.path);
         setSavedMap(loaded.map);
+        setViewport(DEFAULT_VIEWPORT);
         setMessage({ kind: "status", text: `開きました: ${loaded.path}` });
       }
     });
@@ -418,6 +487,21 @@ export default function App() {
           event.preventDefault();
           const toggled = toggleStyle(map, selectedId, key === "b" ? "bold" : "italic");
           commit({ map: toggled, selectedId });
+          return;
+        }
+        if (key === "=" || key === "+") {
+          event.preventDefault();
+          setViewport(zoomIn);
+          return;
+        }
+        if (key === "-") {
+          event.preventDefault();
+          setViewport(zoomOut);
+          return;
+        }
+        if (key === "0") {
+          event.preventDefault();
+          setViewport(DEFAULT_VIEWPORT);
           return;
         }
         if (key === "k" && !event.shiftKey) {
@@ -491,11 +575,6 @@ export default function App() {
     }
   };
 
-  const nodes = visibleNodeIds(laidOut).map((id) => laidOut.nodes[id]);
-  const half = Math.max(
-    MIN_HALF_EXTENT,
-    ...nodes.map((n) => Math.max(Math.abs(n.position.x), Math.abs(n.position.y)) + VIEW_MARGIN),
-  );
 
   return (
     <>
@@ -503,9 +582,20 @@ export default function App() {
         className="mindmap"
         role="application"
         aria-label="マインドマップ"
-        viewBox={`${-half} ${-half} ${half * 2} ${half * 2}`}
+        ref={svgRef}
+        viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
+        onMouseDown={(event) => {
+          // 何もない場所（ノード以外）を、左ボタンで押したら、ドラッグで表示位置を動かす
+          if (event.button !== 0 || (event.target as Element).closest("g[data-node-id]")) return;
+          panRef.current = {
+            startX: event.clientX,
+            startY: event.clientY,
+            panX: viewport.panX,
+            panY: viewport.panY,
+          };
+        }}
       >
-        <rect x={-half} y={-half} width={half * 2} height={half * 2} fill={BACKGROUND} />
+        <rect x={view.x} y={view.y} width={view.width} height={view.height} fill={BACKGROUND} />
         {nodes.map((node) => {
           if (node.parentId === null) return null;
           return (
@@ -635,6 +725,9 @@ export default function App() {
           );
         })}
       </svg>
+      {Math.round(viewport.zoom * 100) !== 100 && (
+        <div className="zoom-state">{Math.round(viewport.zoom * 100)}%</div>
+      )}
       <div className="doc-state">
         {filePath === undefined ? "無題" : (filePath.split("/").pop() as string)}
         {dirty && " ● 未保存"}

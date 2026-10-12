@@ -3754,6 +3754,26 @@ describe("App（マインドマップ編集UI）", () => {
         expect(viewBox(container)[2]).toBe(900); // 拡大率は変わらない
       });
 
+      it("画面の幅が分からないとき（0）は、移動量を、そのままマップの座標として扱う", () => {
+        const { container } = render(<App />);
+
+        fireEvent.wheel(svgEl(container), { deltaX: 0, deltaY: 40 });
+
+        expect(viewBox(container)[1]).toBe(-450 + 40);
+      });
+
+      it("ウィンドウの外など、ノードでない場所でノードのドラッグを終えても、エラーにならず、何も起きない", async () => {
+        const user = userEvent.setup();
+        const { container } = render(<App />);
+        await addChildNamed(user, "a");
+
+        fireEvent.mouseDown(screen.getByText("a"), { button: 0, clientX: 100, clientY: 100 });
+        fireEvent.mouseMove(window, { clientX: 160, clientY: 160 });
+        fireEvent.mouseUp(document);
+
+        expect(nodes(container)).toHaveLength(2);
+      });
+
       it("拡大しているときは、画面上の移動量が、マップの座標では小さくなる", async () => {
         const user = userEvent.setup();
         const { container } = render(<App />);

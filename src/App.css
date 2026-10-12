@@ -150,3 +150,12 @@ body,
   color: #d62839;
   font-size: 12px;
 }
+
+.zoom-state {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  color: #57606a;
+  font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+  font-size: 13px;
+}
