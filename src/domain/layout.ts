@@ -29,12 +29,14 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
     throw new Error("levelDistance は正の数でなければなりません");
   }
 
+  const imageExtra = map.nodes[map.rootId].image ? CENTRAL_IMAGE_EXTRA : 0;
   const nodes: Record<NodeId, MindMapNode> = {};
 
   const place = (id: NodeId, depth: number, start: number, end: number): void => {
     const node = map.nodes[id];
     const angle = (start + end) / 2;
-    const radius = depth * levelDistance;
+    // 中心ノードに画像があるときは、画像と重ならないよう、すべてのブランチを外側へずらす
+    const radius = depth === 0 ? 0 : depth * levelDistance + imageExtra;
     const position =
       depth === 0
         ? { x: 0, y: 0 }
