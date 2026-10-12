@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
 import { toggleCollapse } from "./collapse";
+import { ICON_PRESETS, setNodeIcon } from "./nodeIcon";
 import { MAX_IMAGE_BYTES } from "./nodeImage";
 import { setNodeImage } from "./nodeImage";
 import { setNodeStyle } from "./nodeStyle";
@@ -367,5 +368,36 @@ describe("deserialize（image: ノードの画像）", () => {
 
     expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
   });
+});
+
+describe("deserialize（icon: ノードのアイコン）", () => {
+  const star = ICON_PRESETS[0].value;
+
+  it("アイコンを、保存して読み込んでも保てる（往復）", () => {
+    const { data, ids } = validData();
+    const base = deserialize(JSON.stringify(data));
+    const withIcon = setNodeIcon(setNodeIcon(base, ids.root, star), ids.a, ICON_PRESETS[1].value);
+
+    const restored = deserialize(serialize(withIcon));
+
+    expect(restored.nodes[ids.root].icon).toBe(star);
+    expect(restored).toEqual(withIcon);
+  });
+
+  it("icon がないノード（従来のファイル）も、そのまま読み込める", () => {
+    const { data, ids } = validData();
+
+    expect(deserialize(JSON.stringify(data)).nodes[ids.a].icon).toBeUndefined();
+  });
+
+  it.each([["選択肢にない記号", "👍"], ["任意の文字列", "<script>"], ["空文字列", ""], ["数値", 1], ["null", null]])(
+    "不正な icon（%s）はエラーになる",
+    (_name, value) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].icon = value;
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+    },
+  );
 });
 
