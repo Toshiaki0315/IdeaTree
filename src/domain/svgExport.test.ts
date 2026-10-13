@@ -9,7 +9,7 @@ import { estimateTextWidth } from "./hitArea";
 import { ICON_PRESETS, setNodeIcon } from "./nodeIcon";
 import { setNodeImage } from "./nodeImage";
 import { setNodeStyle } from "./nodeStyle";
-import { exportSvg } from "./svgExport";
+import { exportSvg, labelPosition } from "./svgExport";
 import { updateText } from "./updateText";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -134,7 +134,7 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
     expect(Number(ellipse.getAttribute("ry"))).toBeGreaterThan(0);
   });
 
-  it("すべてのノードのテキストを1つずつ描く。ブランチ上のテキストは枝の中点に置く", () => {
+  it("すべてのノードのテキストを1つずつ描く。サブブランチ上のテキストは枝の中点に、メインブランチは、中心の外側の枝の真ん中に置く", () => {
     const { map } = buildMap();
 
     const doc = parse(exportSvg(map));
@@ -145,10 +145,12 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       const anchor =
         node.parentId === null
           ? node.position
-          : {
-              x: (pos(map, node.parentId).x + node.position.x) / 2,
-              y: (pos(map, node.parentId).y + node.position.y) / 2,
-            };
+          : node.parentId === map.rootId
+            ? labelPosition(map, node)
+            : {
+                x: (pos(map, node.parentId).x + node.position.x) / 2,
+                y: (pos(map, node.parentId).y + node.position.y) / 2,
+              };
       expect(text.textContent).toBe(node.text);
       expect(Number(text.getAttribute("x"))).toBeCloseTo(anchor.x, 1);
       expect(Number(text.getAttribute("y"))).toBeCloseTo(anchor.y, 1);
@@ -651,6 +653,104 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       const image = doc.querySelector(`image[data-node-id="${ids.root}"]`)!;
       expect(Number(icon.getAttribute("y"))).toBeLessThan(num(image, "y"));
     });
+  });
+});
+
+describe("labelPosition（ブランチのラベルを置く位置）", () => {
+  /** 中心ノードを原点に置き、メインブランチを、指定した位置に置いたマップ（レイアウトは使わない） */
+  function mapWithMainAt(x: number, y: number) {
+    const base = createMindMap("root");
+    const a = addChild(base, base.rootId, "a");
+    const placed: MindMap = {
+      ...a.map,
+      nodes: { ...a.map.nodes, [a.nodeId]: { ...a.map.nodes[a.nodeId], position: { x, y } } },
+    };
+    return { map: placed, root: base.rootId, id: a.nodeId };
+  }
+
+  it("メインブランチ（右向き）のラベルは、中心の楕円の外側に出ている枝の、真ん中に置く", () => {
+    const { map, id } = mapWithMainAt(180, 0);
+
+    const { x, y } = labelPosition(map, map.nodes[id]);
+
+    // 楕円の端（x=70）に余白（10）を足した 80 から、枝の先（180）までの真ん中
+    expect(x).toBeCloseTo((80 + 180) / 2);
+    expect(y).toBeCloseTo(0);
+  });
+
+  it("上下を向いたメインブランチは、楕円の縦の半径（40）を基準にする", () => {
+    const down = mapWithMainAt(0, 180);
+    const up = mapWithMainAt(0, -180);
+
+    expect(labelPosition(down.map, down.map.nodes[down.id]).y).toBeCloseTo((50 + 180) / 2);
+    expect(labelPosition(up.map, up.map.nodes[up.id]).y).toBeCloseTo(-(50 + 180) / 2);
+  });
+
+  it("斜めを向いたメインブランチのラベルは、枝の上にあり、楕円より外側、枝の先より内側にある", () => {
+    const { map, id } = mapWithMainAt(127.28, 127.28);
+
+    const { x, y } = labelPosition(map, map.nodes[id]);
+
+    expect(x / y).toBeCloseTo(1); // 中心と枝の先を結ぶ線の上
+    const distance = Math.hypot(x, y);
+    expect(distance).toBeGreaterThan(60); // 楕円の端（約 49）の外側
+    expect(distance).toBeLessThan(180);
+  });
+
+  it("中心ノードに画像があるときは、画像の枠の外側から、枝の先までの真ん中", () => {
+    const { map, root, id } = mapWithMainAt(260, 0);
+    const withImage: MindMap = {
+      ...map,
+      nodes: { ...map.nodes, [root]: { ...map.nodes[root], image: "data:image/png;base64,AAAA" } },
+    };
+
+    // 画像の枠の半幅 80 に余白 10 を足した 90 から、260 までの真ん中
+    expect(labelPosition(withImage, withImage.nodes[id]).x).toBeCloseTo((90 + 260) / 2);
+  });
+
+  it("画像の倍率に合わせて、枠の外側が変わる", () => {
+    const { map, root, id } = mapWithMainAt(400, 0);
+    const scaled: MindMap = {
+      ...map,
+      nodes: {
+        ...map.nodes,
+        [root]: { ...map.nodes[root], image: "data:image/png;base64,AAAA", style: { imageScale: 2 } },
+      },
+    };
+
+    expect(labelPosition(scaled, scaled.nodes[id]).x).toBeCloseTo((170 + 400) / 2); // 半幅 160 + 余白 10
+  });
+
+  it("画像の枠は、縦の向きでは、半分の高さ（60）を基準にする", () => {
+    const { map, root, id } = mapWithMainAt(0, 200);
+    const withImage: MindMap = {
+      ...map,
+      nodes: { ...map.nodes, [root]: { ...map.nodes[root], image: "data:image/png;base64,AAAA" } },
+    };
+
+    expect(labelPosition(withImage, withImage.nodes[id]).y).toBeCloseTo((70 + 200) / 2);
+  });
+
+  it("サブブランチのラベルは、これまでどおり、親と子を結ぶ枝の中点", () => {
+    const { map, id } = mapWithMainAt(180, 0);
+    const sub = addChild(map, id, "子");
+    const placed: MindMap = {
+      ...sub.map,
+      nodes: {
+        ...sub.map.nodes,
+        [sub.nodeId]: { ...sub.map.nodes[sub.nodeId], position: { x: 300, y: 100 } },
+      },
+    };
+
+    expect(labelPosition(placed, placed.nodes[sub.nodeId])).toEqual({ x: 240, y: 50 });
+  });
+
+  it("枝がまだ配置されていない（位置が中心と同じ）、または、楕円より短いときは、枝の中点にする", () => {
+    const same = mapWithMainAt(0, 0);
+    const short = mapWithMainAt(50, 0);
+
+    expect(labelPosition(same.map, same.map.nodes[same.id])).toEqual({ x: 0, y: 0 });
+    expect(labelPosition(short.map, short.map.nodes[short.id])).toEqual({ x: 25, y: 0 });
   });
 });
 
