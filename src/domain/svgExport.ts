@@ -54,12 +54,46 @@ export interface Box {
   height: number;
 }
 
-/** ブランチのラベルを置く位置（親と子を結ぶ枝の中点）。中心ノード以外に使う */
+/** 中心ノードの端から、メインブランチのラベルまでの余白 */
+const LABEL_CLEARANCE = 10;
+
+/** 中心ノードの中心から、指定した向き（単位ベクトル）にある、中心ノードの端までの距離 */
+function centralEdgeDistance(root: MindMapNode, ux: number, uy: number): number {
+  if (root.image) {
+    // 画像があるときは、画像の枠（長方形）の端
+    const scale = imageScaleOf(root);
+    const halfW = (CENTRAL_IMAGE.width * scale) / 2;
+    const halfH = (CENTRAL_IMAGE.height * scale) / 2;
+    return Math.min(halfW / Math.abs(ux), halfH / Math.abs(uy));
+  }
+  // 楕円の端
+  return (CENTRAL_RX * CENTRAL_RY) / Math.hypot(CENTRAL_RY * ux, CENTRAL_RX * uy);
+}
+
+/**
+ * ブランチのラベルを置く位置。中心ノード以外に使う。
+ * サブブランチは、親と子を結ぶ枝の中点。メインブランチは、中心ノードと重ならないよう、
+ * 中心ノードの外側に出ている枝の部分の真ん中。
+ */
 export function labelPosition(map: MindMap, node: MindMapNode): { x: number; y: number } {
   const parent = map.nodes[node.parentId as NodeId];
-  return {
+  const midpoint = {
     x: (parent.position.x + node.position.x) / 2,
     y: (parent.position.y + node.position.y) / 2,
+  };
+  if (parent.parentId !== null) return midpoint;
+
+  const dx = node.position.x - parent.position.x;
+  const dy = node.position.y - parent.position.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance === 0) return midpoint;
+  const start = centralEdgeDistance(parent, dx / distance, dy / distance) + LABEL_CLEARANCE;
+  if (distance <= start) return midpoint;
+
+  const middle = (start + distance) / 2;
+  return {
+    x: parent.position.x + (dx / distance) * middle,
+    y: parent.position.y + (dy / distance) * middle,
   };
 }
 
