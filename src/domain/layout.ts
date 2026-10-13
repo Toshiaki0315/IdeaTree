@@ -1,10 +1,15 @@
+import { estimateTextWidth } from "./hitArea";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
+import { LABEL_CLEARANCE, centralEdgeDistance, iconWidth, nodeLabel, nodeTextStyle } from "./svgExport";
 
 /** 階層ごとの、親ノードからの距離（px） */
 export const LEVEL_DISTANCE = 180;
 
 /** 中心ノードに画像（倍率 1）があるときに、ブランチを外側へずらす距離（px）。倍率に比例して変える */
 export const CENTRAL_IMAGE_EXTRA = 80;
+
+/** ラベルの前後に、枝の上で確保する余白の合計（px） */
+const LABEL_PADDING = 40;
 
 export interface LayoutOptions {
   levelDistance?: number;
@@ -18,8 +23,19 @@ function countLeaves(map: MindMap, id: NodeId): number {
 }
 
 /**
+ * ラベルが、枝の上に入りきるために必要な、枝の長さ（余白を含む）。
+ * 横書きのラベルの幅と高さを、枝の向き（角度）に投影した長さ。上下を向いた枝は、ほとんど長くならない。
+ */
+function labelLength(map: MindMap, node: MindMapNode, angle: number): number {
+  const { fontSize } = nodeTextStyle(map, node);
+  const width = estimateTextWidth(nodeLabel(node), fontSize) + (node.icon ? iconWidth(fontSize) : 0);
+  return Math.abs(Math.cos(angle)) * width + Math.abs(Math.sin(angle)) * fontSize + LABEL_PADDING;
+}
+
+/**
  * 扇形分割型の放射状レイアウトで、全ノードの位置を計算し直す。
- * ルートは原点、他のノードは扇形の中央の角度に「深さ × levelDistance」の距離で置く。
+ * ルートは原点、他のノードは扇形の中央の角度に置く。親からの距離は、levelDistance か、
+ * ラベルが入りきるのに必要な長さの、長い方（長いテキストでは、枝が長くなる）。
  * 扇形は、最初のメインブランチが右向き（角度0）の中心になる位置から時計回りに、葉の数に比例して子へ分配する。
  * 折りたたまれたノードは1枚の葉として扱い、その子孫は同じ位置に置く。
  */
@@ -33,11 +49,29 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
   const imageExtra = rootNode.image ? CENTRAL_IMAGE_EXTRA * (rootNode.style?.imageScale ?? 1) : 0;
   const nodes: Record<NodeId, MindMapNode> = {};
 
-  const place = (id: NodeId, depth: number, start: number, end: number): void => {
+  /** ノードの、中心からの距離 */
+  const radiusOf = (node: MindMapNode, depth: number, parentRadius: number, angle: number) => {
+    if (depth === 0) return 0;
+    const needed = labelLength(map, node, angle);
+    if (depth === 1) {
+      // メインブランチ: 中心ノード（画像）の外側に、ラベルが入る長さを取る。
+      // 画像があるときは、画像と重ならないよう、すべてのブランチを外側へずらす
+      const edge = centralEdgeDistance(rootNode, Math.cos(angle), Math.sin(angle)) + LABEL_CLEARANCE;
+      return Math.max(levelDistance + imageExtra, edge + needed);
+    }
+    return parentRadius + Math.max(levelDistance, needed);
+  };
+
+  const place = (
+    id: NodeId,
+    depth: number,
+    parentRadius: number,
+    start: number,
+    end: number,
+  ): void => {
     const node = map.nodes[id];
     const angle = (start + end) / 2;
-    // 中心ノードに画像があるときは、画像と重ならないよう、すべてのブランチを外側へずらす
-    const radius = depth === 0 ? 0 : depth * levelDistance + imageExtra;
+    const radius = radiusOf(node, depth, parentRadius, angle);
     const position =
       depth === 0
         ? { x: 0, y: 0 }
@@ -59,7 +93,7 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
     let cursor = start;
     for (const childId of node.childIds) {
       const span = ((end - start) * countLeaves(map, childId)) / total;
-      place(childId, depth + 1, cursor, cursor + span);
+      place(childId, depth + 1, radius, cursor, cursor + span);
       cursor += span;
     }
   };
@@ -70,7 +104,7 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
     firstChildId === undefined
       ? -Math.PI
       : (-Math.PI * countLeaves(map, firstChildId)) / countLeaves(map, map.rootId);
-  place(map.rootId, 0, start, start + 2 * Math.PI);
+  place(map.rootId, 0, 0, start, start + 2 * Math.PI);
 
   return { ...map, nodes };
 }

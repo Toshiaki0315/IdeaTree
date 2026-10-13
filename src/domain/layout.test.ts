@@ -85,9 +85,17 @@ describe("layout（放射状レイアウト）", () => {
     const root = createMindMap("root");
     const one = addChild(root, root.rootId, "a");
 
-    const laid = layout(one.map, { levelDistance: 100 });
+    const laid = layout(one.map, { levelDistance: 300 });
 
-    expect(distanceOf(laid, one.nodeId)).toBeCloseTo(100);
+    expect(distanceOf(laid, one.nodeId)).toBeCloseTo(300);
+  });
+
+  it("levelDistance が、ラベルが入る最小の長さより短くても、ラベルが入る長さは確保される", () => {
+    const root = createMindMap("root");
+    const one = addChild(root, root.rootId, "a");
+
+    // 楕円の端 70 + 余白 10 + 幅 12（半角 1 文字 × 0.6 × 20）+ 余白 40
+    expect(distanceOf(layout(one.map, { levelDistance: 100 }), one.nodeId)).toBeCloseTo(132);
   });
 
   it("同じ重みのメインブランチは、ルートの周りに等角度で配置される", () => {

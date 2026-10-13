@@ -55,10 +55,10 @@ export interface Box {
 }
 
 /** 中心ノードの端から、メインブランチのラベルまでの余白 */
-const LABEL_CLEARANCE = 10;
+export const LABEL_CLEARANCE = 10;
 
 /** 中心ノードの中心から、指定した向き（単位ベクトル）にある、中心ノードの端までの距離 */
-function centralEdgeDistance(root: MindMapNode, ux: number, uy: number): number {
+export function centralEdgeDistance(root: MindMapNode, ux: number, uy: number): number {
   if (root.image) {
     // 画像があるときは、画像の枠（長方形）の端
     const scale = imageScaleOf(root);
@@ -127,6 +127,11 @@ const ICON_GAP = 6;
 const ICON_SCALE = 1.1;
 /** 中心ノードのアイコンの中心から、楕円（画像）の上端までの距離 */
 const ROOT_ICON_GAP = 16;
+
+/** アイコンが、ラベルの横に占める幅（アイコンの大きさと、ラベルとの間の余白） */
+export function iconWidth(labelFontSize: number): number {
+  return labelFontSize * ICON_SCALE + ICON_GAP;
+}
 
 export interface IconPlacement {
   x: number;
