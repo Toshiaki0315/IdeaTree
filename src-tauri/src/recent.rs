@@ -10,8 +10,12 @@ pub const RECENT_FILE: &str = "recent-files.json";
 
 /// 一覧を書き込む。フォルダがなければ作る。途中で失敗しても、前の内容を壊さない
 pub fn write_recent_in(dir: &Path, contents: &str) -> Result<(), String> {
-    fs::create_dir_all(dir)
-        .map_err(|e| format!("最近使ったファイルの保存先を用意できません: {}: {e}", dir.display()))?;
+    fs::create_dir_all(dir).map_err(|e| {
+        format!(
+            "最近使ったファイルの保存先を用意できません: {}: {e}",
+            dir.display()
+        )
+    })?;
     write_text_file(&dir.join(RECENT_FILE), contents)
 }
 
@@ -55,7 +59,10 @@ mod tests {
 
         write_recent_in(&target, "[{\"path\":\"/a\"}]").unwrap();
 
-        assert_eq!(read_recent_in(&target).unwrap(), Some("[{\"path\":\"/a\"}]".to_string()));
+        assert_eq!(
+            read_recent_in(&target).unwrap(),
+            Some("[{\"path\":\"/a\"}]".to_string())
+        );
         assert!(target.join(RECENT_FILE).exists());
     }
 
@@ -66,7 +73,10 @@ mod tests {
         write_recent_in(dir.path(), "古い内容がとても長く書かれている").unwrap();
         write_recent_in(dir.path(), "新").unwrap();
 
-        assert_eq!(fs::read_to_string(dir.path().join(RECENT_FILE)).unwrap(), "新");
+        assert_eq!(
+            fs::read_to_string(dir.path().join(RECENT_FILE)).unwrap(),
+            "新"
+        );
     }
 
     #[test]

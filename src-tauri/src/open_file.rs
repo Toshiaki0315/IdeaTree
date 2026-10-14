@@ -79,7 +79,10 @@ mod tests {
 
     #[test]
     fn プラス記号は_そのまま文字として扱う() {
-        assert_eq!(path_from_file_url("file:///a+b.ideatree"), Some("/a+b.ideatree".to_string()));
+        assert_eq!(
+            path_from_file_url("file:///a+b.ideatree"),
+            Some("/a+b.ideatree".to_string())
+        );
     }
 
     #[test]
@@ -92,7 +95,10 @@ mod tests {
 
     #[test]
     fn 大文字のスキームも受け付ける() {
-        assert_eq!(path_from_file_url("FILE:///a.ideatree"), Some("/a.ideatree".to_string()));
+        assert_eq!(
+            path_from_file_url("FILE:///a.ideatree"),
+            Some("/a.ideatree".to_string())
+        );
     }
 
     #[test]

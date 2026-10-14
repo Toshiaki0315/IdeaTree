@@ -72,7 +72,10 @@ mod tests {
 
         write_autosave_in(&target, "{\"a\":1}").unwrap();
 
-        assert_eq!(fs::read_to_string(target.join(AUTOSAVE_FILE)).unwrap(), "{\"a\":1}");
+        assert_eq!(
+            fs::read_to_string(target.join(AUTOSAVE_FILE)).unwrap(),
+            "{\"a\":1}"
+        );
     }
 
     #[test]
@@ -82,7 +85,10 @@ mod tests {
         write_autosave_in(dir.path(), "古い内容がとても長く書かれている").unwrap();
         write_autosave_in(dir.path(), "新").unwrap();
 
-        assert_eq!(fs::read_to_string(dir.path().join(AUTOSAVE_FILE)).unwrap(), "新");
+        assert_eq!(
+            fs::read_to_string(dir.path().join(AUTOSAVE_FILE)).unwrap(),
+            "新"
+        );
         let names: Vec<_> = fs::read_dir(dir.path())
             .unwrap()
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
@@ -95,7 +101,10 @@ mod tests {
         let dir = tempdir().unwrap();
         write_autosave_in(dir.path(), "日本語の内容").unwrap();
 
-        assert_eq!(read_autosave_in(dir.path()).unwrap(), Some("日本語の内容".to_string()));
+        assert_eq!(
+            read_autosave_in(dir.path()).unwrap(),
+            Some("日本語の内容".to_string())
+        );
     }
 
     #[test]

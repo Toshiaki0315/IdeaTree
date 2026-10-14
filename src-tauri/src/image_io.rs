@@ -44,8 +44,8 @@ pub fn read_image_data_url(path: &Path) -> Result<String, String> {
         ));
     }
 
-    let bytes = fs::read(path)
-        .map_err(|e| format!("ファイルを読み込めません: {}: {e}", path.display()))?;
+    let bytes =
+        fs::read(path).map_err(|e| format!("ファイルを読み込めません: {}: {e}", path.display()))?;
     let mime = detect_mime(&bytes).ok_or_else(|| {
         format!(
             "画像ファイルではありません（PNG・JPEG・GIF・WebP のみ）: {}",
@@ -111,7 +111,11 @@ mod tests {
 
             let url = read_image_data_url(&path).unwrap();
 
-            assert_eq!(url, format!("data:{mime};base64,{}", encode(&bytes)), "{name}");
+            assert_eq!(
+                url,
+                format!("data:{mime};base64,{}", encode(&bytes)),
+                "{name}"
+            );
         }
     }
 
@@ -121,7 +125,11 @@ mod tests {
         let path = dir.path().join("photo.txt");
         fs::write(&path, [&PNG_HEADER[..], b"data"].concat()).unwrap();
 
-        assert!(read_image_data_url(&path).unwrap().starts_with("data:image/png;base64,"));
+        assert!(
+            read_image_data_url(&path)
+                .unwrap()
+                .starts_with("data:image/png;base64,")
+        );
     }
 
     #[test]
@@ -132,7 +140,10 @@ mod tests {
 
         let err = read_image_data_url(&path).unwrap_err();
 
-        assert!(err.contains("画像ファイルではありません（PNG・JPEG・GIF・WebP のみ）"), "{err}");
+        assert!(
+            err.contains("画像ファイルではありません（PNG・JPEG・GIF・WebP のみ）"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -185,12 +196,16 @@ mod tests {
     fn パスが空やフォルダならエラーになる() {
         let dir = tempdir().unwrap();
 
-        assert!(read_image_data_url(std::path::Path::new(""))
-            .unwrap_err()
-            .contains("読み込み元のパスが空です"));
-        assert!(read_image_data_url(dir.path())
-            .unwrap_err()
-            .contains("ファイルを読み込めません"));
+        assert!(
+            read_image_data_url(std::path::Path::new(""))
+                .unwrap_err()
+                .contains("読み込み元のパスが空です")
+        );
+        assert!(
+            read_image_data_url(dir.path())
+                .unwrap_err()
+                .contains("ファイルを読み込めません")
+        );
     }
 
     #[test]

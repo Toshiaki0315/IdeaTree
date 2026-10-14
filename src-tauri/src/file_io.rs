@@ -23,7 +23,10 @@ pub fn write_bytes_file(path: &Path, contents: &[u8]) -> Result<(), String> {
         _ => Path::new("."),
     };
     if !parent.is_dir() {
-        return Err(format!("保存先のフォルダが存在しません: {}", parent.display()));
+        return Err(format!(
+            "保存先のフォルダが存在しません: {}",
+            parent.display()
+        ));
     }
     let name = match path.file_name() {
         Some(name) if !path.is_dir() => name.to_string_lossy().into_owned(),
@@ -75,10 +78,14 @@ pub fn read_text_file(path: &Path) -> Result<String, String> {
         ));
     }
 
-    let bytes = fs::read(path)
-        .map_err(|e| format!("ファイルを読み込めません: {}: {e}", path.display()))?;
-    String::from_utf8(bytes)
-        .map_err(|_| format!("ファイルがUTF-8のテキストではありません: {}", path.display()))
+    let bytes =
+        fs::read(path).map_err(|e| format!("ファイルを読み込めません: {}: {e}", path.display()))?;
+    String::from_utf8(bytes).map_err(|_| {
+        format!(
+            "ファイルがUTF-8のテキストではありません: {}",
+            path.display()
+        )
+    })
 }
 
 /// フロントエンドの `invoke("load_file", { path })` から呼ばれるコマンド。
@@ -272,7 +279,10 @@ mod tests {
         let path = dir.path().join("limit.json");
         fs::write(&path, vec![b'a'; MAX_READ_BYTES as usize]).unwrap();
 
-        assert_eq!(read_text_file(&path).unwrap().len(), MAX_READ_BYTES as usize);
+        assert_eq!(
+            read_text_file(&path).unwrap().len(),
+            MAX_READ_BYTES as usize
+        );
     }
 
     #[test]
@@ -328,7 +338,11 @@ mod tests {
         let path = dir.path().join("cmd.pdf");
 
         // "%PDF-" に続く、バイナリのバイト列
-        save_binary_file(path.to_string_lossy().into_owned(), "JVBERi0A/w==".to_string()).unwrap();
+        save_binary_file(
+            path.to_string_lossy().into_owned(),
+            "JVBERi0A/w==".to_string(),
+        )
+        .unwrap();
 
         assert_eq!(fs::read(&path).unwrap(), b"%PDF-\x00\xff");
     }
@@ -338,8 +352,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("bad.png");
 
-        let err = save_binary_file(path.to_string_lossy().into_owned(), "これは%%base64ではない".to_string())
-            .unwrap_err();
+        let err = save_binary_file(
+            path.to_string_lossy().into_owned(),
+            "これは%%base64ではない".to_string(),
+        )
+        .unwrap_err();
 
         assert!(err.contains("書き込むデータの形式が不正です"), "{err}");
         assert!(!path.exists());

@@ -34,7 +34,9 @@ pub fn run() {
         if let tauri::RunEvent::Opened { urls } = event {
             for url in urls {
                 if let Some(path) = open_file::path_from_file_url(url.as_str()) {
-                    app_handle.state::<open_file::PendingOpenFiles>().push(path.clone());
+                    app_handle
+                        .state::<open_file::PendingOpenFiles>()
+                        .push(path.clone());
                     let _ = app_handle.emit("open-file", path);
                 }
             }
