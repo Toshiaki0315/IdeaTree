@@ -5368,4 +5368,147 @@ describe("App（マインドマップ編集UI）", () => {
       expect(container.querySelectorAll("g[data-search-match]")).toHaveLength(1);
     });
   });
+
+  describe("Cmd+R: 関連線（離れたノードを、矢印で結ぶ）", () => {
+    const lines = (container: HTMLElement) => container.querySelectorAll("path[data-relation-id]");
+    const hint = () => screen.queryByRole("status", { name: "関連線" });
+
+    /** 中心の下に、企画と予算（兄弟）を作る。選択は、予算 */
+    async function twoBranches(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}企画{Enter}予算{Enter}");
+      return view;
+    }
+
+    /** 予算から、企画へ、関連線を結ぶ（選択は、企画になる） */
+    async function linkBudgetToPlan(user: User) {
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      await user.keyboard("{ArrowUp}{Enter}");
+    }
+
+    it("Cmd+R で、結ぶ元のノードを示すヒントを出し、Escape で取り消す", async () => {
+      const user = userEvent.setup();
+      await twoBranches(user);
+
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      expect(hint()).toHaveTextContent("予算");
+
+      await user.keyboard("{Escape}");
+      expect(hint()).not.toBeInTheDocument();
+    });
+
+    it("矢印キーで結ぶ先を選び、Enter で確定すると、関連線が引かれる", async () => {
+      const user = userEvent.setup();
+      const { container } = await twoBranches(user);
+      expect(lines(container)).toHaveLength(0);
+
+      await linkBudgetToPlan(user);
+
+      expect(lines(container)).toHaveLength(1);
+      expect(container.querySelectorAll("path[data-relation-arrow]")).toHaveLength(1);
+      expect(hint()).not.toBeInTheDocument();
+      expect(screen.getByText("関連線を追加しました")).toBeInTheDocument();
+      expect(selectedText(container)).toContain("企画");
+    });
+
+    it("すでに結んでいるノードを選んで確定すると、関連線を解除する", async () => {
+      const user = userEvent.setup();
+      const { container } = await twoBranches(user);
+      await linkBudgetToPlan(user);
+
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      await user.keyboard("{ArrowDown}{Enter}"); // 企画 → 予算（逆向き）
+
+      expect(lines(container)).toHaveLength(0);
+      expect(screen.getByText("関連線を解除しました")).toBeInTheDocument();
+    });
+
+    it("同じノードのまま確定したら、結ばずに、終わる", async () => {
+      const user = userEvent.setup();
+      const { container } = await twoBranches(user);
+
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      await user.keyboard("{Enter}");
+
+      expect(lines(container)).toHaveLength(0);
+      expect(hint()).not.toBeInTheDocument();
+      expect(screen.getByText("同じノードは、結べません")).toBeInTheDocument();
+    });
+
+    it("Cmd+R をもう一度押しても、取り消せる", async () => {
+      const user = userEvent.setup();
+      await twoBranches(user);
+
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+
+      expect(hint()).not.toBeInTheDocument();
+    });
+
+    it("結ぶ先を選んでいる間は、ノードの追加・削除などの操作は、効かない", async () => {
+      const user = userEvent.setup();
+      const { container } = await twoBranches(user);
+      const before = nodes(container).length;
+
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      await user.keyboard("{Tab}{Delete}{Backspace}");
+
+      expect(nodes(container)).toHaveLength(before);
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(hint()).toBeInTheDocument();
+    });
+
+    it("関連線を引いたことは、元に戻せる（Cmd+Z）", async () => {
+      const user = userEvent.setup();
+      const { container } = await twoBranches(user);
+      await linkBudgetToPlan(user);
+
+      fireEvent.keyDown(window, { key: "z", metaKey: true });
+
+      expect(lines(container)).toHaveLength(0);
+    });
+
+    it("つながるノードを削除すると、関連線も消える", async () => {
+      const user = userEvent.setup();
+      const { container } = await twoBranches(user);
+      await linkBudgetToPlan(user); // 選択は、企画
+
+      await user.keyboard("{Delete}");
+
+      expect(lines(container)).toHaveLength(0);
+    });
+
+    it("端のノードが、折りたたまれて見えないときは、関連線を描かない。展開すると、また描く", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard("{Tab}企画{Enter}予算{Enter}{Tab}調査{Enter}"); // 調査は、予算の子（選択）
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      await user.keyboard("{ArrowLeft}{ArrowUp}{Enter}"); // 予算 → 企画
+      expect(lines(container)).toHaveLength(1);
+
+      // 調査と企画を結び直す（調査から結ぶ）。予算を折りたたむと、調査は見えない
+      await user.keyboard("{ArrowDown}{ArrowRight}"); // 企画 → 予算 → 調査
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      await user.keyboard("{ArrowLeft}{ArrowUp}{Enter}"); // 調査 → 予算 → 企画
+      expect(lines(container)).toHaveLength(2);
+
+      await user.keyboard("{ArrowDown}"); // 企画 → 予算
+      await user.keyboard("{ }");
+      expect(lines(container)).toHaveLength(1);
+      await user.keyboard("{ }");
+      expect(lines(container)).toHaveLength(2);
+    });
+
+    it("関連線は、保存するデータ（serialize）に含まれる", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/map.ideatree");
+      const user = userEvent.setup();
+      await twoBranches(user);
+      await linkBudgetToPlan(user);
+
+      fireEvent.keyDown(window, { key: "s", metaKey: true });
+
+      await waitFor(() => expect(mockedSaveFile).toHaveBeenCalledTimes(1));
+      expect(mockedSaveFile.mock.calls[0][0].relations).toHaveLength(1);
+    });
+  });
 });
