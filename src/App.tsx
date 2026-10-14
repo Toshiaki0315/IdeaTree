@@ -23,7 +23,14 @@ import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
 import { pasteTexts } from "./domain/pasteTexts";
-import { BACKGROUND, branchPath, depthOf, nodeTextStyle, strokeWidthAt } from "./domain/nodeGeometry";
+import {
+  BACKGROUND,
+  BRANCH_OUTLINE_WIDTH,
+  branchWidths,
+  depthOf,
+  nodeTextStyle,
+  taperedBranchPath,
+} from "./domain/nodeGeometry";
 import { documentOrder, revealNode, searchNodes } from "./domain/search";
 import { updateText } from "./domain/updateText";
 import { DEFAULT_VIEWPORT, fitViewport, zoomIn, zoomOut } from "./domain/viewport";
@@ -584,15 +591,17 @@ export default function App() {
         <rect x={view.x} y={view.y} width={view.width} height={view.height} fill={BACKGROUND} />
         {nodes.map((node) => {
           if (node.parentId === null) return null;
+          const color = nodeTextStyle(laidOut, node).color;
+          const widths = branchWidths(depthOf(laidOut, node));
           return (
             <path
               key={node.id}
               data-node-id={node.id}
-              d={branchPath(laidOut.nodes[node.parentId], node)}
-              fill="none"
-              stroke={nodeTextStyle(laidOut, node).color}
-              strokeWidth={strokeWidthAt(depthOf(laidOut, node))}
-              strokeLinecap="round"
+              d={taperedBranchPath(laidOut.nodes[node.parentId], node, widths.start, widths.end)}
+              fill={color}
+              stroke={color}
+              strokeWidth={BRANCH_OUTLINE_WIDTH}
+              strokeLinejoin="round"
             />
           );
         })}

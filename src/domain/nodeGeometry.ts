@@ -185,16 +185,58 @@ export function depthOf(map: MindMap, node: MindMapNode): number {
   return depth;
 }
 
-/** 親から子へ、緩やかなS字を描く三次ベジェ曲線のパス */
-export function branchPath(from: MindMapNode, to: MindMapNode): string {
-  const dx = to.position.x - from.position.x;
-  const dy = to.position.y - from.position.y;
+/** 枝の図形の輪郭の太さ（塗りと同じ色。角を丸め、細い先でも、途切れて見えないようにする） */
+export const BRANCH_OUTLINE_WIDTH = 1;
+/** 先の太さの下限（とても深い枝でも、これより細くしない） */
+export const MIN_TIP_WIDTH = 2;
+/** 先の太さは、根元の何倍か */
+const TIP_RATIO = 0.4;
+/** 枝の曲線を、いくつの点で近似するか */
+const TAPER_STEPS = 24;
+
+/** 枝の太さ。根元は、深さごとの線幅で、先に向かって細くなる（Buzan のマインドマップのように） */
+export function branchWidths(depth: number): { start: number; end: number } {
+  const start = strokeWidthAt(depth);
+  return { start, end: Math.max(MIN_TIP_WIDTH, start * TIP_RATIO) };
+}
+
+/**
+ * 親から子へ、緩やかなS字を描く枝の、先細りの図形（閉じたパス。塗りつぶして使う）。
+ * 中心の線は三次ベジェ曲線で、根元の幅 start から、先の幅 end へ、なめらかに細くなる。
+ */
+export function taperedBranchPath(from: MindMapNode, to: MindMapNode, start: number, end: number): string {
+  const x0 = from.position.x;
+  const y0 = from.position.y;
+  const dx = to.position.x - x0;
+  const dy = to.position.y - y0;
   // 進行方向に直交する単位ベクトル × 長さの一部 = 曲がりの大きさ
   const bend = 0.18;
   const nx = -dy * bend;
   const ny = dx * bend;
-  const c1 = [from.position.x + dx * 0.35 + nx, from.position.y + dy * 0.35 + ny];
-  const c2 = [from.position.x + dx * 0.65 - nx, from.position.y + dy * 0.65 - ny];
-  const points = [c1, c2, [to.position.x, to.position.y]].map(([x, y]) => `${fmt(x)} ${fmt(y)}`);
-  return `M${fmt(from.position.x)} ${fmt(from.position.y)} C${points.join(", ")}`;
+  const x1 = x0 + dx * 0.35 + nx;
+  const y1 = y0 + dy * 0.35 + ny;
+  const x2 = x0 + dx * 0.65 - nx;
+  const y2 = y0 + dy * 0.65 - ny;
+  const x3 = to.position.x;
+  const y3 = to.position.y;
+
+  const left: string[] = [];
+  const right: string[] = [];
+  for (let i = 0; i <= TAPER_STEPS; i++) {
+    const t = i / TAPER_STEPS;
+    const u = 1 - t;
+    // 三次ベジェ曲線の位置と、接線（微分）
+    const x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3;
+    const y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3;
+    const tx = 3 * u * u * (x1 - x0) + 6 * u * t * (x2 - x1) + 3 * t * t * (x3 - x2);
+    const ty = 3 * u * u * (y1 - y0) + 6 * u * t * (y2 - y1) + 3 * t * t * (y3 - y2);
+    const length = Math.hypot(tx, ty);
+    // 位置が重なっているとき（長さ 0）は、向きが決まらないので、横向きとみなす
+    const ux = length === 0 ? 1 : tx / length;
+    const uy = length === 0 ? 0 : ty / length;
+    const half = (start + (end - start) * t) / 2;
+    left.push(`${fmt(x - uy * half)} ${fmt(y + ux * half)}`);
+    right.push(`${fmt(x + uy * half)} ${fmt(y - ux * half)}`);
+  }
+  return `M${left[0]} L${[...left.slice(1), ...right.reverse()].join(" L")} Z`;
 }

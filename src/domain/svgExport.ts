@@ -1,10 +1,11 @@
 import { fmt } from "./format";
 import {
   BACKGROUND,
+  BRANCH_OUTLINE_WIDTH,
   CENTRAL_RX,
   CENTRAL_RY,
   LABEL_HALO_WIDTH,
-  branchPath,
+  branchWidths,
   centralLabelY,
   depthOf,
   iconPlacement,
@@ -13,7 +14,7 @@ import {
   labelPosition,
   nodeLabel,
   nodeTextStyle,
-  strokeWidthAt,
+  taperedBranchPath,
 } from "./nodeGeometry";
 import { iconShapeAttributes, iconShapes } from "./nodeIcon";
 import type { MindMap, NodeId } from "./mindmap";
@@ -105,9 +106,9 @@ export function exportSvg(map: MindMap): string {
     }
 
     const color = look.color;
-    const strokeWidth = strokeWidthAt(depth);
+    const widths = branchWidths(depth);
     branches.push(
-      `<path data-node-id="${id}" d="${branchPath(map.nodes[node.parentId], node)}" fill="none" stroke="${color}" stroke-width="${fmt(strokeWidth)}" stroke-linecap="round"/>`,
+      `<path data-node-id="${id}" d="${taperedBranchPath(map.nodes[node.parentId], node, widths.start, widths.end)}" fill="${color}" stroke="${color}" stroke-width="${BRANCH_OUTLINE_WIDTH}" stroke-linejoin="round" data-width-start="${fmt(widths.start)}" data-width-end="${fmt(widths.end)}"/>`,
     );
     // ブランチのテキストは枝の中点に置く（枝の先で子ブランチと重ならない）
     const { x: labelX, y: labelY } = labelPosition(map, node);
