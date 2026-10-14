@@ -165,11 +165,44 @@ describe("deserialize（JSON読み込み）", () => {
     },
   );
 
-  it("子ノードの childIds が重複していても復元できる", () => {
+  it("同じ子が、childIds に重複していればエラーになる", () => {
     const { data, ids } = validData();
     data.nodes[ids.root].childIds.push(ids.a);
 
-    expect(deserialize(JSON.stringify(data)).nodes[ids.root].childIds).toHaveLength(3);
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`子ノードが重複しています: ${ids.a}`);
+  });
+
+  it("同じ子が、別の親の childIds にもあればエラーになる", () => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].childIds.push(ids.b);
+
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`親子関係が不整合です: ${ids.b}`);
+  });
+
+  describe("ノードの種類（kind）の整合", () => {
+    it("ルートが中心ノード（central）でなければエラーになる", () => {
+      const { data, ids } = validData();
+      data.nodes[ids.root].kind = "branch";
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの種類が不整合です: ${ids.root}`);
+    });
+
+    it("ルート以外が中心ノード（central）ならエラーになる", () => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].kind = "central";
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの種類が不整合です: ${ids.a}`);
+    });
+  });
+
+  it.each([["1e999"], ["-1e999"]])("座標が有限の数でなければ（%s）エラーになる", (huge) => {
+    const { data, ids } = validData();
+    const json = JSON.stringify(data).replace(
+      new RegExp(`("id":"${ids.a}".*?"position":\\{"x":)[^,]+`),
+      `$1${huge}`,
+    );
+
+    expect(() => deserialize(json)).toThrow(`ノードの形式が不正です: ${ids.a}`);
   });
 
   describe("collapsed（折りたたみ状態）", () => {
