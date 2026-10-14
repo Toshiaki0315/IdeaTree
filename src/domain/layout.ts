@@ -11,6 +11,9 @@ export const CENTRAL_IMAGE_EXTRA = 80;
 /** ラベルの前後に、枝の上で確保する余白の合計（px） */
 const LABEL_PADDING = 40;
 
+/** 子ブランチが、親ブランチの向きを中心に広がる、扇形の幅の上限（120°）。メインブランチが少ないときに、後ろへ回り込まないため */
+const MAX_CHILD_FAN = (2 * Math.PI) / 3;
+
 export interface LayoutOptions {
   levelDistance?: number;
 }
@@ -91,10 +94,12 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
       return;
     }
 
+    // 中心の子（メインブランチ）以外は、親の向きを中心に、上限の幅までの扇形に子を並べる
+    const fan = depth === 0 ? end - start : Math.min(end - start, MAX_CHILD_FAN);
     const total = countLeaves(map, id);
-    let cursor = start;
+    let cursor = angle - fan / 2;
     for (const childId of node.childIds) {
-      const span = ((end - start) * countLeaves(map, childId)) / total;
+      const span = (fan * countLeaves(map, childId)) / total;
       place(childId, depth + 1, radius, cursor, cursor + span);
       cursor += span;
     }

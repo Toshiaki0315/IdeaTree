@@ -120,10 +120,10 @@ describe("layout（放射状レイアウト）", () => {
     // 葉は全部で4枚。ブランチAは3/4（3π/2）の扇形で、右向き(0)を中心にした [-3π/4, 3π/4]。Bは残りの [3π/4, 5π/4]（左向き）
     expectDirection(laid, mains.ids[0], 0);
     expectDirection(laid, mains.ids[1], Math.PI);
-    // Aの子3つは扇形を3等分した中央に置かれる
-    expectDirection(laid, withLeaves.ids[0], -Math.PI / 2);
+    // Aの子3つは、扇形（3π/2）のうち、上限の 120° を、3等分した中央（±40°）に置かれる
+    expectDirection(laid, withLeaves.ids[0], (-2 * Math.PI) / 9);
     expectDirection(laid, withLeaves.ids[1], 0);
-    expectDirection(laid, withLeaves.ids[2], Math.PI / 2);
+    expectDirection(laid, withLeaves.ids[2], (2 * Math.PI) / 9);
   });
 
   it("子ノードは、親の扇形の中に childIds の順で時計回りに並ぶ", () => {
