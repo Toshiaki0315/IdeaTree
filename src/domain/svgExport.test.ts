@@ -86,30 +86,35 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
     expect(doc.querySelector(`path[data-node-id="${ids.root}"]`)).toBeNull();
   });
 
-  it("ブランチは直線ではなく三次ベジェ曲線で、親の位置から子の位置までを結ぶ", () => {
+  it("ブランチは、親の位置から子の位置までを結ぶ、先細りの曲線の図形（根元の中心が親、先の中心が子）", () => {
     const { map, ids } = buildMap();
 
     const d = byNodeId(parse(exportSvg(map)), "path", ids.a1).getAttribute("d")!;
-    const numbers = d.match(/-?\d+(\.\d+)?/g)!.map(Number);
+    const values = d.match(/-?\d+(\.\d+)?/g)!.map(Number);
+    const pts = Array.from({ length: values.length / 2 }, (_, i) => ({
+      x: values[i * 2],
+      y: values[i * 2 + 1],
+    }));
+    const half = pts.length / 2;
     const parent = pos(map, ids.a);
     const child = pos(map, ids.a1);
 
-    expect(d).toMatch(/^M[^A-Za-z]+C[^A-Za-z]+$/);
-    expect(numbers).toHaveLength(8);
-    expect(numbers[0]).toBeCloseTo(parent.x, 1);
-    expect(numbers[1]).toBeCloseTo(parent.y, 1);
-    expect(numbers[6]).toBeCloseTo(child.x, 1);
-    expect(numbers[7]).toBeCloseTo(child.y, 1);
+    expect(d).toMatch(/^M[^A-Za-z]+(L[^A-Za-z]+)+Z$/);
+    expect((pts[0].x + pts[pts.length - 1].x) / 2).toBeCloseTo(parent.x, 1);
+    expect((pts[0].y + pts[pts.length - 1].y) / 2).toBeCloseTo(parent.y, 1);
+    expect((pts[half - 1].x + pts[half].x) / 2).toBeCloseTo(child.x, 1);
+    expect((pts[half - 1].y + pts[half].y) / 2).toBeCloseTo(child.y, 1);
   });
 
-  it("ブランチは塗りつぶさず、メインブランチの色で線を描き、端は丸める", () => {
+  it("ブランチは、メインブランチの色で塗りつぶした、先細りの図形（輪郭も同じ色）", () => {
     const { map, ids } = buildMap();
     const doc = parse(exportSvg(map));
 
     const main = byNodeId(doc, "path", ids.b);
-    expect(main.getAttribute("fill")).toBe("none");
+    expect(main.getAttribute("fill")).toBe(BRANCH_COLORS[1]);
     expect(main.getAttribute("stroke")).toBe(BRANCH_COLORS[1]);
-    expect(main.getAttribute("stroke-linecap")).toBe("round");
+    expect(main.getAttribute("stroke-linejoin")).toBe("round");
+    expect(main.getAttribute("d")!.endsWith("Z")).toBe(true);
     // サブブランチはメインブランチの色を引き継ぐ
     expect(byNodeId(doc, "path", ids.a11).getAttribute("stroke")).toBe(BRANCH_COLORS[0]);
   });
@@ -117,7 +122,7 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
   it("中心に近いほど太く、外側ほど細い（深さが増えると線幅が減る）", () => {
     const { map, ids } = buildMap();
     const doc = parse(exportSvg(map));
-    const width = (id: NodeId) => Number(byNodeId(doc, "path", id).getAttribute("stroke-width"));
+    const width = (id: NodeId) => Number(byNodeId(doc, "path", id).getAttribute("data-width-start"));
 
     expect(width(ids.a)).toBeGreaterThan(width(ids.a1));
     expect(width(ids.a1)).toBeGreaterThan(width(ids.a11));
