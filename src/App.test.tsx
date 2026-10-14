@@ -21,6 +21,7 @@ import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { confirmRestore } from "./files/confirmRestore";
 import { exportFile } from "./files/exportFile";
+import { openLink } from "./files/openLink";
 import { loadFile } from "./files/loadFile";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
@@ -38,6 +39,7 @@ vi.mock("./files/autosave", () => ({
 vi.mock("./files/confirmRestore", () => ({ confirmRestore: vi.fn() }));
 vi.mock("./files/clipboard", () => ({ readClipboardText: vi.fn(), writeClipboardText: vi.fn() }));
 vi.mock("./files/exportFile", () => ({ exportFile: vi.fn() }));
+vi.mock("./files/openLink", () => ({ openLink: vi.fn() }));
 
 const mockedSaveFile = vi.mocked(saveFile);
 const mockedLoadFile = vi.mocked(loadFile);
@@ -52,6 +54,7 @@ const mockedConfirmRestore = vi.mocked(confirmRestore);
 const mockedReadClipboard = vi.mocked(readClipboardText);
 const mockedWriteClipboard = vi.mocked(writeClipboardText);
 const mockedExportFile = vi.mocked(exportFile);
+const mockedOpenLink = vi.mocked(openLink);
 
 /** 読み込み用のマップ（中心「読込」の下に「子A」「子B」） */
 function loadedMap() {
@@ -5189,6 +5192,156 @@ describe("App（マインドマップ編集UI）", () => {
       const exported = mockedExportFile.mock.calls[0][0];
       expect(exportSvg(layout(exported))).toContain('data-role="background"');
       expect(exportSvg(layout(exported))).toContain('fill="#FFFFFF"');
+    });
+  });
+
+  describe("Cmd+L: ノードのメモとリンク", () => {
+    const panel = () => screen.getByRole("dialog", { name: "メモとリンク" });
+    const memoField = () => within(panel()).getByRole("textbox", { name: "メモ" });
+    const linkField = () => within(panel()).getByRole("textbox", { name: "リンク（URL）" });
+    const marker = (container: HTMLElement, kind: "note" | "link") =>
+      container.querySelector(`g[data-marker="${kind}"]`);
+
+    beforeEach(() => {
+      mockedOpenLink.mockResolvedValue(undefined);
+    });
+
+    /** 子「企画」を作って選び、メモとリンクのパネルを開く */
+    async function openPanelOnChild(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}企画{Enter}");
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      return view;
+    }
+
+    it("Cmd+L で開き、もう一度で閉じる。他のパネルとは、同時に開かない", async () => {
+      const user = userEvent.setup();
+      await openPanelOnChild(user);
+      expect(within(panel()).getByText("企画")).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      expect(screen.queryByRole("dialog", { name: "メモとリンク" })).not.toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      fireEvent.keyDown(panel(), { key: "l", metaKey: true });
+      expect(screen.queryByRole("dialog", { name: "メモとリンク" })).not.toBeInTheDocument();
+    });
+
+    it("メモを書くと、ノードにメモの印が付く。消すと、印も消える", async () => {
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+      expect(marker(container, "note")).toBeNull();
+
+      await user.type(memoField(), "補足の説明");
+      await user.keyboard("{Escape}");
+      expect(marker(container, "note")).not.toBeNull();
+      expect(marker(container, "note")!.getAttribute("aria-label")).toBe("メモ: 補足の説明");
+
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      await user.clear(memoField());
+      await user.keyboard("{Escape}");
+      expect(marker(container, "note")).toBeNull();
+    });
+
+    it("長いメモの印の名前（ツールチップ）は、先頭の部分だけにする", async () => {
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+
+      await user.type(memoField(), "あ".repeat(80));
+      await user.keyboard("{Escape}");
+
+      expect(marker(container, "note")!.getAttribute("aria-label")).toBe(`メモ: ${"あ".repeat(50)}…`);
+    });
+
+    it("リンクを付けると、リンクの印が付き、印を押すと、リンクを開く（ノードは選択しない）", async () => {
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+
+      await user.type(linkField(), "example.com{Enter}");
+      await user.keyboard("{Escape}");
+      const link = marker(container, "link")!;
+      expect(link.getAttribute("aria-label")).toBe("リンクを開く: https://example.com/");
+
+      await user.click(link);
+
+      expect(mockedOpenLink).toHaveBeenCalledWith("https://example.com/");
+    });
+
+    it("メモの印を押すと、そのノードを選んで、パネルを開く", async () => {
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+      await user.type(memoField(), "メモ");
+      await user.keyboard("{Escape}");
+      fireEvent.keyDown(window, { key: "ArrowLeft" }); // 中心へ
+      expect(selectedText(container)).toContain("中心テーマ");
+
+      await user.click(marker(container, "note")!);
+
+      expect(selectedText(container)).toContain("企画");
+      expect(panel()).toBeInTheDocument();
+    });
+
+    it("Cmd+Shift+L で、選択ノードのリンクを開く。リンクがなければ、その旨を表示する", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}企画{Enter}");
+
+      fireEvent.keyDown(window, { key: "l", metaKey: true, shiftKey: true });
+      expect(screen.getByText("このノードには、リンクがありません")).toBeInTheDocument();
+      expect(mockedOpenLink).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      await user.type(linkField(), "https://example.com/a{Enter}");
+      await user.keyboard("{Escape}");
+      fireEvent.keyDown(window, { key: "l", metaKey: true, shiftKey: true });
+
+      await waitFor(() => expect(mockedOpenLink).toHaveBeenCalledWith("https://example.com/a"));
+    });
+
+    it("リンクを開けなかったら、エラーを表示する", async () => {
+      mockedOpenLink.mockRejectedValue(new Error("リンクを開けません: 失敗"));
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+      await user.type(linkField(), "example.com{Enter}");
+      await user.keyboard("{Escape}");
+
+      await user.click(marker(container, "link")!);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("リンクを開けません: 失敗");
+    });
+
+    it("パネルの「リンクを開く」でも、開ける", async () => {
+      const user = userEvent.setup();
+      await openPanelOnChild(user);
+      await user.type(linkField(), "example.com{Enter}");
+
+      await user.click(within(panel()).getByRole("button", { name: "リンクを開く" }));
+
+      expect(mockedOpenLink).toHaveBeenCalledWith("https://example.com/");
+    });
+
+    it("メモとリンクの変更は、元に戻せて（Cmd+Z）、保存していない変更になる", async () => {
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+      await user.type(memoField(), "メモ");
+      await user.keyboard("{Escape}");
+      expect(document.querySelector(".doc-state")?.textContent).toContain("未保存");
+
+      fireEvent.keyDown(window, { key: "z", metaKey: true });
+
+      expect(marker(container, "note")).toBeNull();
+    });
+
+    it("メモの中の言葉でも、検索（Cmd+F）で見つかる", async () => {
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+      await user.type(memoField(), "秘密の合言葉");
+      await user.keyboard("{Escape}");
+
+      fireEvent.keyDown(window, { key: "f", metaKey: true });
+      await user.keyboard("合言葉");
+
+      expect(container.querySelectorAll("g[data-search-match]")).toHaveLength(1);
     });
   });
 });
