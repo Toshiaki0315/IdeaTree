@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { deserialize } from "../domain/deserialize";
 import type { MindMap } from "../domain/mindmap";
 import { serialize } from "../domain/serialize";
+import { errorMessage } from "./errorMessage";
 
 /** 復元できる自動保存の内容 */
 export interface AutosaveSnapshot {
@@ -10,10 +11,6 @@ export interface AutosaveSnapshot {
   filePath: string | undefined;
   /** 自動保存した時刻 */
   savedAt: Date;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** 編集中のマップを、自動保存する（アプリのデータフォルダに、1つだけ保持する） */

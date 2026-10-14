@@ -2,14 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { MindMap } from "../domain/mindmap";
 import { serialize } from "../domain/serialize";
+import { errorMessage } from "./errorMessage";
 
 /** 保存するファイルの拡張子（どちらも、中身は同じ JSON）。IdeaTree の標準は .ideatree */
 const EXTENSIONS = [".ideatree", ".json"];
 const DEFAULT_EXTENSION = ".ideatree";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * マインドマップをJSONファイルとして保存し、保存したパスを返す。

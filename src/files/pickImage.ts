@@ -1,9 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { errorMessage } from "./errorMessage";
 
 /**
  * ダイアログで画像（PNG・JPEG・GIF・WebP）を選ばせ、データURLとして返す。

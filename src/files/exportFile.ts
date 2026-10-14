@@ -6,15 +6,12 @@ import type { MindMap } from "../domain/mindmap";
 import { buildPdf } from "../domain/pdf";
 import { exportSvg } from "../domain/svgExport";
 import { rasterizeSvg } from "./rasterize";
+import { errorMessage } from "./errorMessage";
 
 /** 画面の 1px（96dpi）を、PDF の pt（72dpi）にする倍率 */
 const PX_TO_PT = 0.75;
 
 type Format = "svg" | "png" | "pdf";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** パスの拡張子から、書き出す形式を決める（知らない拡張子や、ない場合は SVG） */
 function formatOf(path: string): Format {

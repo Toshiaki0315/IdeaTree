@@ -1,10 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { parseRecentFiles, serializeRecentFiles } from "../domain/recentFiles";
 import type { RecentFile } from "../domain/recentFiles";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { errorMessage } from "./errorMessage";
 
 /** 最近使ったファイルの一覧を読み込む（なければ、壊れていれば、空） */
 export async function readRecentFiles(): Promise<RecentFile[]> {

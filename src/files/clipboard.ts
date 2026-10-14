@@ -1,8 +1,5 @@
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { errorMessage } from "./errorMessage";
 
 /** システムのクリップボードに、文字列を書き込む */
 export async function writeClipboardText(text: string): Promise<void> {

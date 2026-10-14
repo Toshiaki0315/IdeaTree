@@ -2,10 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { deserialize } from "../domain/deserialize";
 import type { MindMap } from "../domain/mindmap";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { errorMessage } from "./errorMessage";
 
 /** パスを指定して、JSON ファイルを読み込み、マインドマップを復元する（ダイアログは開かない） */
 export async function loadFileAt(path: string): Promise<{ map: MindMap; path: string }> {

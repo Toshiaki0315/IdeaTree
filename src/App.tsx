@@ -32,6 +32,7 @@ import { visibleNodeIds } from "./domain/visibleNodeIds";
 import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
+import { errorMessage } from "./files/errorMessage";
 import { exportFile } from "./files/exportFile";
 import { loadFile, loadFileAt } from "./files/loadFile";
 import { onOpenFileRequest, takePendingOpenFiles } from "./files/openRequests";
@@ -55,8 +56,8 @@ interface Message {
   text: string;
 }
 
-function errorMessage(error: unknown): Message {
-  return { kind: "alert", text: error instanceof Error ? error.message : String(error) };
+function errorToMessage(error: unknown): Message {
+  return { kind: "alert", text: errorMessage(error) };
 }
 
 /** この距離（px）より動かしたら、クリックではなく、ドラッグとみなす */
@@ -457,7 +458,7 @@ export default function App() {
     try {
       await action();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorToMessage(error));
     }
   };
 
