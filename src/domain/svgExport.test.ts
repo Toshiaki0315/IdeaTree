@@ -688,9 +688,10 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       const scaled = setNodeStyle(setNodeImage(map, ids.root, PNG), ids.root, { imageScale: 2 });
       const doc = parse(exportSvg(setNodeIcon(scaled, ids.root, ICON_PRESETS[0].value)));
 
-      const icon = doc.querySelector(`text[data-icon-for="${ids.root}"]`)!;
+      const icon = doc.querySelector(`g[data-icon-for="${ids.root}"]`)!;
       const image = doc.querySelector(`image[data-node-id="${ids.root}"]`)!;
-      expect(Number(icon.getAttribute("y"))).toBeLessThan(num(image, "y"));
+      const m = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/.exec(icon.getAttribute("transform")!)!;
+      expect(Number(m[2]) + Number(m[3]) * 24).toBeLessThanOrEqual(num(image, "y"));
     });
   });
 });

@@ -1,5 +1,7 @@
 import { getBranchColor } from "./branchColor";
 import { estimateTextWidth } from "./hitArea";
+import { iconShapes } from "./nodeIcon";
+import type { IconShape } from "./nodeIcon";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 import { visibleNodeIds } from "./visibleNodeIds";
 
@@ -125,34 +127,50 @@ export function centralLabelY(node: MindMapNode): number {
 
 const ICON_GAP = 6;
 const ICON_SCALE = 1.1;
-/** 中心ノードのアイコンの中心から、楕円（画像）の上端までの距離 */
-const ROOT_ICON_GAP = 16;
+/** 中心ノードのアイコンの下端から、楕円（画像）の上端までの距離 */
+const ROOT_ICON_GAP = 4;
 
 /** アイコンが、ラベルの横に占める幅（アイコンの大きさと、ラベルとの間の余白） */
 export function iconWidth(labelFontSize: number): number {
   return labelFontSize * ICON_SCALE + ICON_GAP;
 }
 
+/** アイコン（24×24 の絵）を置く、正方形の枠。x, y は左上、size は1辺の長さ */
 export interface IconPlacement {
   x: number;
   y: number;
-  fontSize: number;
-  anchor: "end" | "middle";
+  size: number;
 }
 
 /** アイコンの位置。ブランチは、ラベルの左側。中心ノードは、楕円（画像）の上に、中央揃え */
 export function iconPlacement(map: MindMap, node: MindMapNode): IconPlacement {
   const look = nodeTextStyle(map, node);
-  const fontSize = look.fontSize * ICON_SCALE;
+  const size = look.fontSize * ICON_SCALE;
   if (node.parentId === null) {
     const top = node.image
       ? node.position.y - (CENTRAL_IMAGE.height * imageScaleOf(node)) / 2
       : node.position.y - CENTRAL_RY;
-    return { x: node.position.x, y: top - ROOT_ICON_GAP, fontSize, anchor: "middle" };
+    return { x: node.position.x - size / 2, y: top - ROOT_ICON_GAP - size, size };
   }
   const { x, y } = labelPosition(map, node);
   const labelWidth = estimateTextWidth(nodeLabel(node), look.fontSize);
-  return { x: x - labelWidth / 2 - ICON_GAP, y, fontSize, anchor: "end" };
+  return { x: x - labelWidth / 2 - ICON_GAP - size, y: y - size / 2, size };
+}
+
+/** アイコンの図形の、SVG の属性（塗りや線の指定がなければ、なし） */
+export function iconShapeAttributes(shape: IconShape) {
+  return {
+    d: shape.d,
+    fill: shape.fill ?? "none",
+    stroke: shape.stroke ?? "none",
+    strokeWidth: shape.strokeWidth ?? 0,
+  };
+}
+
+/** アイコンの 24×24 の絵を、枠に収める変換（SVG の transform 属性） */
+export function iconTransform(place: IconPlacement): string {
+  // 倍率は、小数第2位では粗いので、小数第4位まで出す
+  return `translate(${fmt(place.x)} ${fmt(place.y)}) scale(${Number((place.size / 24).toFixed(4))})`;
 }
 
 /** テキストと枝の見た目（スタイルの指定があればそれを、なければ既定値を使う） */
@@ -237,9 +255,12 @@ export function exportSvg(map: MindMap): string {
     }
 
     if (node.icon) {
-      const place = iconPlacement(map, node);
+      const paths = iconShapes(node.icon).map((shape) => {
+        const a = iconShapeAttributes(shape);
+        return `<path d="${a.d}" fill="${a.fill}" stroke="${a.stroke}" stroke-width="${a.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      });
       labels.push(
-        `<text data-icon-for="${id}" x="${fmt(place.x)}" y="${fmt(place.y)}" text-anchor="${place.anchor}" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="${fmt(place.fontSize)}">${escapeXml(node.icon)}</text>`,
+        `<g data-icon-for="${id}" data-icon="${escapeXml(node.icon)}" transform="${iconTransform(iconPlacement(map, node))}">${paths.join("")}</g>`,
       );
     }
 
