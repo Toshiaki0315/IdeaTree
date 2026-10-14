@@ -2,6 +2,11 @@
 
 IdeaTree の、バージョンごとの変更点です（新しいものが上）。バージョンは `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` で、そろえています。
 
+## 未リリース
+
+### 内部の整理
+- `App.tsx` から、ズーム・パン（`useViewport`）と、ノードのドラッグ移動（`useNodeDrag`）を切り出しました（1030 行 → 656 行）。
+
 ## 0.6.4
 
 ### ライセンス
@@ -17,7 +22,7 @@ IdeaTree の、バージョンごとの変更点です（新しいものが上�
 
 ### 内部の整理
 - `svgExport.ts` から、位置・見た目の計算を `nodeGeometry.ts` に分けました（`layout` が書き出しに依存しなくなりました）。エラーメッセージの変換も、共通にしました。
-- `App.tsx`（1030 行 → 656 行）から、ズーム・パン（`useViewport`）、ノードのドラッグ移動（`useNodeDrag`）、自動保存（`useAutosave`）、最近使ったファイル（`useRecentFiles`）、イベント監視（`useSubscription`）、ノードの描画（`NodeView`）を切り出しました。開くパネルの状態も、1つにまとめました。
+- `App.tsx`（1030 行 → 781 行）から、自動保存（`useAutosave`）、最近使ったファイル（`useRecentFiles`）、イベント監視（`useSubscription`）、ノードの描画（`NodeView`）を切り出しました。開くパネルの状態も、1つにまとめました。
 - 最近使ったファイルの一覧の保存を、順番に行うようにしました（続けて更新したときに、古い内容が後から書かれないように）。
 
 ### セキュリティ
