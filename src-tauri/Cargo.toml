@@ -1,6 +1,6 @@
 [package]
 name = "idea-tree"
-version = "0.6.2"
+version = "0.6.3"
 description = "トニー・ブザンの法則に忠実な、macOS 向けのマインドマップツール"
 authors = ["Toshiaki Nomura"]
 edition = "2024"
