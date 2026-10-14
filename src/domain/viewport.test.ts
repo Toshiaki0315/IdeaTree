@@ -4,6 +4,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   ZOOM_STEP,
+  fitViewport,
   panBy,
   panToInclude,
   visibleRect,
@@ -108,5 +109,82 @@ describe("viewport（ズームとパン）", () => {
       expect(panToInclude(viewport, 400, { x: 0, y: -190 }, 20).panY).toBe(-190);
       expect(panToInclude(viewport, 400, { x: 0, y: 190 }, 20).panY).toBe(190);
     });
+  });
+});
+
+describe("fitViewport（全体表示）", () => {
+  const MARGIN = 100;
+
+  it("点が1つもなければ、既定の表示に戻す", () => {
+    expect(fitViewport(500, [], MARGIN)).toEqual(DEFAULT_VIEWPORT);
+  });
+
+  it("中心を、すべての点を囲む長方形の中心に合わせる", () => {
+    const fit = fitViewport(
+      500,
+      [
+        { x: 0, y: 0 },
+        { x: 200, y: 100 },
+      ],
+      MARGIN,
+    );
+
+    expect(fit.panX).toBe(100);
+    expect(fit.panY).toBe(50);
+  });
+
+  it("小さいマップは、拡大せず、100% のまま（中心だけ合わせる）", () => {
+    const fit = fitViewport(
+      500,
+      [
+        { x: -50, y: 0 },
+        { x: 50, y: 0 },
+      ],
+      MARGIN,
+    );
+
+    expect(fit.zoom).toBe(1);
+  });
+
+  it("大きいマップは、長い方の辺に余白を足した範囲が、ちょうど収まるよう縮小する", () => {
+    // 幅 1800 + 余白 200 = 2000 を、1000（= half × 2）に収める → 0.5
+    const fit = fitViewport(
+      500,
+      [
+        { x: -900, y: 0 },
+        { x: 900, y: 300 },
+      ],
+      MARGIN,
+    );
+
+    expect(fit.zoom).toBeCloseTo(0.5);
+    const rect = visibleRect(500, fit);
+    expect(rect.width).toBeCloseTo(2000);
+  });
+
+  it("縦長でも、長い方（縦）で決める", () => {
+    const fit = fitViewport(
+      500,
+      [
+        { x: 0, y: -1400 },
+        { x: 100, y: 1400 },
+      ],
+      MARGIN,
+    );
+
+    expect(fit.zoom).toBeCloseTo(1000 / 3000);
+  });
+
+  it("縮小の下限（MIN_ZOOM）を超えては、縮小しない", () => {
+    const fit = fitViewport(
+      500,
+      [
+        { x: -100000, y: 0 },
+        { x: 100000, y: 0 },
+      ],
+      MARGIN,
+    );
+
+    expect(fit.zoom).toBe(MIN_ZOOM);
   });
 });

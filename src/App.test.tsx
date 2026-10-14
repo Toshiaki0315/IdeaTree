@@ -5048,4 +5048,40 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.getByRole("treeitem", { name: "企画" }).hasAttribute("aria-expanded")).toBe(false);
     });
   });
+
+  describe("Cmd+Shift+0: 全体表示", () => {
+    const viewBox = (container: HTMLElement) =>
+      container.querySelector("svg.mindmap")!.getAttribute("viewBox")!.split(" ").map(Number);
+
+    /** 右へ、子を深く 5 段つなげる（右側に、大きく偏ったマップ） */
+    async function deepRight(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}a{Enter}{Tab}b{Enter}{Tab}c{Enter}{Tab}d{Enter}{Tab}e{Enter}");
+      return view;
+    }
+
+    it("マップの全体が見えるよう、表示の中心を、マップの中心に動かす", async () => {
+      const user = userEvent.setup();
+      const { container } = await deepRight(user);
+      fireEvent.keyDown(window, { key: "0", metaKey: true }); // 100% に戻して、中心を原点にする
+      const before = viewBox(container);
+
+      fireEvent.keyDown(window, { key: ")", metaKey: true, shiftKey: true });
+
+      const after = viewBox(container);
+      expect(after[0] + after[2] / 2).toBeGreaterThan(before[0] + before[2] / 2); // 右へ動いた
+    });
+
+    it("拡大したあとでも、全体表示で、収まる大きさに戻る", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      fireEvent.keyDown(window, { key: "=", metaKey: true });
+      expect(viewBox(container)[2]).toBeLessThan(900);
+
+      fireEvent.keyDown(window, { key: ")", metaKey: true, shiftKey: true });
+
+      expect(viewBox(container)[2]).toBeGreaterThanOrEqual(900);
+      void user;
+    });
+  });
 });
