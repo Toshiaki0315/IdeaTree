@@ -35,7 +35,7 @@ const json = (text) => {
 edit("package.json", json);
 edit("package-lock.json", json);
 // 手で整えた書式（配列の改行など）を崩さないよう、tauri.conf.json は、文字列の置き換えにする
-edit("src-tauri/tauri.conf.json", (text) => text.replace(/^(  "version": )".*"/m, `$1"${version}"`));
+edit("src-tauri/tauri.conf.json", (text) => text.replace(/^( {2}"version": )".*"/m, `$1"${version}"`));
 edit("src-tauri/Cargo.toml", (text) => text.replace(/^version = ".*"$/m, `version = "${version}"`));
 edit("src-tauri/Cargo.lock", (text) =>
   text.replace(/(name = "idea-tree"\nversion = )".*"/, `$1"${version}"`),
