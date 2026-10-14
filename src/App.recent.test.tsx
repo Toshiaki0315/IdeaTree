@@ -211,6 +211,17 @@ describe("最近使ったファイル", () => {
       ]);
     });
 
+    it("アウトラインの取り込みは、最近使ったファイルに加えない", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/outline.md", imported: true });
+      render(<App />);
+      await settle();
+
+      fireEvent.keyDown(window, { key: "o", metaKey: true });
+
+      await waitFor(() => expect(docState()).toBe("無題 ● 未保存"));
+      expect(mockedWriteRecent).not.toHaveBeenCalled();
+    });
+
     it("ダイアログで開いたファイルも加える。一覧の保存に失敗しても、無視する", async () => {
       mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/dialog.ideatree" });
       mockedWriteRecent.mockRejectedValue(new Error("保存できません"));

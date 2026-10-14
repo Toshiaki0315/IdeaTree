@@ -5084,4 +5084,43 @@ describe("App（マインドマップ編集UI）", () => {
       void user;
     });
   });
+
+  describe("アウトラインの取り込み（.md・.txt）", () => {
+    const docState = () => document.querySelector(".doc-state")?.textContent;
+
+    it("取り込んだ文書は、保存先のない、未保存の文書として開く（元のファイルを、上書きしない）", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/outline.md", imported: true });
+      render(<App />);
+
+      fireEvent.keyDown(window, { key: "o", metaKey: true });
+
+      await waitFor(() => expect(docState()).toBe("無題 ● 未保存"));
+      expect(screen.getByText(/取り込みました: \/Users\/me\/outline\.md/)).toBeInTheDocument();
+    });
+
+    it("取り込んだあとの Cmd+S は、保存先を尋ねる（保存先を、取り込み元にしない）", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/outline.md", imported: true });
+      mockedSaveFile.mockResolvedValue("/Users/me/new.ideatree");
+      render(<App />);
+      fireEvent.keyDown(window, { key: "o", metaKey: true });
+      await waitFor(() => expect(docState()).toBe("無題 ● 未保存"));
+
+      fireEvent.keyDown(window, { key: "s", metaKey: true });
+
+      await waitFor(() => expect(mockedSaveFile).toHaveBeenCalledTimes(1));
+      expect(mockedSaveFile.mock.calls[0][1]).toBeUndefined();
+      await waitFor(() => expect(docState()).toBe("new.ideatree"));
+    });
+
+    it("取り込む前に、未保存の変更があれば、確認する", async () => {
+      mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/outline.md", imported: true });
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}あ{Enter}");
+
+      fireEvent.keyDown(window, { key: "o", metaKey: true });
+
+      await waitFor(() => expect(mockedConfirmDiscard).toHaveBeenCalled());
+    });
+  });
 });
