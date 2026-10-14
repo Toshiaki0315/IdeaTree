@@ -5376,7 +5376,7 @@ describe("App（マインドマップ編集UI）", () => {
     /** 中心の下に、企画と予算（兄弟）を作る。選択は、予算 */
     async function twoBranches(user: User) {
       const view = render(<App />);
-      await user.keyboard("{Tab}企画{Enter}予算{Enter}");
+      await user.keyboard("{Tab}企画{Enter}{Enter}予算{Enter}");
       return view;
     }
 
@@ -5481,22 +5481,21 @@ describe("App（マインドマップ編集UI）", () => {
     it("端のノードが、折りたたまれて見えないときは、関連線を描かない。展開すると、また描く", async () => {
       const user = userEvent.setup();
       const { container } = render(<App />);
-      await user.keyboard("{Tab}企画{Enter}予算{Enter}{Tab}調査{Enter}"); // 調査は、予算の子（選択）
+      // 中心の下に、企画・予算（兄弟）。予算の子に、調査（選択）
+      await user.keyboard("{Tab}企画{Enter}{Enter}予算{Enter}{Tab}調査{Enter}");
+      // 調査から、企画へ結ぶ（調査 → 予算 → 企画）
       fireEvent.keyDown(window, { key: "r", metaKey: true });
-      await user.keyboard("{ArrowLeft}{ArrowUp}{Enter}"); // 予算 → 企画
+      await user.keyboard("{ArrowLeft}{ArrowUp}{Enter}");
       expect(lines(container)).toHaveLength(1);
 
-      // 調査と企画を結び直す（調査から結ぶ）。予算を折りたたむと、調査は見えない
-      await user.keyboard("{ArrowDown}{ArrowRight}"); // 企画 → 予算 → 調査
-      fireEvent.keyDown(window, { key: "r", metaKey: true });
-      await user.keyboard("{ArrowLeft}{ArrowUp}{Enter}"); // 調査 → 予算 → 企画
-      expect(lines(container)).toHaveLength(2);
+      // 予算（調査の親）を選んで、折りたたむ。調査は見えなくなる
+      await user.keyboard("{ArrowDown}");
+      expect(selectedText(container)).toContain("予算");
+      await user.keyboard("{ }");
+      expect(lines(container)).toHaveLength(0);
 
-      await user.keyboard("{ArrowDown}"); // 企画 → 予算
       await user.keyboard("{ }");
       expect(lines(container)).toHaveLength(1);
-      await user.keyboard("{ }");
-      expect(lines(container)).toHaveLength(2);
     });
 
     it("関連線は、保存するデータ（serialize）に含まれる", async () => {

@@ -19,6 +19,7 @@ import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeLink, setNodeNote } from "./domain/nodeNote";
+import { toggleRelation } from "./domain/relations";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
@@ -55,6 +56,7 @@ import { useViewport } from "./hooks/useViewport";
 import { useSubscription } from "./hooks/useSubscription";
 import NodeView from "./NodeView";
 import NotePanel from "./NotePanel";
+import RelationView from "./RelationView";
 import RecentFilesPanel from "./RecentFilesPanel";
 import SearchBar from "./SearchBar";
 import SettingsPanel from "./SettingsPanel";
@@ -112,6 +114,8 @@ export default function App() {
   const [searchIndex, setSearchIndex] = useState(0);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
   const recent = useRecentFiles();
+  /** 関連線を結んでいる途中なら、結ぶ元のノード（結ぶ先を、矢印キーで選んでいる間） */
+  const [relationFrom, setRelationFrom] = useState<NodeId | null>(null);
   const { setting: themeSetting, theme, setSetting: setThemeSetting } = useTheme();
   const palette = PALETTES[theme];
   /** コピーしたサブツリー。ファイルを開いても保持する */
@@ -163,7 +167,8 @@ export default function App() {
   const editingRef = useRef(editing);
   editingRef.current = editing;
   const laidOut = useMemo(() => layout(map), [map]);
-  const nodes = visibleNodeIds(laidOut).map((id) => laidOut.nodes[id]);
+  const visibleIds = new Set(visibleNodeIds(laidOut));
+  const nodes = [...visibleIds].map((id) => laidOut.nodes[id]);
   /** 拡大率 100% のとき、中心から見える距離。マップが大きくなったら、広げる */
   const half = Math.max(
     MIN_HALF_EXTENT,
@@ -414,6 +419,24 @@ export default function App() {
     });
   openPathRef.current = openPath;
 
+  /** 関連線の結ぶ先（選択しているノード）を確定する。すでに結んでいれば解除する。同じノードは、結ばない */
+  const confirmRelation = (from: NodeId) => {
+    setRelationFrom(null);
+    if (from === selectedId) {
+      setMessage({ kind: "status", text: "同じノードは、結べません" });
+      return;
+    }
+    const updated = toggleRelation(map, from, selectedId);
+    commit({ map: updated, selectedId });
+    setMessage({
+      kind: "status",
+      text:
+        updated.relations && updated.relations.length > (map.relations?.length ?? 0)
+          ? "関連線を追加しました"
+          : "関連線を解除しました",
+    });
+  };
+
   /** リンクを、既定のブラウザで開く（開けなければ、エラーを表示する） */
   const openLinkAction = (url: string) => runFileAction(() => openLink(url));
 
@@ -441,6 +464,21 @@ export default function App() {
   const keyDownRef = useRef<(event: KeyboardEvent) => void>(undefined as never);
   // 編集中のキー入力は、入力欄が受け取って伝播を止める（ここには届かない）
   const onKeyDown = (event: KeyboardEvent) => {
+    // 関連線の結ぶ先を選んでいる間は、矢印キー（移動）・Enter（確定）・Escape（取り消し）だけを受け付ける
+    if (relationFrom !== null) {
+      if (event.key === "Escape" || (event.metaKey && event.key.toLowerCase() === "r")) {
+        event.preventDefault();
+        setRelationFrom(null);
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        confirmRelation(relationFrom);
+      } else if (event.key in ARROW_DIRECTIONS) {
+        event.preventDefault();
+        replacePresent({ map, selectedId: navigate(map, selectedId, ARROW_DIRECTIONS[event.key]) });
+      }
+      return;
+    }
+
     const node = map.nodes[selectedId];
     const isRoot = node.parentId === null;
 
@@ -525,6 +563,12 @@ export default function App() {
         event.preventDefault();
         setPanel("search");
         setSearchFocusToken((token) => token + 1);
+        return;
+      }
+      if (key === "r" && !event.shiftKey) {
+        event.preventDefault();
+        setPanel(null);
+        setRelationFrom(selectedId);
         return;
       }
       if (key === "l" && event.shiftKey) {
@@ -635,6 +679,11 @@ export default function App() {
         }}
       >
         <rect x={view.x} y={view.y} width={view.width} height={view.height} fill={palette.background} />
+        {(map.relations ?? [])
+          .filter((r) => visibleIds.has(r.from) && visibleIds.has(r.to))
+          .map((r) => (
+            <RelationView key={r.id} id={r.id} from={laidOut.nodes[r.from]} to={laidOut.nodes[r.to]} />
+          ))}
         {nodes.map((node) => {
           if (node.parentId === null) return null;
           const color = nodeTextStyle(laidOut, node).color;
@@ -695,6 +744,12 @@ export default function App() {
           onClose={closeSearch}
           focusToken={searchFocusToken}
         />
+      )}
+      {relationFrom !== null && (
+        <div className="relation-hint" role="status" aria-label="関連線">
+          関連線: 「{map.nodes[relationFrom].text}」から結ぶ先のノードを、矢印キーで選び、Enter
+          で確定（すでに結んでいれば解除）。Escape で取り消し
+        </div>
       )}
       {panel === "note" && (
         <NotePanel
