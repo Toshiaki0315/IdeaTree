@@ -224,6 +224,30 @@ describe("最近使ったファイル", () => {
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
+    it("一覧の書き込みは、順番に行う（前の書き込みが終わるまで、次を始めない）", async () => {
+      let finishFirst: () => void = () => {};
+      mockedWriteRecent
+        .mockReturnValueOnce(new Promise<void>((resolve) => (finishFirst = resolve)))
+        .mockResolvedValue(undefined);
+      mockedSaveFile
+        .mockResolvedValueOnce("/Users/me/a.ideatree")
+        .mockResolvedValueOnce("/Users/me/b.ideatree");
+      render(<App />);
+      await settle();
+
+      fireEvent.keyDown(window, { key: "s", metaKey: true });
+      await waitFor(() => expect(mockedWriteRecent).toHaveBeenCalledTimes(1));
+      fireEvent.keyDown(window, { key: "s", metaKey: true, shiftKey: true });
+      await waitFor(() => expect(mockedSaveFile).toHaveBeenCalledTimes(2));
+      await settle();
+      expect(mockedWriteRecent).toHaveBeenCalledTimes(1);
+
+      await act(async () => finishFirst());
+
+      await waitFor(() => expect(mockedWriteRecent).toHaveBeenCalledTimes(2));
+      expect(mockedWriteRecent.mock.calls[1][0].map((f) => f.path)[0]).toBe("/Users/me/b.ideatree");
+    });
+
     it("一覧の読み込みが終わる前に加えても、読み込んだ一覧と合わせる", async () => {
       let resolveRead: (list: RecentFile[]) => void = () => {};
       mockedReadRecent.mockReturnValue(new Promise((resolve) => (resolveRead = resolve)));
