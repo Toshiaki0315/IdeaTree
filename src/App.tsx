@@ -32,6 +32,7 @@ import {
   centralLabelY,
   depthOf,
   iconPlacement,
+  iconTransform,
   imageBox,
   labelPosition,
   nodeLabel,
@@ -56,6 +57,7 @@ import { loadFile } from "./files/loadFile";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
+import NodeIcon from "./NodeIcon";
 import StylePanel from "./StylePanel";
 
 /** 履歴の1件分の状態（マップと、そのとき選択していたノード） */
@@ -110,11 +112,6 @@ const FOLLOW_MARGIN = 40;
 /** 折りたたまれているノードを展開する（子を追加・貼り付けしても、見えなくならないように） */
 function expanded(map: MindMap, nodeId: NodeId): MindMap {
   return map.nodes[nodeId].collapsed ? toggleCollapse(map, nodeId) : map;
-}
-
-/** アイコンの位置を、SVG の属性にする */
-function iconProps(place: { x: number; y: number; fontSize: number; anchor: "end" | "middle" }) {
-  return { x: place.x, y: place.y, fontSize: place.fontSize, textAnchor: place.anchor };
 }
 
 /** ラベルを中心にした、クリック範囲の長方形 */
@@ -393,11 +390,9 @@ export default function App() {
   const deleteSelected = (parentId: NodeId) =>
     commit({ map: deleteNode(map, selectedId), selectedId: parentId });
 
-  /** スタイルパネルでのアイコンの変更を、1手の履歴として記録する（変化がなければ記録しない） */
-  const changeIcon = (icon: string | undefined) => {
-    const updated = setNodeIcon(map, selectedId, icon);
-    if (updated !== map) commit({ map: updated, selectedId });
-  };
+  /** スタイルパネルでのアイコンの変更を、1手の履歴として記録する（選び直しは、変更にならない） */
+  const changeIcon = (icon: string | undefined) =>
+    commit({ map: setNodeIcon(map, selectedId, icon), selectedId });
 
   /** スタイルパネルでの変更を、1手の履歴として記録する（変化がなければ記録しない） */
   const changeStyle = (patch: Partial<NodeStyle>) => {
@@ -719,15 +714,15 @@ export default function App() {
                   {nodeLabel(node)}
                 </text>
               )}
-              {node.icon && !isEditing && (
-                <text
+              {node.icon && (
+                // アイコンは、IdeaTree のオリジナルの図形（24×24 の絵を、枠に収める）
+                <g
                   data-icon-for={node.id}
-                  {...iconProps(iconPlacement(laidOut, node))}
-                  dominantBaseline="central"
-                  fontFamily={look.fontFamily}
+                  data-icon={node.icon}
+                  transform={iconTransform(iconPlacement(laidOut, node))}
                 >
-                  {node.icon}
-                </text>
+                  <NodeIcon id={node.icon} />
+                </g>
               )}
               {isEditing && editing && (
                 <foreignObject x={labelX - 80} y={labelY - 18} width={160} height={36}>

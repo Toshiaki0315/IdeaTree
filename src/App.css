@@ -159,3 +159,37 @@ body,
   font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
   font-size: 13px;
 }
+
+.style-panel-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.style-panel-icon {
+  position: relative;
+  display: block;
+  padding: 3px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.style-panel-icon input {
+  position: absolute;
+  opacity: 0;
+}
+
+.style-panel-icon:has(input:checked) {
+  border-color: #1a7fd1;
+  background: #eef6fd;
+}
+
+.style-panel-icon:has(input:focus-visible) {
+  outline: 2px solid #1a7fd1;
+  outline-offset: 2px;
+}

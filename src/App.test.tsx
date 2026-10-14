@@ -3887,14 +3887,15 @@ describe("App（マインドマップ編集UI）", () => {
     const CMD_K = "{Meta>}k{/Meta}";
     const CMD_Z = "{Meta>}z{/Meta}";
     const panel = () => screen.getByRole("dialog", { name: "スタイル" });
-    const iconSelect = () => within(panel()).getByRole("combobox", { name: "アイコン" });
+    const iconGroup = () => within(panel()).getByRole("radiogroup", { name: "アイコン" });
+    const iconRadio = (name: string) => within(iconGroup()).getByRole("radio", { name });
     const star = ICON_PRESETS[0];
     const idea = ICON_PRESETS[4];
     const icons = (container: HTMLElement) =>
-      [...container.querySelectorAll("text[data-icon-for]")].map((e) => e.textContent);
+      [...container.querySelectorAll("g[data-icon-for]")].map((e) => e.getAttribute("data-icon"));
     const iconOf = (container: HTMLElement, nodeText: string) => {
       const id = screen.getByText(nodeText).closest("g[data-node-id]")?.getAttribute("data-node-id");
-      return container.querySelector(`text[data-icon-for="${id}"]`)?.textContent;
+      return container.querySelector(`g[data-icon-for="${id}"]`)?.getAttribute("data-icon");
     };
 
     /** 中心 ─ a / b を作り、b を選択した状態にする */
@@ -3903,15 +3904,18 @@ describe("App（マインドマップ編集UI）", () => {
       await addSiblingNamed(user, "b");
     }
 
-    it("「なし」と、選択肢のアイコンを選べ、初期状態では「なし」が選ばれている", async () => {
+    it("「なし」と、オリジナルのアイコンの選択肢が、絵つきで選べ、初期状態では「なし」が選ばれている", async () => {
       const user = userEvent.setup();
       render(<App />);
       await user.keyboard(CMD_K);
 
-      const options = within(iconSelect()).getAllByRole("option").map((o) => o.textContent);
+      const names = within(iconGroup()).getAllByRole("radio").map((r) => r.getAttribute("aria-label"));
 
-      expect(options).toEqual(["なし", ...ICON_PRESETS.map((p) => p.name)]);
-      expect(iconSelect()).toHaveDisplayValue("なし");
+      expect(names).toEqual(["なし", ...ICON_PRESETS.map((p) => p.name)]);
+      expect(iconRadio("なし")).toBeChecked();
+      // 選択肢には、それぞれ、アイコンの絵が付いている（「なし」を除く）
+      expect(iconGroup().querySelectorAll("svg")).toHaveLength(ICON_PRESETS.length + 1);
+      expect(iconGroup().querySelectorAll("svg path").length).toBeGreaterThan(ICON_PRESETS.length);
     });
 
     it("アイコンを選ぶと、選択ノードにだけ表示され、「なし」で外れる", async () => {
@@ -3920,12 +3924,12 @@ describe("App（マインドマップ編集UI）", () => {
       await buildTree(user);
       await user.keyboard(CMD_K);
 
-      await user.selectOptions(iconSelect(), star.name);
+      await user.click(iconRadio(star.name));
       expect(iconOf(container, "b")).toBe(star.value);
       expect(iconOf(container, "a")).toBeUndefined();
-      expect(iconSelect()).toHaveDisplayValue(star.name);
+      expect(iconRadio(star.name)).toBeChecked();
 
-      await user.selectOptions(iconSelect(), "なし");
+      await user.click(iconRadio("なし"));
       expect(icons(container)).toEqual([]);
     });
 
@@ -3934,7 +3938,7 @@ describe("App（マインドマップ編集UI）", () => {
       const { container } = render(<App />);
       await user.keyboard(CMD_K);
 
-      await user.selectOptions(iconSelect(), idea.name);
+      await user.click(iconRadio(idea.name));
 
       expect(iconOf(container, "中心テーマ")).toBe(idea.value);
     });
@@ -3944,13 +3948,13 @@ describe("App（マインドマップ編集UI）", () => {
       render(<App />);
       await buildTree(user);
       await user.keyboard(CMD_K);
-      await user.selectOptions(iconSelect(), star.name);
+      await user.click(iconRadio(star.name));
 
       await user.click(screen.getByText("a"));
-      expect(iconSelect()).toHaveDisplayValue("なし");
+      expect(iconRadio("なし")).toBeChecked();
 
       await user.click(screen.getByText("b"));
-      expect(iconSelect()).toHaveDisplayValue(star.name);
+      expect(iconRadio(star.name)).toBeChecked();
     });
 
     it("アイコンの変更は1手の履歴で、同じアイコンを選び直しても、増えない", async () => {
@@ -3958,9 +3962,9 @@ describe("App（マインドマップ編集UI）", () => {
       const { container } = render(<App />);
       await buildTree(user);
       await user.keyboard(CMD_K);
-      await user.selectOptions(iconSelect(), star.name);
-      await user.selectOptions(iconSelect(), star.name);
-      await user.selectOptions(iconSelect(), idea.name);
+      await user.click(iconRadio(star.name));
+      await user.click(iconRadio(star.name));
+      await user.click(iconRadio(idea.name));
       await user.keyboard("{Escape}");
 
       await user.keyboard(CMD_Z);
@@ -3977,7 +3981,7 @@ describe("App（マインドマップ編集UI）", () => {
       const { container } = render(<App />);
       await buildTree(user);
       await user.keyboard(CMD_K);
-      await user.selectOptions(iconSelect(), star.name);
+      await user.click(iconRadio(star.name));
       await user.keyboard("{Escape}");
       await user.keyboard("{Meta>}s{/Meta}");
       await screen.findByRole("status");
@@ -4000,7 +4004,7 @@ describe("App（マインドマップ編集UI）", () => {
       const { container } = render(<App />);
       await buildTree(user);
       await user.keyboard(CMD_K);
-      await user.selectOptions(iconSelect(), star.name);
+      await user.click(iconRadio(star.name));
       await user.keyboard("{Escape}");
       await user.keyboard("{Meta>}c{/Meta}");
       await user.keyboard("{ArrowUp}");
@@ -4015,7 +4019,7 @@ describe("App（マインドマップ編集UI）", () => {
       await addChildNamed(user, "親");
       await addChildNamed(user, "子");
       await user.keyboard(CMD_K);
-      await user.selectOptions(iconSelect(), star.name);
+      await user.click(iconRadio(star.name));
       await user.keyboard("{Escape}");
       await user.keyboard("{ArrowLeft}");
       expect(icons(container)).toEqual([star.value]);
@@ -4030,13 +4034,13 @@ describe("App（マインドマップ編集UI）", () => {
       const { container } = render(<App />);
       await buildTree(user);
       await user.keyboard(CMD_K);
-      await user.selectOptions(iconSelect(), star.name);
+      await user.click(iconRadio(star.name));
       await user.keyboard("{Escape}");
       await user.click(screen.getByText("a"));
 
-      await user.click(container.querySelector("text[data-icon-for]")!);
+      await user.click(container.querySelector("g[data-icon-for]")!);
 
-      expect(selectedText(container)).toBe(`b${star.value}`); // ノードの文字には、アイコンの記号も含まれる
+      expect(selectedText(container)).toBe("b");
     });
   });
 

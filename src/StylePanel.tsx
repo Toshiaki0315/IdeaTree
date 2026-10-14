@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { NodeStyle } from "./domain/mindmap";
 import { ICON_PRESETS } from "./domain/nodeIcon";
+import NodeIcon from "./NodeIcon";
 import { isColor } from "./domain/nodeStyle";
 import {
   COLOR_PRESETS,
@@ -198,21 +199,33 @@ export default function StylePanel({
         </select>
       </label>
 
-      <label className="style-panel-field">
-        アイコン
-        <select
-          aria-label="アイコン"
-          value={icon ?? ""}
-          onChange={(event) => onChangeIcon(event.target.value || undefined)}
-        >
-          <option value="">なし</option>
-          {ICON_PRESETS.map((preset) => (
-            <option key={preset.value} value={preset.value}>
-              {preset.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <fieldset className="style-panel-icons" role="radiogroup" aria-label="アイコン">
+        {[{ name: "なし", value: undefined as string | undefined }, ...ICON_PRESETS].map((preset) => (
+          <label key={preset.name} className="style-panel-icon" title={preset.name}>
+            <input
+              type="radio"
+              name="style-icon"
+              aria-label={preset.name}
+              checked={icon === preset.value}
+              onChange={() => onChangeIcon(preset.value)}
+            />
+            <svg viewBox="0 0 24 24" width={28} height={28} aria-hidden="true">
+              {preset.value === undefined ? (
+                // 「なし」は、斜線を引いた円
+                <path
+                  d="M12 3A9 9 0 1 1 11.99 3ZM5.6 5.6L18.4 18.4"
+                  fill="none"
+                  stroke="#8C959F"
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                />
+              ) : (
+                <NodeIcon id={preset.value} />
+              )}
+            </svg>
+          </label>
+        ))}
+      </fieldset>
 
       <label className="style-panel-field">
         画像の大きさ
