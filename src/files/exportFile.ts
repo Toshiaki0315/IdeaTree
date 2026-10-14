@@ -3,6 +3,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { bytesToBase64 } from "../domain/base64";
 import { layout } from "../domain/layout";
 import type { MindMap } from "../domain/mindmap";
+import { toOutline } from "../domain/outline";
 import { buildPdf } from "../domain/pdf";
 import { exportSvg } from "../domain/svgExport";
 import { rasterizeSvg } from "./rasterize";
@@ -11,12 +12,13 @@ import { errorMessage } from "./errorMessage";
 /** 画面の 1px（96dpi）を、PDF の pt（72dpi）にする倍率 */
 const PX_TO_PT = 0.75;
 
-type Format = "svg" | "png" | "pdf";
+type Format = "svg" | "png" | "pdf" | "outline";
 
 /** パスの拡張子から、書き出す形式を決める（知らない拡張子や、ない場合は SVG） */
 function formatOf(path: string): Format {
   const extension = path.toLowerCase().split(".").pop();
-  return extension === "png" || extension === "pdf" ? extension : "svg";
+  if (extension === "png" || extension === "pdf") return extension;
+  return extension === "md" || extension === "txt" ? "outline" : "svg";
 }
 
 /** exportSvg が書いた、画像の大きさ（<svg> の width と height） */
@@ -38,6 +40,7 @@ export async function exportFile(map: MindMap): Promise<string | null> {
       { name: "SVG（ベクター画像）", extensions: ["svg"] },
       { name: "PNG（画像）", extensions: ["png"] },
       { name: "PDF", extensions: ["pdf"] },
+      { name: "アウトライン（Markdown・テキスト）", extensions: ["md", "txt"] },
     ],
   });
   if (chosen === null) return null;
@@ -46,6 +49,10 @@ export async function exportFile(map: MindMap): Promise<string | null> {
   const path = format === "svg" && !chosen.toLowerCase().endsWith(".svg") ? `${chosen}.svg` : chosen;
 
   try {
+    if (format === "outline") {
+      await invoke("save_file", { path, contents: toOutline(map) });
+      return path;
+    }
     const svg = exportSvg(layout(map));
     if (format === "svg") {
       await invoke("save_file", { path, contents: svg });
