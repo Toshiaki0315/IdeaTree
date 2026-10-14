@@ -45,11 +45,9 @@ import { updateText } from "./domain/updateText";
 import { DEFAULT_VIEWPORT, panBy, panToInclude, visibleRect, zoomIn, zoomOut } from "./domain/viewport";
 import type { Viewport } from "./domain/viewport";
 import { visibleNodeIds } from "./domain/visibleNodeIds";
-import { clearAutosave, readAutosave, writeAutosave } from "./files/autosave";
 import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
-import { confirmRestore } from "./files/confirmRestore";
 import { exportFile } from "./files/exportFile";
 import { loadFile, loadFileAt } from "./files/loadFile";
 import { onOpenFileRequest, takePendingOpenFiles } from "./files/openRequests";
@@ -58,6 +56,7 @@ import { readRecentFiles, writeRecentFiles } from "./files/recent";
 import { saveFile } from "./files/saveFile";
 import { addRecentFile, removeRecentFile } from "./domain/recentFiles";
 import type { RecentFile } from "./domain/recentFiles";
+import { confirmDiscardAndClearAutosave, useAutosave } from "./hooks/useAutosave";
 import { useSubscription } from "./hooks/useSubscription";
 import NodeIcon from "./NodeIcon";
 import RecentFilesPanel from "./RecentFilesPanel";
@@ -116,9 +115,6 @@ const MIN_HALF_EXTENT = 450;
 const VIEW_MARGIN = 160;
 /** 選択したノードが、見える範囲の端から、これより近いと、表示位置を動かす */
 const FOLLOW_MARGIN = 40;
-/** 最後の変更から、自動保存するまでの待ち時間（ミリ秒） */
-const AUTOSAVE_DELAY_MS = 2000;
-
 /** 折りたたまれているノードを展開する（子を追加・貼り付けしても、見えなくならないように） */
 function expanded(map: MindMap, nodeId: NodeId): MindMap {
   return map.nodes[nodeId].collapsed ? toggleCollapse(map, nodeId) : map;
@@ -139,13 +135,6 @@ function editorHeight(draft: string): number {
 function hitRect(centerX: number, centerY: number, label: string, fontSize: number) {
   const { width, height } = hitAreaSize(label, fontSize);
   return { x: centerX - width / 2, y: centerY - height / 2, width, height };
-}
-
-/** 変更を破棄して閉じることを選んだら、自動保存も削除する（次の起動で、復元を尋ねないように） */
-async function confirmDiscardAndClearAutosave(): Promise<boolean> {
-  const discard = await confirmDiscard();
-  if (discard) await clearAutosave().catch(() => {});
-  return discard;
 }
 
 function initialSnapshot(): Snapshot {
@@ -263,59 +252,16 @@ export default function App() {
     };
   }, []);
 
-  // 起動したら、前回の自動保存が残っていないか調べ、あれば、復元するかを尋ねる。
-  // 確認が終わるまでは、自動保存の書き込みや削除をしない（残っている内容を、消してしまわないため）
-  const [autosaveReady, setAutosaveReady] = useState(false);
-  /** 自動保存のファイルが、今、ディスクにあるか（変更なしに戻ったときに、削除するかの判断に使う） */
-  const autosaveOnDiskRef = useRef(false);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      // 読み込めない（Tauri の外など）ときは、自動保存がないものとして、そのまま起動する
-      const saved = await readAutosave().catch(() => null);
-      // 画面が閉じられた（開発時の再描画など）ときは、二重に確認しない
-      if (cancelled) return;
-      if (saved !== null) {
-        let restore: boolean;
-        try {
-          restore = await confirmRestore(saved.savedAt, saved.filePath);
-        } catch {
-          // 確認できなかったときは、残っている内容を守るため、自動保存を残し、この回は自動保存しない
-          return;
-        }
-        if (restore) {
-          // 復元した内容は、保存していない変更として扱う（保存すれば、変更なしになる）
-          autosaveOnDiskRef.current = true;
-          setHistory(createHistory({ map: saved.map, selectedId: saved.map.rootId }));
-          setFilePath(saved.filePath);
-          setMessage({ kind: "status", text: "前回の編集内容を復元しました" });
-        } else {
-          await clearAutosave().catch(() => {});
-        }
-      }
-      setAutosaveReady(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // 変更があれば、最後の変更から少し待って、自動保存する。変更なしに戻ったら、自動保存を削除する
-  useEffect(() => {
-    if (!autosaveReady) return;
-    if (!dirty) {
-      if (autosaveOnDiskRef.current) {
-        autosaveOnDiskRef.current = false;
-        clearAutosave().catch(() => {});
-      }
-      return;
-    }
-    const timer = setTimeout(() => {
-      autosaveOnDiskRef.current = true;
-      writeAutosave(map, filePath).catch(() => {});
-    }, AUTOSAVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [autosaveReady, dirty, map, filePath]);
+  const autosaveReady = useAutosave({
+    map,
+    filePath,
+    dirty,
+    onRestore: (saved) => {
+      setHistory(createHistory({ map: saved.map, selectedId: saved.map.rootId }));
+      setFilePath(saved.filePath);
+      setMessage({ kind: "status", text: "前回の編集内容を復元しました" });
+    },
+  });
 
   // 最近使ったファイルの一覧を読み込む（読み込めなければ、空のまま）。
   // 読み込みが終わる前に加えたファイルがあれば、それを先頭に残して、合わせる
