@@ -45,6 +45,10 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       },
       { keys: "Cmd + B / I", description: "太字 / 斜体" },
       {
+        keys: "Cmd + R",
+        description: "関連線: 結ぶ先を矢印キーで選び、Enter で確定（もう一度で解除）、Escape で取り消し",
+      },
+      {
         keys: "Cmd + L",
         description: "メモとリンクのパネルを開く / 閉じる（ノードに、補足の文章と URL を付ける）",
       },
