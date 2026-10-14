@@ -12,6 +12,7 @@ import { deleteNode } from "./domain/deleteNode";
 import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
 import { hitAreaSize } from "./domain/hitArea";
+import { labelBlock, lineCenters } from "./domain/wrapLabel";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
@@ -838,6 +839,7 @@ export default function App() {
           // 中心ノードは、ノードの位置（画像があれば、その下）に、それ以外は、枝の中点にラベルを置く
           const labelX = isRoot ? node.position.x : labelPosition(laidOut, node).x;
           const labelY = isRoot ? centralLabelY(node) : labelPosition(laidOut, node).y;
+          const labelLines = labelBlock(nodeLabel(node), look.fontSize).lines;
           const box = node.image ? imageBox(laidOut, node) : null;
           const isEditing = editing?.nodeId === node.id;
           const selected = node.id === selectedId;
@@ -927,7 +929,13 @@ export default function App() {
                         strokeLinejoin: "round" as const,
                       })}
                 >
-                  {nodeLabel(node)}
+                  {labelLines.length === 1
+                    ? labelLines[0]
+                    : labelLines.map((line, i) => (
+                        <tspan key={i} x={labelX} y={lineCenters(labelLines.length, look.fontSize, labelY)[i]}>
+                          {line}
+                        </tspan>
+                      ))}
                 </text>
               )}
               {node.icon && (
