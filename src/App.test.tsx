@@ -4576,4 +4576,233 @@ describe("App（マインドマップ編集UI）", () => {
       });
     });
   });
+
+  describe("Cmd+F: ノードの検索", () => {
+    const CMD_F = "{Meta>}f{/Meta}";
+    const CMD_Z = "{Meta>}z{/Meta}";
+    const bar = () => screen.getByRole("search", { name: "検索" });
+    const field = () => within(bar()).getByRole("searchbox", { name: "検索" });
+    const count = () => bar().querySelector("[data-role='search-count']")?.textContent;
+    const matches = (container: HTMLElement) =>
+      [...container.querySelectorAll("g[data-search-match]")].map((g) => g.textContent);
+    const currentMatch = (container: HTMLElement) =>
+      container.querySelector("g[data-search-current]")?.textContent;
+
+    /** 中心 ─ Apple(apple pie) / Berry / Banana を作る（最後の Banana を選択） */
+    async function buildTree(user: User) {
+      await addChildNamed(user, "Apple");
+      await addChildNamed(user, "apple pie");
+      await user.keyboard("{ArrowLeft}");
+      await addSiblingNamed(user, "Berry");
+      await addSiblingNamed(user, "Banana");
+    }
+
+    it("Cmd+F で、検索バーが開き、入力欄にフォーカスが移る。Escape で閉じる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      expect(screen.queryByRole("search")).not.toBeInTheDocument();
+
+      await user.keyboard(CMD_F);
+      expect(field()).toHaveFocus();
+
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    });
+
+    it("検索語を入力すると、一致するノードが強調され、件数が表示され、最初の一致が選択される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user); // Banana を選択中
+      await user.keyboard(CMD_F);
+
+      await user.type(field(), "apple");
+
+      expect(count()).toBe("2 件中 1 件目");
+      expect(matches(container)).toEqual(["Apple", "apple pie"]);
+      expect(currentMatch(container)).toBe("Apple");
+      expect(selectedText(container)).toBe("Apple");
+    });
+
+    it("入力したとき、今選んでいるノードより後ろの、最初の一致から始まる（なければ、先頭に戻る）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.click(screen.getByText("Apple")); // 選択を、先頭の方へ
+      await user.keyboard(CMD_F);
+
+      await user.type(field(), "b");
+
+      expect(selectedText(container)).toBe("Berry"); // Apple より後ろの、最初の一致
+      expect(count()).toBe("2 件中 1 件目");
+    });
+
+    it("Enter で次の一致へ、Shift+Enter で前の一致へ移動し、端では、反対側へ回り込む", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_F);
+      await user.type(field(), "apple");
+      expect(selectedText(container)).toBe("Apple");
+
+      await user.keyboard("{Enter}");
+      expect(selectedText(container)).toBe("apple pie");
+      expect(count()).toBe("2 件中 2 件目");
+
+      await user.keyboard("{Enter}");
+      expect(selectedText(container)).toBe("Apple");
+
+      await user.keyboard("{Shift>}{Enter}{/Shift}");
+      expect(selectedText(container)).toBe("apple pie");
+      expect(currentMatch(container)).toBe("apple pie");
+    });
+
+    it("「前へ」「次へ」ボタンでも移動できる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_F);
+      await user.type(field(), "apple");
+
+      await user.click(within(bar()).getByRole("button", { name: "次へ" }));
+      expect(selectedText(container)).toBe("apple pie");
+
+      await user.click(within(bar()).getByRole("button", { name: "前へ" }));
+      expect(selectedText(container)).toBe("Apple");
+    });
+
+    it("大文字小文字は区別せず、部分一致する。中心ノードも検索できる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_F);
+
+      await user.type(field(), "BERR");
+      expect(selectedText(container)).toBe("Berry");
+
+      await user.clear(field());
+      await user.type(field(), "中心");
+      expect(selectedText(container)).toBe("中心テーマ");
+    });
+
+    it("一致するものがなければ「該当なし」と表示し、選択は変えない。空にすると、表示が消える", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_F);
+
+      await user.type(field(), "zzz");
+      expect(count()).toBe("該当なし");
+      expect(matches(container)).toEqual([]);
+      expect(selectedText(container)).toBe("Banana");
+
+      await user.keyboard("{Enter}"); // 一致がなくても、エラーにならない
+      expect(selectedText(container)).toBe("Banana");
+
+      await user.clear(field());
+      expect(count()).toBe("");
+    });
+
+    it("折りたたまれた枝の中の一致は、祖先を展開して見せ、1手の履歴になる（元に戻すと、再び折りたたまれる）", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.click(screen.getByText("Apple"));
+      await user.keyboard(" "); // Apple を折りたたむ
+      expect(screen.queryByText("apple pie")).not.toBeInTheDocument();
+      await user.keyboard(CMD_F);
+
+      await user.type(field(), "pie");
+
+      expect(screen.getByText("apple pie")).toBeInTheDocument();
+      expect(selectedText(container)).toBe("apple pie");
+      expect(count()).toBe("1 件中 1 件目");
+
+      await user.keyboard("{Escape}");
+      await user.keyboard(CMD_Z);
+      expect(screen.queryByText("apple pie")).not.toBeInTheDocument();
+    });
+
+    it("Escape で閉じても、選択は、見つけたノードのまま。強調は消え、通常のキー操作に戻る", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_F);
+      await user.type(field(), "berry");
+
+      await user.keyboard("{Escape}");
+
+      expect(selectedText(container)).toBe("Berry");
+      expect(matches(container)).toEqual([]);
+      await addChildNamed(user, "子");
+      expect(selectedText(container)).toBe("子");
+    });
+
+    it("入力欄の中のキー（Delete・矢印・Tab など）は、ノードの操作にならない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await buildTree(user);
+      await user.keyboard(CMD_F);
+      await user.type(field(), "apple");
+
+      await user.keyboard("{Delete}{ArrowLeft}{ArrowLeft}{Backspace}x");
+
+      expect(container.querySelectorAll("g[data-node-id]")).toHaveLength(5);
+    });
+
+    it("開いたまま、フォーカスが外れていても、Cmd+F で入力欄に戻れる（検索語は残る）", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard(CMD_F);
+      await user.type(field(), "abc");
+      await user.click(screen.getByRole("application"));
+      expect(field()).not.toHaveFocus();
+
+      await user.keyboard(CMD_F);
+
+      expect(field()).toHaveFocus();
+      expect(field()).toHaveValue("abc");
+    });
+
+    it("ブラウザ標準の動作を止める。Ctrl+F・Cmd+Shift+F・テキスト編集中は、開かない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      expect(fireEvent.keyDown(window, { key: "f", metaKey: true })).toBe(false);
+      await user.keyboard("{Escape}");
+
+      await user.keyboard("{Control>}f{/Control}");
+      await user.keyboard("{Meta>}{Shift>}f{/Shift}{/Meta}");
+      await user.keyboard("{F2}");
+      await user.keyboard(CMD_F);
+
+      expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    });
+
+    it("スタイルパネル・ショートカット一覧とは、同時には開かない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_F);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      expect(screen.queryByRole("search")).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "スタイル" })).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "f", metaKey: true });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByRole("search")).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "/", metaKey: true });
+      expect(screen.queryByRole("search")).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "ショートカット一覧" })).toBeInTheDocument();
+    });
+
+    it("閉じるボタンでも閉じる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard(CMD_F);
+
+      await user.click(within(bar()).getByRole("button", { name: "閉じる" }));
+
+      expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    });
+  });
 });
