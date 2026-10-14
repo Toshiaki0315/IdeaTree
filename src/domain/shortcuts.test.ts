@@ -41,6 +41,7 @@ describe("SHORTCUT_GROUPS（ショートカット一覧）", () => {
     ["Cmd + Shift + E", "SVG"],
     ["Cmd + = / Cmd + - / Cmd + 0", "拡大"],
     ["Cmd + /", "ショートカット"],
+    ["Cmd + F", "検索"],
   ])("主なショートカット「%s」が、説明（%s を含む）つきで載っている", (keys, word) => {
     const item = find(keys);
 
