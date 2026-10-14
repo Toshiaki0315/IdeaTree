@@ -58,6 +58,7 @@ import { readRecentFiles, writeRecentFiles } from "./files/recent";
 import { saveFile } from "./files/saveFile";
 import { addRecentFile, removeRecentFile } from "./domain/recentFiles";
 import type { RecentFile } from "./domain/recentFiles";
+import { useSubscription } from "./hooks/useSubscription";
 import NodeIcon from "./NodeIcon";
 import RecentFilesPanel from "./RecentFilesPanel";
 import SearchBar from "./SearchBar";
@@ -339,31 +340,12 @@ export default function App() {
       })
       .catch(() => {});
   }, [autosaveReady]);
-  // 起動中に頼まれたファイルを開く（Tauri の外では監視できないが、無視する）
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    onOpenFileRequest((path) => void openPathRef.current(path))
-      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
+  // 起動中に頼まれたファイルを開く
+  useSubscription(() => onOpenFileRequest((path) => void openPathRef.current(path)));
 
-  // ウィンドウを閉じるときに、未保存の変更を確認する（Tauri の外では登録に失敗するが、無視する）
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    registerCloseGuard(() => dirtyRef.current, confirmDiscardAndClearAutosave)
-      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
+  // ウィンドウを閉じるときに、未保存の変更を確認する
+  useSubscription(() => registerCloseGuard(() => dirtyRef.current, confirmDiscardAndClearAutosave));
+
   // 入力欄のフォーカス外れで、すでに確定・取り消し済みの編集を二重に処理しないための参照
   const editingRef = useRef(editing);
   editingRef.current = editing;
