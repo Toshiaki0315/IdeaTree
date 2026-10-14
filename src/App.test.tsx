@@ -5510,4 +5510,203 @@ describe("App（マインドマップ編集UI）", () => {
       expect(mockedSaveFile.mock.calls[0][0].relations).toHaveLength(1);
     });
   });
+
+  describe("手動配置（ノードを、自動配置から動かす）", () => {
+    const at = (x: number, y: number) => ({ clientX: x, clientY: y });
+    /** ラベルの位置（表示されている x, y） */
+    const labelPos = (text: string) => {
+      const el = screen.getByText(text);
+      return { x: Number(el.getAttribute("x")), y: Number(el.getAttribute("y")) };
+    };
+    const nudgeKey = (key: string) => fireEvent.keyDown(window, { key, metaKey: true, altKey: true });
+
+    /** 中心の下に a（子に a1）と b を作る。選択は a */
+    async function build(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}a{Enter}{Tab}a1{Enter}{ArrowLeft}{Enter}b{Enter}{ArrowUp}");
+      expect(selectedText(view.container)).toBe("a");
+      return view;
+    }
+
+    describe("キーボード: Cmd + Option + 矢印キー", () => {
+      it("選択ノードを、20 ずつ動かす。子孫も、一緒に動く（子孫の位置は、親に対して変わらない）", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+        const a1 = labelPos("a1");
+        const b = labelPos("b");
+
+        nudgeKey("ArrowRight");
+        nudgeKey("ArrowDown");
+
+        expect(labelPos("a")).toEqual({ x: a.x + 20, y: a.y + 20 });
+        expect(labelPos("a1")).toEqual({ x: a1.x + 20, y: a1.y + 20 });
+        expect(labelPos("b")).toEqual(b);
+      });
+
+      it("4方向とも動かせる", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+
+        nudgeKey("ArrowLeft");
+        nudgeKey("ArrowUp");
+
+        expect(labelPos("a")).toEqual({ x: a.x - 20, y: a.y - 20 });
+      });
+
+      it("中心ノードは、動かない", async () => {
+        const user = userEvent.setup();
+        const { container } = await build(user);
+        await user.keyboard("{ArrowLeft}");
+        expect(selectedText(container)).toContain("中心テーマ");
+        const root = labelPos("中心テーマ");
+
+        nudgeKey("ArrowRight");
+
+        expect(labelPos("中心テーマ")).toEqual(root);
+      });
+
+      it("元に戻せて（Cmd+Z）、保存していない変更になる", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+
+        nudgeKey("ArrowRight");
+        expect(document.querySelector(".doc-state")?.textContent).toContain("未保存");
+
+        fireEvent.keyDown(window, { key: "z", metaKey: true });
+        expect(labelPos("a")).toEqual(a);
+      });
+    });
+
+    describe("Cmd + Shift + R: 自動配置に戻す", () => {
+      const reset = () => fireEvent.keyDown(window, { key: "r", metaKey: true, shiftKey: true });
+
+      it("選択ノードと子孫の手動配置を、外す。ほかのノードの手動配置は、残る", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+        const b = labelPos("b");
+        nudgeKey("ArrowRight");
+        await user.keyboard("{ArrowDown}"); // b
+        nudgeKey("ArrowDown");
+        await user.keyboard("{ArrowUp}"); // a
+
+        reset();
+
+        expect(labelPos("a")).toEqual(a);
+        expect(labelPos("b")).toEqual({ x: b.x, y: b.y + 20 });
+        expect(screen.getByText("自動配置に戻しました")).toBeInTheDocument();
+      });
+
+      it("中心ノードを選んでいれば、すべての手動配置を外す", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+        nudgeKey("ArrowRight");
+        await user.keyboard("{ArrowLeft}");
+
+        reset();
+
+        expect(labelPos("a")).toEqual(a);
+      });
+
+      it("手動で動かしたノードがなければ、その旨を表示する", async () => {
+        const user = userEvent.setup();
+        await build(user);
+
+        reset();
+
+        expect(screen.getByText("手動で動かしたノードは、ありません")).toBeInTheDocument();
+      });
+    });
+
+    describe("マウス: 何もない場所へドラッグ", () => {
+      /** ノードを押して、十分に動かしてから、何もない場所（SVG の背景）まで移動する */
+      async function dragToEmpty(user: User, text: string, dx: number, dy: number, release = true) {
+        const svg = screen.getByRole("application");
+        await user.pointer([
+          { keys: "[MouseLeft>]", target: screen.getByText(text), coords: at(100, 100) },
+          { target: svg, coords: at(100 + dx, 100 + dy) },
+        ]);
+        if (release)
+          await user.pointer({ keys: "[/MouseLeft]", target: svg, coords: at(100 + dx, 100 + dy) });
+      }
+
+      it("離した場所へ、ノードと子孫が移動する（ドラッグした量だけ）。ほかのノードは、動かない", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+        const a1 = labelPos("a1");
+        const b = labelPos("b");
+
+        await dragToEmpty(user, "a", 60, 40);
+
+        expect(labelPos("a")).toEqual({ x: a.x + 60, y: a.y + 40 });
+        expect(labelPos("a1")).toEqual({ x: a1.x + 60, y: a1.y + 40 });
+        expect(labelPos("b")).toEqual(b);
+      });
+
+      it("ドラッグしている間も、ノードが、マウスについてくる（離すまで、履歴には残さない）", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+
+        await dragToEmpty(user, "a", 60, 40, false);
+
+        expect(labelPos("a")).toEqual({ x: a.x + 60, y: a.y + 40 });
+        expect(document.querySelector(".doc-state")?.textContent).not.toContain("未保存");
+
+        await user.pointer({
+          keys: "[/MouseLeft]",
+          target: screen.getByRole("application"),
+          coords: at(160, 140),
+        });
+        expect(document.querySelector(".doc-state")?.textContent).toContain("未保存");
+      });
+
+      it("離したあとの移動は、元に戻せる（Cmd+Z）", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+        await dragToEmpty(user, "a", 60, 40);
+
+        fireEvent.keyDown(window, { key: "z", metaKey: true });
+
+        expect(labelPos("a")).toEqual(a);
+      });
+
+      it("ドラッグの途中で Escape を押すと、元の位置に戻り、離しても移動しない", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+        await dragToEmpty(user, "a", 60, 40, false);
+
+        await user.keyboard("{Escape}");
+        expect(labelPos("a")).toEqual(a);
+        await user.pointer({
+          keys: "[/MouseLeft]",
+          target: screen.getByRole("application"),
+          coords: at(160, 140),
+        });
+
+        expect(labelPos("a")).toEqual(a);
+      });
+
+      it("別のノードの上へ動かしている間は、つなぎ替えの候補で、移動の予告は、しない", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a = labelPos("a");
+
+        await user.pointer([
+          { keys: "[MouseLeft>]", target: screen.getByText("a"), coords: at(100, 100) },
+          { target: screen.getByText("b"), coords: at(300, 300) },
+        ]);
+
+        expect(labelPos("a")).toEqual(a);
+        expect(document.querySelector('[data-drop-target="true"]')).not.toBeNull();
+      });
+    });
+  });
 });
