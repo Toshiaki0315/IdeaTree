@@ -58,6 +58,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "Cmd + = / Cmd + - / Cmd + 0", description: "拡大 / 縮小 / 元に戻す" },
       { keys: "ホイール・何もない場所のドラッグ", description: "表示位置を動かす（パン）" },
+      { keys: "Cmd + F", description: "ノードを検索（Enter / Shift + Enter で次 / 前の一致、Escape で閉じる）" },
       { keys: "Cmd + /", description: "ショートカット一覧を開く / 閉じる" },
     ],
   },

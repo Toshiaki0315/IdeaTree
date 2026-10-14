@@ -38,6 +38,7 @@ https://github.com/Toshiaki0315/IdeaTree.git
 | `Cmd + O` | ファイルを開く |
 | `Cmd + Shift + E` | 書き出し（SVG・PNG・PDF。拡張子で形式を選ぶ） |
 | `Cmd + =` / `Cmd + -` / `Cmd + 0` | 拡大 / 縮小 / 元に戻す（ホイール・ドラッグでパン） |
+| `Cmd + F` | ノードを検索（`Enter` で次の一致へ） |
 | `Cmd + /` | ショートカット一覧を開く / 閉じる |
 
 詳しい仕様は [docs/spec.md](docs/spec.md) を参照してください。
