@@ -44,6 +44,16 @@ describe("wrapLabel（ラベルの折り返し）", () => {
     expect(lines).toEqual(["a".repeat(16), "a".repeat(4)]);
   });
 
+  it("ちょうど上限の幅で空白が来たら、そこで折り返す（行末に空白を残さない）", () => {
+    const lines = wrapLabel("あ".repeat(MAX_LABEL_EM) + " いう", 20);
+
+    expect(lines).toEqual(["あ".repeat(MAX_LABEL_EM), "いう"]);
+  });
+
+  it("先頭の空白は捨てる", () => {
+    expect(wrapLabel("  企画", 20)).toEqual(["企画"]);
+  });
+
   it("サロゲートペアの文字（絵文字など）を、途中で切らない", () => {
     const label = "😀".repeat(MAX_LABEL_EM + 1);
 
