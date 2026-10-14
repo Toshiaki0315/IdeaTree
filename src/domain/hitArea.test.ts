@@ -52,3 +52,11 @@ describe("estimateTextWidth（文字の幅の見積もり）", () => {
   });
 });
 
+describe("hitAreaSize: 折り返したラベル", () => {
+  it("上限を超える長いラベルは、幅は上限の幅、高さは行数の分になる", () => {
+    const { width, height } = hitAreaSize("あ".repeat(12), 20);
+
+    expect(width).toBe(10 * 20 + 24);
+    expect(height).toBe(2 * 20 * 1.25 + 20);
+  });
+});

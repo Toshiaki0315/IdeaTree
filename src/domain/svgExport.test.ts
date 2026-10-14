@@ -794,3 +794,52 @@ describe("labelPosition（ブランチのラベルを置く位置）", () => {
   });
 });
 
+describe("exportSvg: ラベルの折り返し", () => {
+  function longMap(label: string) {
+    const base = createMindMap("中心");
+    const a = addChild(base, base.rootId, label);
+    return { map: layout(a.map), id: a.nodeId, root: base.rootId };
+  }
+
+  it("短いラベルは、これまでどおり、1つの text（tspan なし）", () => {
+    const { map, id } = longMap("企画");
+    const text = byNodeId(parse(exportSvg(map)), "text", id);
+
+    expect(text.querySelector("tspan")).toBeNull();
+    expect(text.textContent).toBe("企画");
+  });
+
+  it("長いラベルは、行ごとの tspan に分け、行の中心が、ラベルの位置の上下に並ぶ", () => {
+    const { map, id } = longMap("あ".repeat(25));
+    const text = byNodeId(parse(exportSvg(map)), "text", id);
+    const lines = [...text.querySelectorAll("tspan")];
+    const { x, y } = labelPosition(map, map.nodes[id]);
+
+    expect(lines.map((l) => l.textContent)).toEqual(["あ".repeat(10), "あ".repeat(10), "あ".repeat(5)]);
+    const ys = lines.map((l) => Number(l.getAttribute("y")));
+    expect(ys[1]).toBeCloseTo(y);
+    expect(ys[1] - ys[0]).toBeCloseTo(20 * 1.25);
+    expect(ys[2] - ys[1]).toBeCloseTo(20 * 1.25);
+    lines.forEach((l) => expect(Number(l.getAttribute("x"))).toBeCloseTo(x));
+  });
+
+  it("中心ノードの長いテキストも、折り返す", () => {
+    const base = createMindMap("あ".repeat(12));
+    const doc = parse(exportSvg(layout(base)));
+    const lines = [...byNodeId(doc, "text", base.rootId).querySelectorAll("tspan")];
+
+    expect(lines.map((l) => l.textContent)).toEqual(["あ".repeat(10), "あ".repeat(2)]);
+  });
+
+  it("アイコンは、折り返したあとの一番広い行の左に置く", () => {
+    const { map, id } = longMap("あ".repeat(25));
+    const iconMap = setNodeIcon(map, id, ICON_PRESETS[0].value);
+    const { x } = labelPosition(iconMap, iconMap.nodes[id]);
+    const g = parse(exportSvg(iconMap)).querySelector(`g[data-icon-for="${id}"]`)!;
+    const translate = /translate\(([-\d.]+)/.exec(g.getAttribute("transform") ?? "");
+
+    // 幅は 10 文字ぶん（200）。アイコンの右端は、その左から ICON_GAP(6) 離れる
+    const size = 20 * 1.1;
+    expect(Number(translate![1])).toBeCloseTo(x - 100 - 6 - size);
+  });
+});

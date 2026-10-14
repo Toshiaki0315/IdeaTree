@@ -574,3 +574,36 @@ describe("layout（放射状レイアウト）", () => {
 function updateTextFor(map: MindMap, id: NodeId, text: string): MindMap {
   return { ...map, nodes: { ...map.nodes, [id]: { ...map.nodes[id], text } } };
 }
+
+describe("layout: ラベルの折り返しと枝の長さ", () => {
+  const distance = (map: MindMap, id: NodeId) => Math.hypot(map.nodes[id].position.x, map.nodes[id].position.y);
+
+  function oneMain(label: string) {
+    const root = createMindMap("root");
+    const main = addChild(root, root.rootId, label);
+    return { map: main.map, id: main.nodeId };
+  }
+
+  it("とても長いラベルでも、枝の長さは、折り返したあとの幅（上限）までしか伸びない", () => {
+    const a = oneMain("あ".repeat(10));
+    const b = oneMain("あ".repeat(40));
+
+    expect(distance(layout(b.map), b.id)).toBeCloseTo(distance(layout(a.map), a.id));
+  });
+
+  it("折り返して行数が増えると、真下に向いた枝は、行の高さの分だけ長くなる", () => {
+    /** 4本のメインブランチ（右・下・左・上）のうち、2本目（真下）に、指定のラベルを付ける */
+    const withSecond = (label: string) => {
+      const root = createMindMap("root");
+      const first = addChild(root, root.rootId, "あ");
+      const second = addChild(first.map, root.rootId, label);
+      const third = addChild(second.map, root.rootId, "い");
+      return { map: layout(addChild(third.map, root.rootId, "う").map), id: second.nodeId };
+    };
+    const oneLine = withSecond("あ".repeat(10));
+    const threeLines = withSecond("あ".repeat(25));
+
+    // 3行 − 1行 = 2行分の高さ（行の高さ 20 × 1.25）が、真下には、そのまま足される
+    expect(distance(threeLines.map, threeLines.id) - distance(oneLine.map, oneLine.id)).toBeCloseTo(2 * 20 * 1.25, 0);
+  });
+});
