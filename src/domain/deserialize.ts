@@ -1,5 +1,5 @@
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
-import { isIcon } from "./nodeIcon";
+import { isIcon, legacyIconToId } from "./nodeIcon";
 import { isImageDataUrl } from "./nodeImage";
 import { isColor, isNodeStyle } from "./nodeStyle";
 import { SAVE_FORMAT_VERSION } from "./serialize";
@@ -44,9 +44,16 @@ export function deserialize(json: string): MindMap {
   if (data.version !== SAVE_FORMAT_VERSION) {
     throw new Error(`未対応のバージョンです: ${data.version}`);
   }
-  const { rootId, nodes } = data;
-  if (typeof rootId !== "string" || !isRecord(nodes)) throw new Error(FORMAT_ERROR);
+  const { rootId, nodes: rawNodes } = data;
+  if (typeof rootId !== "string" || !isRecord(rawNodes)) throw new Error(FORMAT_ERROR);
 
+  // 以前の版で保存した、絵文字のアイコンは、現在の識別子に変換する
+  const nodes = Object.fromEntries(
+    Object.entries(rawNodes).map(([key, value]) => {
+      const migrated = isRecord(value) ? legacyIconToId(value.icon) : undefined;
+      return [key, migrated === undefined ? value : { ...(value as object), icon: migrated }];
+    }),
+  );
   for (const [key, value] of Object.entries(nodes)) {
     if (!isNode(key, value)) throw new Error(`ノードの形式が不正です: ${key}`);
   }
