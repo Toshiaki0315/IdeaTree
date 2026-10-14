@@ -80,6 +80,11 @@ export default function NodeView({
 
   return (
     <g
+      role="treeitem"
+      aria-label={nodeLabel(node).replace(/\r?\n/g, " ")}
+      aria-selected={selected}
+      // 子を持つノードだけ、展開・折りたたみの状態を伝える
+      aria-expanded={node.childIds.length > 0 ? !node.collapsed : undefined}
       data-node-id={node.id}
       data-selected={selected}
       data-drop-target={dropMode !== null}
