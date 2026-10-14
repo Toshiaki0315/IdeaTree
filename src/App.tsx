@@ -127,6 +127,9 @@ function expanded(map: MindMap, nodeId: NodeId): MindMap {
   return map.nodes[nodeId].collapsed ? toggleCollapse(map, nodeId) : map;
 }
 
+/** 日本語入力の変換中に、キーイベントに付く keyCode */
+const IME_KEY_CODE = 229;
+
 /** 編集中の入力欄の文字サイズ（App.css の .node-input と同じ） */
 const EDITOR_FONT_SIZE = 16;
 
@@ -795,6 +798,9 @@ export default function App() {
 
   const onInputKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>, editing: Editing) => {
     event.stopPropagation();
+    // 日本語入力の変換中（確定直後の keyCode 229 を含む）のキーは、変換のためのもの。
+    // 最初の Enter は変換の確定だけにして、ノードの確定・取り消しは、次のキーで行う
+    if (event.nativeEvent.isComposing || event.keyCode === IME_KEY_CODE) return;
     // Shift + Enter は、改行（入力欄の標準の動作）。Enter だけで確定する
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
