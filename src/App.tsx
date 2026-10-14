@@ -55,10 +55,10 @@ import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { confirmRestore } from "./files/confirmRestore";
+import { exportFile } from "./files/exportFile";
 import { loadFile } from "./files/loadFile";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
-import { svgExportFile } from "./files/svgExportFile";
 import NodeIcon from "./NodeIcon";
 import ShortcutHelp from "./ShortcutHelp";
 import StylePanel from "./StylePanel";
@@ -515,10 +515,10 @@ export default function App() {
       }
     });
 
-  /** SVG画像として書き出す（保存先は変えない） */
+  /** SVG・PNG・PDF として書き出す（保存先は変えない） */
   const exportImage = () =>
     runFileAction(async () => {
-      const path = await svgExportFile(map);
+      const path = await exportFile(map);
       if (path !== null) {
         setMessage({ kind: "status", text: `書き出しました: ${path}` });
       }

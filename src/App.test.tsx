@@ -18,10 +18,10 @@ import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { confirmRestore } from "./files/confirmRestore";
+import { exportFile } from "./files/exportFile";
 import { loadFile } from "./files/loadFile";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
-import { svgExportFile } from "./files/svgExportFile";
 
 vi.mock("./files/saveFile", () => ({ saveFile: vi.fn() }));
 vi.mock("./files/loadFile", () => ({ loadFile: vi.fn() }));
@@ -35,7 +35,7 @@ vi.mock("./files/autosave", () => ({
 }));
 vi.mock("./files/confirmRestore", () => ({ confirmRestore: vi.fn() }));
 vi.mock("./files/clipboard", () => ({ readClipboardText: vi.fn(), writeClipboardText: vi.fn() }));
-vi.mock("./files/svgExportFile", () => ({ svgExportFile: vi.fn() }));
+vi.mock("./files/exportFile", () => ({ exportFile: vi.fn() }));
 
 const mockedSaveFile = vi.mocked(saveFile);
 const mockedLoadFile = vi.mocked(loadFile);
@@ -49,7 +49,7 @@ const mockedClearAutosave = vi.mocked(clearAutosave);
 const mockedConfirmRestore = vi.mocked(confirmRestore);
 const mockedReadClipboard = vi.mocked(readClipboardText);
 const mockedWriteClipboard = vi.mocked(writeClipboardText);
-const mockedSvgExportFile = vi.mocked(svgExportFile);
+const mockedExportFile = vi.mocked(exportFile);
 
 /** 読み込み用のマップ（中心「読込」の下に「子A」「子B」） */
 function loadedMap() {
@@ -621,24 +621,24 @@ describe("App（マインドマップ編集UI）", () => {
     });
   });
 
-  describe("Cmd+Shift+E: SVGエクスポート", () => {
+  describe("Cmd+Shift+E: 書き出し（SVG・PNG・PDF）", () => {
     const CMD_SHIFT_E = "{Meta>}{Shift>}e{/Shift}{/Meta}";
 
-    it("現在のマインドマップを svgExportFile に渡して書き出す", async () => {
-      mockedSvgExportFile.mockResolvedValue("/Users/me/map.svg");
+    it("現在のマインドマップを exportFile に渡して書き出す", async () => {
+      mockedExportFile.mockResolvedValue("/Users/me/map.svg");
       const user = userEvent.setup();
       render(<App />);
       await addChildNamed(user, "企画");
 
       await user.keyboard(CMD_SHIFT_E);
 
-      expect(mockedSvgExportFile).toHaveBeenCalledTimes(1);
-      const [map] = mockedSvgExportFile.mock.calls[0];
+      expect(mockedExportFile).toHaveBeenCalledTimes(1);
+      const [map] = mockedExportFile.mock.calls[0];
       expect(Object.values(map.nodes).map((n) => n.text)).toEqual(["中心テーマ", "企画"]);
     });
 
     it("ブラウザ標準の動作を止める", async () => {
-      mockedSvgExportFile.mockResolvedValue(null);
+      mockedExportFile.mockResolvedValue(null);
       render(<App />);
 
       const notPrevented = fireEvent.keyDown(window, { key: "E", metaKey: true, shiftKey: true });
@@ -647,7 +647,7 @@ describe("App（マインドマップ編集UI）", () => {
     });
 
     it("書き出しに成功したら、パスをステータスに表示する", async () => {
-      mockedSvgExportFile.mockResolvedValue("/Users/me/map.svg");
+      mockedExportFile.mockResolvedValue("/Users/me/map.svg");
       const user = userEvent.setup();
       render(<App />);
 
@@ -660,7 +660,7 @@ describe("App（マインドマップ編集UI）", () => {
 
     it("書き出しても、Cmd+S の保存先は変わらない", async () => {
       mockedSaveFile.mockResolvedValue("/Users/me/map.json");
-      mockedSvgExportFile.mockResolvedValue("/Users/me/map.svg");
+      mockedExportFile.mockResolvedValue("/Users/me/map.svg");
       const user = userEvent.setup();
       render(<App />);
       await user.keyboard("{Meta>}s{/Meta}");
@@ -674,19 +674,19 @@ describe("App（マインドマップ編集UI）", () => {
     });
 
     it("ダイアログをキャンセルしたら、メッセージは出さない", async () => {
-      mockedSvgExportFile.mockResolvedValue(null);
+      mockedExportFile.mockResolvedValue(null);
       const user = userEvent.setup();
       render(<App />);
 
       await user.keyboard(CMD_SHIFT_E);
-      await waitFor(() => expect(mockedSvgExportFile).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockedExportFile).toHaveBeenCalledTimes(1));
 
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
     it("書き出しに失敗したら、エラーメッセージをアラートに表示する", async () => {
-      mockedSvgExportFile.mockRejectedValue(new Error("書き出しに失敗しました: disk full"));
+      mockedExportFile.mockRejectedValue(new Error("書き出しに失敗しました: disk full"));
       const user = userEvent.setup();
       render(<App />);
 
@@ -698,7 +698,7 @@ describe("App（マインドマップ編集UI）", () => {
     });
 
     it("Error 以外の値で失敗した場合も、その内容を表示する", async () => {
-      mockedSvgExportFile.mockRejectedValue("boom");
+      mockedExportFile.mockRejectedValue("boom");
       const user = userEvent.setup();
       render(<App />);
 
@@ -708,7 +708,7 @@ describe("App（マインドマップ編集UI）", () => {
     });
 
     it("書き出しに成功すると、前回のエラーメッセージは消える", async () => {
-      mockedSvgExportFile
+      mockedExportFile
         .mockRejectedValueOnce(new Error("書き出しに失敗しました: x"))
         .mockResolvedValueOnce("/Users/me/map.svg");
       const user = userEvent.setup();
@@ -731,7 +731,7 @@ describe("App（マインドマップ編集UI）", () => {
       await user.keyboard("{Tab}");
       await user.keyboard(CMD_SHIFT_E);
 
-      expect(mockedSvgExportFile).not.toHaveBeenCalled();
+      expect(mockedExportFile).not.toHaveBeenCalled();
     });
   });
 
@@ -2342,7 +2342,7 @@ describe("App（マインドマップ編集UI）", () => {
 
     it("ファイルを開いた直後は変更なしで、SVGの書き出しは変更に影響しない", async () => {
       mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/map.json" });
-      mockedSvgExportFile.mockResolvedValue("/Users/me/map.svg");
+      mockedExportFile.mockResolvedValue("/Users/me/map.svg");
       const user = userEvent.setup();
       render(<App />);
       await addChildNamed(user, "古い子");
