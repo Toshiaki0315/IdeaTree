@@ -2,7 +2,7 @@ import { toggleCollapse } from "./collapse";
 import type { MindMap, NodeId } from "./mindmap";
 
 /**
- * テキストに検索語を含むノードを、深さ優先（子の順）で返す。
+ * テキストかメモに検索語を含むノードを、深さ優先（子の順）で返す。
  * 大文字小文字は区別せず、前後の空白は無視する（正規表現ではなく、普通の文字として探す）。
  * 折りたたまれて見えないノードも、対象にする。
  */
@@ -10,7 +10,10 @@ export function searchNodes(map: MindMap, query: string): NodeId[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return [];
 
-  return documentOrder(map).filter((id) => map.nodes[id].text.toLowerCase().includes(needle));
+  return documentOrder(map).filter((id) => {
+    const { text, note } = map.nodes[id];
+    return text.toLowerCase().includes(needle) || (note?.toLowerCase().includes(needle) ?? false);
+  });
 }
 
 /**

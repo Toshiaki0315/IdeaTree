@@ -33,6 +33,10 @@ export interface MindMapNode {
   image?: string;
   /** ノードのアイコン（選択肢の中の記号）。ラベルの横に表示する */
   icon?: string;
+  /** ノードのメモ（補足の文章）。ラベルのほかに、残しておきたい説明 */
+  note?: string;
+  /** ノードのリンク（http・https の URL） */
+  link?: string;
 }
 
 export interface MindMap {
