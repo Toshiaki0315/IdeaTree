@@ -9,6 +9,7 @@ import { estimateTextWidth } from "./hitArea";
 import { ICON_PRESETS, setNodeIcon } from "./nodeIcon";
 import { setNodeImage } from "./nodeImage";
 import { setNodeStyle } from "./nodeStyle";
+import { toggleRelation } from "./relations";
 import { labelPosition } from "./nodeGeometry";
 import { exportSvg } from "./svgExport";
 import { updateText } from "./updateText";
@@ -848,5 +849,40 @@ describe("exportSvg: ラベルの折り返し", () => {
     // 幅は 10 文字ぶん（200）。アイコンの右端は、その左から ICON_GAP(6) 離れる
     const size = 20 * 1.1;
     expect(Number(translate![1])).toBeCloseTo(x - 100 - 6 - size);
+  });
+});
+
+describe("exportSvg: 関連線", () => {
+  it("関連線は、破線の曲線と、矢じりで描く。ブランチより、後ろ（先）に置く", () => {
+    const { map, ids } = buildMap();
+    const linked = toggleRelation(map, ids.a11, ids.b);
+    const svg = exportSvg(linked);
+    const doc = parse(svg);
+    const relation = linked.relations![0];
+
+    const line = doc.querySelector(`path[data-relation-id="${relation.id}"]`)!;
+    const arrow = doc.querySelector(`path[data-relation-arrow="${relation.id}"]`)!;
+    expect(line.getAttribute("fill")).toBe("none");
+    expect(line.getAttribute("stroke-dasharray")).toBeTruthy();
+    expect(line.getAttribute("d")).toMatch(/^M[^A-Za-z]+Q[^A-Za-z]+$/);
+    expect(arrow.getAttribute("d")).toMatch(/Z$/);
+    expect(arrow.getAttribute("fill")).toBe(line.getAttribute("stroke"));
+    // ブランチ（枝）の前に書く＝枝より、背面に描く
+    expect(svg.indexOf("data-relation-id")).toBeLessThan(svg.indexOf(`path data-node-id="${ids.a}"`));
+  });
+
+  it("関連線がなければ、何も描かない", () => {
+    const { map } = buildMap();
+
+    expect(parse(exportSvg(map)).querySelector("[data-relation-id]")).toBeNull();
+  });
+
+  it("折りたたまれて見えないノードにつながる関連線は、描かない", () => {
+    const { map, ids } = buildMap();
+    const linked = toggleRelation(map, ids.a11, ids.b);
+
+    const folded = toggleCollapse(linked, ids.a); // a11 は、a の子孫（見えない）
+
+    expect(parse(exportSvg(folded)).querySelector("[data-relation-id]")).toBeNull();
   });
 });
