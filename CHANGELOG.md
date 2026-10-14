@@ -2,7 +2,7 @@
 
 IdeaTree の、バージョンごとの変更点です（新しいものが上）。バージョンは `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` で、そろえています。
 
-## 未リリース
+## 0.6.2
 
 ### 追加
 - **手動の改行**: ラベルの入力中に `Shift + Enter` で改行できます（`Enter` で確定）。入力欄は、行数に合わせて高くなります。
