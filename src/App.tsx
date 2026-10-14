@@ -58,6 +58,7 @@ import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
 import { svgExportFile } from "./files/svgExportFile";
 import NodeIcon from "./NodeIcon";
+import ShortcutHelp from "./ShortcutHelp";
 import StylePanel from "./StylePanel";
 
 /** 履歴の1件分の状態（マップと、そのとき選択していたノード） */
@@ -134,6 +135,7 @@ export default function App() {
   const [filePath, setFilePath] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<Message | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const dragRef = useRef<Drag | null>(null);
   /** ドラッグ中に、離すとつなぎ替えられるノード（強調表示する） */
   const [dropTarget, setDropTarget] = useState<{ id: NodeId; mode: "child" | "reorder" } | null>(null);
@@ -512,9 +514,16 @@ export default function App() {
           setViewport(DEFAULT_VIEWPORT);
           return;
         }
+        if (key === "/" || key === "?") {
+          event.preventDefault();
+          setHelpOpen((open) => !open);
+          setStyleOpen(false);
+          return;
+        }
         if (key === "k" && !event.shiftKey) {
           event.preventDefault();
           setStyleOpen((open) => !open);
+          setHelpOpen(false);
           return;
         }
         if (key === "x") {
@@ -750,6 +759,7 @@ export default function App() {
         {filePath === undefined ? "無題" : (filePath.split("/").pop() as string)}
         {dirty && " ● 未保存"}
       </div>
+      {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
       {styleOpen && (
         <StylePanel
           nodeId={selectedId}
