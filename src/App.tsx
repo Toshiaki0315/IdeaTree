@@ -52,11 +52,9 @@ import { exportFile } from "./files/exportFile";
 import { loadFile, loadFileAt } from "./files/loadFile";
 import { onOpenFileRequest, takePendingOpenFiles } from "./files/openRequests";
 import { pickImage } from "./files/pickImage";
-import { readRecentFiles, writeRecentFiles } from "./files/recent";
 import { saveFile } from "./files/saveFile";
-import { addRecentFile, removeRecentFile } from "./domain/recentFiles";
-import type { RecentFile } from "./domain/recentFiles";
 import { confirmDiscardAndClearAutosave, useAutosave } from "./hooks/useAutosave";
+import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useSubscription } from "./hooks/useSubscription";
 import NodeIcon from "./NodeIcon";
 import RecentFilesPanel from "./RecentFilesPanel";
@@ -156,8 +154,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
-  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
-  const recentRef = useRef<RecentFile[]>([]);
+  const recent = useRecentFiles();
   const dragRef = useRef<Drag | null>(null);
   /** ドラッグ中に、離すとつなぎ替えられるノード（強調表示する） */
   const [dropTarget, setDropTarget] = useState<{ id: NodeId; mode: "child" | "reorder" } | null>(null);
@@ -262,19 +259,6 @@ export default function App() {
       setMessage({ kind: "status", text: "前回の編集内容を復元しました" });
     },
   });
-
-  // 最近使ったファイルの一覧を読み込む（読み込めなければ、空のまま）。
-  // 読み込みが終わる前に加えたファイルがあれば、それを先頭に残して、合わせる
-  useEffect(() => {
-    readRecentFiles()
-      .then((list) => {
-        const current = recentRef.current;
-        const merged = [...current, ...list.filter((f) => !current.some((c) => c.path === f.path))];
-        recentRef.current = merged;
-        setRecentFiles(merged);
-      })
-      .catch(() => {});
-  }, []);
 
   // Finder から渡されたファイルを開く。起動時に溜まっていた分は、自動保存の確認が終わってから
   const openPathRef = useRef<(path: string) => Promise<void>>(undefined as never); // 毎回の描画で openPath を入れる
@@ -521,15 +505,6 @@ export default function App() {
     }
   };
 
-  /** 一覧を更新して保存する（保存に失敗しても、使い続けられるので、無視する） */
-  const updateRecent = (update: (list: RecentFile[]) => RecentFile[]) => {
-    const next = update(recentRef.current);
-    recentRef.current = next;
-    setRecentFiles(next);
-    writeRecentFiles(next).catch(() => {});
-  };
-  const rememberRecent = (path: string) => updateRecent((list) => addRecentFile(list, path, new Date()));
-
   /** 保存する。saveAs が true なら保存先を決め直す（名前を付けて保存） */
   const save = (saveAs: boolean) =>
     runFileAction(async () => {
@@ -537,7 +512,7 @@ export default function App() {
       if (path !== null) {
         setFilePath(path);
         setSavedMap(map);
-        rememberRecent(path);
+        recent.remember(path);
         setMessage({ kind: "status", text: `保存しました: ${path}` });
       }
     });
@@ -558,7 +533,7 @@ export default function App() {
     setFilePath(loaded.path);
     setSavedMap(loaded.map);
     setViewport(DEFAULT_VIEWPORT);
-    rememberRecent(loaded.path);
+    recent.remember(loaded.path);
     setMessage({ kind: "status", text: `開きました: ${loaded.path}` });
   };
 
@@ -570,7 +545,7 @@ export default function App() {
       try {
         showLoaded(await loadFileAt(path));
       } catch (error) {
-        updateRecent((list) => removeRecentFile(list, path));
+        recent.forget(path);
         throw error;
       }
     });
@@ -941,7 +916,7 @@ export default function App() {
       {panel === "help" && <ShortcutHelp onClose={() => closePanel("help")} />}
       {panel === "recent" && (
         <RecentFilesPanel
-          files={recentFiles}
+          files={recent.files}
           onSelect={(path) => void openPath(path)}
           onClose={() => closePanel("recent")}
         />
