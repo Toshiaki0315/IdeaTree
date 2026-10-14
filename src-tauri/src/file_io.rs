@@ -1,5 +1,6 @@
 //! マインドマップ（JSON）のファイル入出力。
 
+use base64::Engine;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
@@ -7,8 +8,13 @@ use std::path::Path;
 /// 読み込めるファイルの上限（想定外の巨大ファイルでメモリを使い切らないため）
 pub const MAX_READ_BYTES: u64 = 50 * 1024 * 1024;
 
-/// 一時ファイルに書き込んでから置き換えることで、保存の途中で失敗しても元のファイルを壊さない。
+/// テキストを書き込む（UTF-8）。書き込み方は、`write_bytes_file` と同じ。
 pub fn write_text_file(path: &Path, contents: &str) -> Result<(), String> {
+    write_bytes_file(path, contents.as_bytes())
+}
+
+/// 一時ファイルに書き込んでから置き換えることで、保存の途中で失敗しても元のファイルを壊さない。
+pub fn write_bytes_file(path: &Path, contents: &[u8]) -> Result<(), String> {
     if path.as_os_str().is_empty() {
         return Err("保存先のパスが空です".to_string());
     }
@@ -31,6 +37,16 @@ pub fn write_text_file(path: &Path, contents: &str) -> Result<(), String> {
         return Err(format!("ファイルを書き込めません: {}: {e}", path.display()));
     }
     Ok(())
+}
+
+/// フロントエンドの `invoke("save_binary_file", { path, dataBase64 })` から呼ばれるコマンド。
+/// 画像（PNG）や PDF など、テキストでないデータを、base64 で受け取って保存する。
+#[tauri::command]
+pub fn save_binary_file(path: String, data_base64: String) -> Result<(), String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|e| format!("書き込むデータの形式が不正です: {e}"))?;
+    write_bytes_file(Path::new(&path), &bytes)
 }
 
 /// フロントエンドの `invoke("save_file", { path, contents })` から呼ばれるコマンド。

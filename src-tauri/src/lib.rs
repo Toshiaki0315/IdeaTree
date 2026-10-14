@@ -10,6 +10,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             file_io::save_file,
+            file_io::save_binary_file,
             file_io::load_file,
             image_io::load_image,
             autosave::write_autosave,
