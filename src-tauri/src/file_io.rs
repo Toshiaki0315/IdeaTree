@@ -269,4 +269,63 @@ mod tests {
 
         assert_eq!(contents, "コマンド");
     }
+
+    #[test]
+    fn バイナリ_utf8でないバイト列もそのまま書き込める() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("image.png");
+        let bytes = [0x89, b'P', b'N', b'G', 0x00, 0xFF, 0xFE, 0x80];
+
+        write_bytes_file(&path, &bytes).unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+    }
+
+    #[test]
+    fn バイナリ_既存ファイルを置き換え_一時ファイルが残らない() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("image.png");
+
+        write_bytes_file(&path, &[1, 2, 3, 4, 5, 6]).unwrap();
+        write_bytes_file(&path, &[9]).unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), vec![9]);
+        let names: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["image.png"]);
+    }
+
+    #[test]
+    fn バイナリ_保存先のフォルダがなければエラーになる() {
+        let dir = tempdir().unwrap();
+
+        let err = write_bytes_file(&dir.path().join("missing").join("a.png"), &[1]).unwrap_err();
+
+        assert!(err.contains("保存先のフォルダが存在しません"), "{err}");
+    }
+
+    #[test]
+    fn バイナリ_コマンドはbase64の文字列を復号して保存する() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cmd.pdf");
+
+        // "%PDF-" に続く、バイナリのバイト列
+        save_binary_file(path.to_string_lossy().into_owned(), "JVBERi0A/w==".to_string()).unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), b"%PDF-\x00\xff");
+    }
+
+    #[test]
+    fn バイナリ_base64として不正なデータはエラーになり_何も書き込まない() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("bad.png");
+
+        let err = save_binary_file(path.to_string_lossy().into_owned(), "これは%%base64ではない".to_string())
+            .unwrap_err();
+
+        assert!(err.contains("書き込むデータの形式が不正です"), "{err}");
+        assert!(!path.exists());
+    }
 }
