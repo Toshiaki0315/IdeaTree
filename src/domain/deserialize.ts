@@ -2,6 +2,7 @@ import type { MindMap, MindMapNode, NodeId, Relation } from "./mindmap";
 import { isIcon, legacyIconToId } from "./nodeIcon";
 import { isImageDataUrl } from "./nodeImage";
 import { isLink, isNote } from "./nodeNote";
+import { isOffset } from "./nodeOffset";
 import { isColor, isNodeStyle } from "./nodeStyle";
 import { SAVE_FORMAT_VERSION } from "./serialize";
 
@@ -28,6 +29,7 @@ function isNode(key: string, value: unknown): value is MindMapNode {
     icon,
     note,
     link,
+    offset,
   } = value;
   return (
     id === key &&
@@ -45,7 +47,8 @@ function isNode(key: string, value: unknown): value is MindMapNode {
     (image === undefined || isImageDataUrl(image)) &&
     (icon === undefined || isIcon(icon)) &&
     (note === undefined || isNote(note)) &&
-    (link === undefined || isLink(link))
+    (link === undefined || isLink(link)) &&
+    (offset === undefined || isOffset(offset))
   );
 }
 
@@ -91,6 +94,10 @@ export function deserialize(json: string, options: DeserializeOptions = {}): Min
     const isRoot = node.id === rootId;
     if ((node.kind === "central" && !isRoot) || (isRoot && !options.subtree && node.kind !== "central")) {
       throw new Error(`ノードの種類が不整合です: ${node.id}`);
+    }
+    // 中心ノードは、動かせない（手動配置の、ずれを持たない）
+    if (isRoot && node.offset !== undefined) {
+      throw new Error(`ノードの形式が不正です: ${node.id}`);
     }
     if (new Set(node.childIds).size !== node.childIds.length) {
       const duplicated = node.childIds.find((id, i) => node.childIds.indexOf(id) !== i);

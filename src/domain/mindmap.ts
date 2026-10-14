@@ -37,6 +37,8 @@ export interface MindMapNode {
   note?: string;
   /** ノードのリンク（http・https の URL） */
   link?: string;
+  /** 手動配置: 自動配置の位置からの、ずれ。このノードと、子孫に効く（中心ノードには、付けない） */
+  offset?: Position;
 }
 
 /** 離れた2つのノードを結ぶ、関連線（矢印）。ツリーの親子とは、別のつながり */

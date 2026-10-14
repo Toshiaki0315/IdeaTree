@@ -595,7 +595,7 @@ describe("deserialize（offset: 手動配置のずれ）", () => {
     ["配列", []],
     ["x がない", { y: 1 }],
     ["文字列の座標", { x: "1", y: 2 }],
-    ["有限でない座標", { x: 1e999, y: 0 }],
+    ["有限でない座標", { x: Number.POSITIVE_INFINITY, y: 0 }],
   ])("不正な offset（%s）はエラーになる", (_name, value) => {
     const { data, ids } = validData();
     data.nodes[ids.a].offset = value;

@@ -43,6 +43,7 @@ function labelLength(map: MindMap, node: MindMapNode, angle: number): number {
  * ラベルが入りきるのに必要な長さの、長い方（長いテキストでは、枝が長くなる）。
  * 扇形は、最初のメインブランチが右向き（角度0）の中心になる位置から時計回りに、葉の数に比例して子へ分配する。
  * 折りたたまれたノードは1枚の葉として扱い、その子孫は同じ位置に置く。
+ * 最後に、手動配置のずれ（offset）を、ノードと子孫の位置に足す。
  */
 export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
   const levelDistance = options.levelDistance ?? LEVEL_DISTANCE;
@@ -104,6 +105,19 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
       ? -Math.PI
       : (-Math.PI * countLeaves(map, firstChildId)) / countLeaves(map, map.rootId);
   place(map.rootId, 0, 0, start, start + 2 * Math.PI);
+
+  // 手動配置: ずれ（offset）を、そのノードと子孫の位置に足す（子孫のずれは、親のずれに足される）
+  const shift = (id: NodeId, dx: number, dy: number) => {
+    const node = nodes[id];
+    const x = dx + (node.offset?.x ?? 0);
+    const y = dy + (node.offset?.y ?? 0);
+    if (x !== 0 || y !== 0) {
+      nodes[id] = { ...node, position: { x: node.position.x + x, y: node.position.y + y } };
+    }
+    node.childIds.forEach((childId) => shift(childId, x, y));
+  };
+  // 中心ノードは、動かさない
+  nodes[map.rootId].childIds.forEach((childId) => shift(childId, 0, 0));
 
   return { ...map, nodes };
 }
