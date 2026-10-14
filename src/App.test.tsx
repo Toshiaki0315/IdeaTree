@@ -7,6 +7,8 @@ import { addChild } from "./domain/addChild";
 import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
 import { copyNode } from "./domain/copyNode";
 import { hitAreaSize } from "./domain/hitArea";
+import { layout } from "./domain/layout";
+import { exportSvg } from "./domain/svgExport";
 import { SHORTCUT_GROUPS } from "./domain/shortcuts";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap } from "./domain/mindmap";
@@ -5121,6 +5123,72 @@ describe("App（マインドマップ編集UI）", () => {
       fireEvent.keyDown(window, { key: "o", metaKey: true });
 
       await waitFor(() => expect(mockedConfirmDiscard).toHaveBeenCalled());
+    });
+  });
+
+  describe("Cmd+,: 設定（テーマ）", () => {
+    const background = (container: HTMLElement) =>
+      container.querySelector("svg.mindmap > rect")!.getAttribute("fill");
+    const chooseTheme = async (user: User, name: string) => {
+      fireEvent.keyDown(window, { key: ",", metaKey: true });
+      await user.click(screen.getByRole("radio", { name }));
+    };
+
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    it("Cmd+, で設定を開き、もう一度で閉じる。他のパネルとは、同時に開かない", () => {
+      render(<App />);
+
+      fireEvent.keyDown(window, { key: ",", metaKey: true });
+      expect(screen.getByRole("dialog", { name: "設定" })).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      expect(screen.queryByRole("dialog", { name: "設定" })).not.toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: ",", metaKey: true });
+      fireEvent.keyDown(screen.getByRole("dialog", { name: "設定" }), { key: ",", metaKey: true });
+      expect(screen.queryByRole("dialog", { name: "設定" })).not.toBeInTheDocument();
+    });
+
+    it("ダークを選ぶと、背景と、中心ノードの文字が、ダークの配色になる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      expect(background(container)).toBe("#FFFFFF");
+
+      await chooseTheme(user, "ダーク");
+
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      expect(background(container)).not.toBe("#FFFFFF");
+      const rootText = container.querySelector("g[data-node-id] text") as SVGTextElement;
+      expect(rootText.getAttribute("fill")).not.toBe("#333333");
+    });
+
+    it("ライトに戻すと、これまでの配色になる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await chooseTheme(user, "ダーク");
+
+      await user.click(screen.getByRole("radio", { name: "ライト" }));
+
+      expect(background(container)).toBe("#FFFFFF");
+      const rootText = container.querySelector("g[data-node-id] text") as SVGTextElement;
+      expect(rootText.getAttribute("fill")).toBe("#333333");
+    });
+
+    it("書き出す SVG は、画面のテーマによらず、白い背景のまま", async () => {
+      const user = userEvent.setup();
+      mockedExportFile.mockResolvedValue(null);
+      render(<App />);
+      await chooseTheme(user, "ダーク");
+
+      fireEvent.keyDown(window, { key: "e", metaKey: true, shiftKey: true });
+
+      await waitFor(() => expect(mockedExportFile).toHaveBeenCalledTimes(1));
+      const exported = mockedExportFile.mock.calls[0][0];
+      expect(exportSvg(layout(exported))).toContain('data-role="background"');
+      expect(exportSvg(layout(exported))).toContain('fill="#FFFFFF"');
     });
   });
 });
