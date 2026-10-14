@@ -7,6 +7,7 @@ import { addChild } from "./domain/addChild";
 import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
 import { copyNode } from "./domain/copyNode";
 import { hitAreaSize } from "./domain/hitArea";
+import { SHORTCUT_GROUPS } from "./domain/shortcuts";
 import { createMindMap } from "./domain/mindmap";
 import { ICON_PRESETS, setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
@@ -4150,6 +4151,100 @@ describe("App（マインドマップ編集UI）", () => {
       await user.selectOptions(scaleSelect(), "300%");
 
       expect(imageWidth(container)).toBe(192);
+    });
+  });
+
+  describe("Cmd+/: ショートカット一覧", () => {
+    const CMD_SLASH = "{Meta>}/{/Meta}";
+    const help = () => screen.getByRole("dialog", { name: "ショートカット一覧" });
+
+    it("Cmd+/ で、ショートカット一覧が開き、フォーカスが中に移る。もう一度で閉じる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      await user.keyboard(CMD_SLASH);
+      expect(help()).toBeInTheDocument();
+      expect(help()).toContainElement(document.activeElement as HTMLElement);
+
+      await user.keyboard(CMD_SLASH);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("すべてのグループの題名と、すべての項目（キーと説明）が表示される", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_SLASH);
+
+      for (const group of SHORTCUT_GROUPS) {
+        expect(within(help()).getByRole("heading", { name: group.title })).toBeInTheDocument();
+        for (const item of group.items) {
+          expect(within(help()).getByText(item.description)).toBeInTheDocument();
+        }
+      }
+      const total = SHORTCUT_GROUPS.reduce((sum, g) => sum + g.items.length, 0);
+      expect(help().querySelectorAll("kbd")).toHaveLength(total);
+    });
+
+    it("Escape や、閉じるボタンでも閉じる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard(CMD_SLASH);
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      await user.keyboard(CMD_SLASH);
+      await user.click(within(help()).getByRole("button", { name: "閉じる" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("ブラウザ標準の動作を止める。Cmd+Shift+/（Cmd+?）でも開く。Ctrl との組み合わせや、テキスト編集中は開かない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      expect(fireEvent.keyDown(window, { key: "/", metaKey: true })).toBe(false);
+      await user.keyboard(CMD_SLASH); // 開いているのを閉じる
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      await user.keyboard("{Meta>}{Shift>}?{/Shift}{/Meta}");
+      expect(help()).toBeInTheDocument();
+      await user.keyboard("{Escape}");
+
+      await user.keyboard("{Control>}/{/Control}");
+      await user.keyboard("{F2}");
+      await user.keyboard(CMD_SLASH);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("開いている間は、ノードの操作のショートカット（Tab・Delete など）は、効かない", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await addChildNamed(user, "a");
+      await user.keyboard(CMD_SLASH);
+
+      await user.keyboard("{Delete}{Backspace}{ArrowLeft}");
+      await user.keyboard("{Meta>}b{/Meta}");
+
+      expect(container.querySelectorAll("g[data-node-id]")).toHaveLength(2);
+      expect(screen.getByText("a").getAttribute("font-weight")).toBe("normal");
+    });
+
+    it("スタイルパネルとは、同時には開かない（片方を開くと、もう片方は閉じる）", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+
+      await user.keyboard("{Meta>}k{/Meta}");
+      expect(screen.getByRole("dialog", { name: "スタイル" })).toBeInTheDocument();
+      await user.keyboard("{Escape}");
+      await user.keyboard("{Meta>}k{/Meta}");
+      fireEvent.keyDown(window, { key: "/", metaKey: true });
+      expect(screen.queryByRole("dialog", { name: "スタイル" })).not.toBeInTheDocument();
+      expect(help()).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      expect(help).toThrow();
+      expect(screen.getByRole("dialog", { name: "スタイル" })).toBeInTheDocument();
     });
   });
 });
