@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import "./App.css";
+import type { Editing, Snapshot } from "./editorState";
 import { addChild } from "./domain/addChild";
 import { addSibling } from "./domain/addSibling";
 import { toggleCollapse } from "./domain/collapse";
@@ -11,8 +12,6 @@ import type { Subtree } from "./domain/copyNode";
 import { deleteNode } from "./domain/deleteNode";
 import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
-import { hitAreaSize } from "./domain/hitArea";
-import { LINE_HEIGHT_RATIO, labelBlock, lineCenters, wrapLabel } from "./domain/wrapLabel";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
@@ -24,22 +23,7 @@ import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
 import { pasteTexts } from "./domain/pasteTexts";
-import {
-  BACKGROUND,
-  CENTRAL_RX,
-  CENTRAL_RY,
-  LABEL_HALO_WIDTH,
-  branchPath,
-  centralLabelY,
-  depthOf,
-  iconPlacement,
-  iconTransform,
-  imageBox,
-  labelPosition,
-  nodeLabel,
-  nodeTextStyle,
-  strokeWidthAt,
-} from "./domain/svgExport";
+import { BACKGROUND, branchPath, depthOf, nodeTextStyle, strokeWidthAt } from "./domain/svgExport";
 import { documentOrder, revealNode, searchNodes } from "./domain/search";
 import { updateText } from "./domain/updateText";
 import { DEFAULT_VIEWPORT, panBy, panToInclude, visibleRect, zoomIn, zoomOut } from "./domain/viewport";
@@ -56,7 +40,7 @@ import { saveFile } from "./files/saveFile";
 import { confirmDiscardAndClearAutosave, useAutosave } from "./hooks/useAutosave";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useSubscription } from "./hooks/useSubscription";
-import NodeIcon from "./NodeIcon";
+import NodeView from "./NodeView";
 import RecentFilesPanel from "./RecentFilesPanel";
 import SearchBar from "./SearchBar";
 import ShortcutHelp from "./ShortcutHelp";
@@ -64,20 +48,6 @@ import StylePanel from "./StylePanel";
 
 /** 画面の上に重ねて開くパネル */
 type Panel = "style" | "help" | "search" | "recent";
-
-/** 履歴の1件分の状態（マップと、そのとき選択していたノード） */
-interface Snapshot {
-  map: MindMap;
-  selectedId: NodeId;
-}
-
-/** 編集中のノードと入力途中のテキスト */
-interface Editing {
-  nodeId: NodeId;
-  draft: string;
-  /** Tab/Enter で追加した直後のノードなら、追加前の状態（取り消し・空確定で、これに戻す）。既存ノードの編集なら null */
-  base: Snapshot | null;
-}
 
 /** 画面下部に表示する、保存結果などのメッセージ */
 interface Message {
@@ -120,20 +90,6 @@ function expanded(map: MindMap, nodeId: NodeId): MindMap {
 
 /** 日本語入力の変換中に、キーイベントに付く keyCode */
 const IME_KEY_CODE = 229;
-
-/** 編集中の入力欄の文字サイズ（App.css の .node-input と同じ） */
-const EDITOR_FONT_SIZE = 16;
-
-/** 編集中の入力欄の高さ（行数に合わせる） */
-function editorHeight(draft: string): number {
-  return Math.max(36, wrapLabel(draft, EDITOR_FONT_SIZE).length * EDITOR_FONT_SIZE * LINE_HEIGHT_RATIO + 16);
-}
-
-/** ラベルを中心にした、クリック範囲の長方形 */
-function hitRect(centerX: number, centerY: number, label: string, fontSize: number) {
-  const { width, height } = hitAreaSize(label, fontSize);
-  return { x: centerX - width / 2, y: centerY - height / 2, width, height };
-}
 
 function initialSnapshot(): Snapshot {
   const map = createMindMap("中心テーマ");
@@ -751,148 +707,27 @@ export default function App() {
             />
           );
         })}
-        {nodes.map((node) => {
-          const isRoot = node.parentId === null;
-          const look = nodeTextStyle(laidOut, node);
-          // 中心ノードは、ノードの位置（画像があれば、その下）に、それ以外は、枝の中点にラベルを置く
-          const labelX = isRoot ? node.position.x : labelPosition(laidOut, node).x;
-          const labelY = isRoot ? centralLabelY(node) : labelPosition(laidOut, node).y;
-          const labelLines = labelBlock(nodeLabel(node), look.fontSize).lines;
-          const box = node.image ? imageBox(laidOut, node) : null;
-          const isEditing = editing?.nodeId === node.id;
-          const selected = node.id === selectedId;
-
-          return (
-            <g
-              key={node.id}
-              data-node-id={node.id}
-              data-selected={selected}
-              data-drop-target={dropTarget?.id === node.id}
-              data-drop-mode={dropTarget?.id === node.id ? dropTarget.mode : undefined}
-              data-search-match={matchSet.has(node.id) ? "true" : undefined}
-              data-search-current={node.id === currentMatch ? "true" : undefined}
-              onMouseDown={(event) => {
-                // 左ボタンで、中心ノード以外を押したときだけ、ドラッグの候補にする（入力欄の操作は除く）
-                if (event.button !== 0 || isRoot || event.target instanceof HTMLTextAreaElement) return;
-                dragRef.current = {
-                  nodeId: node.id,
-                  startX: event.clientX,
-                  startY: event.clientY,
-                  active: false,
-                };
-              }}
-              onClick={() => select(node.id)}
-              onDoubleClick={() => startEdit(node.id)}
-            >
-              {!isRoot && (
-                // 文字だけでは小さくて押しにくいので、まわりに透明なクリック範囲を置く
-                <rect
-                  data-role="hit-area"
-                  {...hitRect(labelX, labelY, nodeLabel(node), look.fontSize)}
-                  fill="transparent"
-                />
-              )}
-              {isRoot && !node.image && (
-                <ellipse
-                  cx={node.position.x}
-                  cy={node.position.y}
-                  rx={CENTRAL_RX}
-                  ry={CENTRAL_RY}
-                  fill={BACKGROUND}
-                  stroke={selected ? "#1A7FD1" : look.color}
-                  strokeWidth={selected ? 6 : 4}
-                />
-              )}
-              {node.image && box && (
-                <>
-                  <image
-                    href={node.image}
-                    x={box.x}
-                    y={box.y}
-                    width={box.width}
-                    height={box.height}
-                    preserveAspectRatio="xMidYMid meet"
-                  />
-                  {selected && (
-                    <rect
-                      x={box.x - 4}
-                      y={box.y - 4}
-                      width={box.width + 8}
-                      height={box.height + 8}
-                      rx={8}
-                      fill="none"
-                      stroke="#1A7FD1"
-                      strokeWidth={3}
-                    />
-                  )}
-                </>
-              )}
-              {!isEditing && (
-                <text
-                  x={labelX}
-                  y={labelY}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fontFamily={look.fontFamily}
-                  fontSize={look.fontSize}
-                  fontWeight={look.fontWeight}
-                  fontStyle={look.fontStyle}
-                  fill={look.color}
-                  {...(isRoot
-                    ? {}
-                    : {
-                        stroke: selected ? "#FFE066" : BACKGROUND,
-                        strokeWidth: LABEL_HALO_WIDTH + (selected ? 3 : 0),
-                        paintOrder: "stroke",
-                        strokeLinejoin: "round" as const,
-                      })}
-                >
-                  {labelLines.length === 1
-                    ? labelLines[0]
-                    : labelLines.map((line, i) => (
-                        <tspan
-                          key={i}
-                          x={labelX}
-                          y={lineCenters(labelLines.length, look.fontSize, labelY)[i]}
-                        >
-                          {line}
-                        </tspan>
-                      ))}
-                </text>
-              )}
-              {node.icon && (
-                // アイコンは、IdeaTree のオリジナルの図形（24×24 の絵を、枠に収める）
-                <g
-                  data-icon-for={node.id}
-                  data-icon={node.icon}
-                  transform={iconTransform(iconPlacement(laidOut, node))}
-                >
-                  <NodeIcon id={node.icon} />
-                </g>
-              )}
-              {isEditing && editing && (
-                <foreignObject
-                  x={labelX - 80}
-                  y={labelY - editorHeight(editing.draft) / 2}
-                  width={160}
-                  height={editorHeight(editing.draft)}
-                >
-                  <textarea
-                    ref={inputRef}
-                    className="node-input"
-                    aria-label="ノードのテキスト"
-                    value={editing.draft}
-                    onChange={(event) => setEditing({ ...editing, draft: event.target.value })}
-                    onKeyDown={(event) => onInputKeyDown(event, editing)}
-                    onBlur={() => editingRef.current !== null && commitEdit(editing)}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  />
-                </foreignObject>
-              )}
-            </g>
-          );
-        })}
+        {nodes.map((node) => (
+          <NodeView
+            key={node.id}
+            map={laidOut}
+            node={node}
+            selected={node.id === selectedId}
+            dropMode={dropTarget?.id === node.id ? dropTarget.mode : null}
+            searchMatch={matchSet.has(node.id)}
+            searchCurrent={node.id === currentMatch}
+            editing={editing?.nodeId === node.id ? editing : null}
+            inputRef={inputRef}
+            onSelect={() => select(node.id)}
+            onStartEdit={() => startEdit(node.id)}
+            onDragStart={(x, y) => {
+              dragRef.current = { nodeId: node.id, startX: x, startY: y, active: false };
+            }}
+            onDraftChange={(current, draft) => setEditing({ ...current, draft })}
+            onInputKeyDown={onInputKeyDown}
+            onInputBlur={(current) => editingRef.current !== null && commitEdit(current)}
+          />
+        ))}
       </svg>
       {Math.round(viewport.zoom * 100) !== 100 && (
         <div className="zoom-state">{Math.round(viewport.zoom * 100)}%</div>
