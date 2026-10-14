@@ -7,11 +7,18 @@ export const MAX_LABEL_EM = 10;
 export const LINE_HEIGHT_RATIO = 1.25;
 
 /**
- * ラベルを、1行の幅の上限（文字サイズ × MAX_LABEL_EM）で折り返す。
- * 英単語は空白の位置で折り返し（行頭・行末の空白は捨てる）、区切れないときは文字の途中で折り返す。
+ * ラベルを折り返す。手動の改行（\n）では必ず行を分け、各行が長ければ、さらに上限の幅で折り返す。
  * 空のラベルも、1行（空の行）として返す。
  */
 export function wrapLabel(label: string, fontSize: number): string[] {
+  return label.split(/\r?\n/).flatMap((paragraph) => wrapParagraph(paragraph, fontSize));
+}
+
+/**
+ * 改行を含まない文を、1行の幅の上限（文字サイズ × MAX_LABEL_EM）で折り返す。
+ * 英単語は空白の位置で折り返し（行頭・行末の空白は捨てる）、区切れないときは文字の途中で折り返す。
+ */
+function wrapParagraph(label: string, fontSize: number): string[] {
   const maxWidth = MAX_LABEL_EM * fontSize;
   const lines: string[] = [];
   let current = "";

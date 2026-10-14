@@ -16,6 +16,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "Tab", description: "子ノードを追加" },
       { keys: "Enter", description: "兄弟ノードを追加（入力中は確定）" },
+      { keys: "Shift + Enter", description: "入力中に、ラベルの改行（Enter で確定）" },
       { keys: "F2", description: "テキストを編集（ダブルクリックでも可）" },
       { keys: "Escape", description: "入力を取り消す" },
       { keys: "Delete / Backspace", description: "ノードを削除（子孫ごと）" },

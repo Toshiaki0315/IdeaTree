@@ -4907,7 +4907,7 @@ describe("App（マインドマップ編集UI）", () => {
       const user = userEvent.setup();
       render(<App />);
       await user.keyboard("{Tab}あ");
-      const height = () => Number(area().closest("foreignObject")!.getAttribute("height"));
+      const height = () => Number(area().parentElement!.getAttribute("height"));
       const one = height();
 
       await user.keyboard("{Shift>}{Enter}{/Shift}い{Shift>}{Enter}{/Shift}う");

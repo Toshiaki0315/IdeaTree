@@ -12,7 +12,7 @@ import { deleteNode } from "./domain/deleteNode";
 import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
 import { hitAreaSize } from "./domain/hitArea";
-import { labelBlock, lineCenters } from "./domain/wrapLabel";
+import { LINE_HEIGHT_RATIO, labelBlock, lineCenters, wrapLabel } from "./domain/wrapLabel";
 import { layout } from "./domain/layout";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
@@ -127,6 +127,14 @@ function expanded(map: MindMap, nodeId: NodeId): MindMap {
   return map.nodes[nodeId].collapsed ? toggleCollapse(map, nodeId) : map;
 }
 
+/** 編集中の入力欄の文字サイズ（App.css の .node-input と同じ） */
+const EDITOR_FONT_SIZE = 16;
+
+/** 編集中の入力欄の高さ（行数に合わせる） */
+function editorHeight(draft: string): number {
+  return Math.max(36, wrapLabel(draft, EDITOR_FONT_SIZE).length * EDITOR_FONT_SIZE * LINE_HEIGHT_RATIO + 16);
+}
+
 /** ラベルを中心にした、クリック範囲の長方形 */
 function hitRect(centerX: number, centerY: number, label: string, fontSize: number) {
   const { width, height } = hitAreaSize(label, fontSize);
@@ -167,7 +175,7 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState<{ id: NodeId; mode: "child" | "reorder" } | null>(null);
   /** コピーしたサブツリー。ファイルを開いても保持する */
   const [clipboard, setClipboard] = useState<Subtree | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { map, selectedId } = history.present;
   const mapRef = useRef(map);
@@ -785,9 +793,10 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [history, filePath, clipboard]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, editing: Editing) => {
+  const onInputKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>, editing: Editing) => {
     event.stopPropagation();
-    if (event.key === "Enter") {
+    // Shift + Enter は、改行（入力欄の標準の動作）。Enter だけで確定する
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       commitEdit(editing);
     } else if (event.key === "Escape") {
@@ -855,7 +864,7 @@ export default function App() {
               data-search-current={node.id === currentMatch ? "true" : undefined}
               onMouseDown={(event) => {
                 // 左ボタンで、中心ノード以外を押したときだけ、ドラッグの候補にする（入力欄の操作は除く）
-                if (event.button !== 0 || isRoot || event.target instanceof HTMLInputElement) return;
+                if (event.button !== 0 || isRoot || event.target instanceof HTMLTextAreaElement) return;
                 dragRef.current = {
                   nodeId: node.id,
                   startX: event.clientX,
@@ -949,8 +958,8 @@ export default function App() {
                 </g>
               )}
               {isEditing && editing && (
-                <foreignObject x={labelX - 80} y={labelY - 18} width={160} height={36}>
-                  <input
+                <foreignObject x={labelX - 80} y={labelY - editorHeight(editing.draft) / 2} width={160} height={editorHeight(editing.draft)}>
+                  <textarea
                     ref={inputRef}
                     className="node-input"
                     aria-label="ノードのテキスト"
