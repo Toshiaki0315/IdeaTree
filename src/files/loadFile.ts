@@ -27,3 +27,7 @@ export async function loadFile(): Promise<{ map: MindMap; path: string } | null>
     throw new Error(`読み込みに失敗しました: ${errorMessage(error)}`);
   }
 }
+
+export async function loadFileAt(_path: string): Promise<{ map: MindMap; path: string }> {
+  throw new Error("未実装");
+}

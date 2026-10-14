@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addChild } from "../domain/addChild";
 import { createMindMap } from "../domain/mindmap";
 import { serialize } from "../domain/serialize";
-import { loadFile } from "./loadFile";
+import { loadFile, loadFileAt } from "./loadFile";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
@@ -98,3 +98,29 @@ describe("loadFile（JSON読み込み / Cmd+O）", () => {
     });
   });
 });
+
+describe("loadFileAt（パスを指定してファイルを読み込む）", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("ダイアログを開かず、指定したパスのファイルを読み込み、復元したマップとパスを返す", async () => {
+    const map = sampleMap();
+    mockedInvoke.mockResolvedValue(serialize(map));
+
+    const result = await loadFileAt("/Users/me/map.ideatree");
+
+    expect(mockedOpen).not.toHaveBeenCalled();
+    expect(mockedInvoke).toHaveBeenCalledWith("load_file", { path: "/Users/me/map.ideatree" });
+    expect(result).toEqual({ map, path: "/Users/me/map.ideatree" });
+  });
+
+  it("読み込めない・壊れたファイルは、理由を含む日本語のエラーにする", async () => {
+    mockedInvoke.mockRejectedValueOnce("ファイルが見つかりません: /x");
+    await expect(loadFileAt("/x")).rejects.toThrow("読み込みに失敗しました: ファイルが見つかりません: /x");
+
+    mockedInvoke.mockResolvedValueOnce("{ not json");
+    await expect(loadFileAt("/x")).rejects.toThrow("読み込みに失敗しました: JSONの形式が不正です");
+  });
+});
+
