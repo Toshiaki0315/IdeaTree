@@ -18,7 +18,7 @@ import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
-import { canMoveTo, canReorderTo, dropNode, moveNode } from "./domain/moveNode";
+import { moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
@@ -26,8 +26,7 @@ import { pasteTexts } from "./domain/pasteTexts";
 import { BACKGROUND, branchPath, depthOf, nodeTextStyle, strokeWidthAt } from "./domain/nodeGeometry";
 import { documentOrder, revealNode, searchNodes } from "./domain/search";
 import { updateText } from "./domain/updateText";
-import { DEFAULT_VIEWPORT, panBy, panToInclude, visibleRect, zoomIn, zoomOut } from "./domain/viewport";
-import type { Viewport } from "./domain/viewport";
+import { DEFAULT_VIEWPORT, zoomIn, zoomOut } from "./domain/viewport";
 import { visibleNodeIds } from "./domain/visibleNodeIds";
 import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
@@ -39,7 +38,9 @@ import { onOpenFileRequest, takePendingOpenFiles } from "./files/openRequests";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
 import { confirmDiscardAndClearAutosave, useAutosave } from "./hooks/useAutosave";
+import { useNodeDrag } from "./hooks/useNodeDrag";
 import { useRecentFiles } from "./hooks/useRecentFiles";
+import { useViewport } from "./hooks/useViewport";
 import { useSubscription } from "./hooks/useSubscription";
 import NodeView from "./NodeView";
 import RecentFilesPanel from "./RecentFilesPanel";
@@ -60,18 +61,6 @@ function errorToMessage(error: unknown): Message {
   return { kind: "alert", text: errorMessage(error) };
 }
 
-/** この距離（px）より動かしたら、クリックではなく、ドラッグとみなす */
-const DRAG_THRESHOLD = 4;
-
-/** ドラッグの状態（ノードを押してから、離すまで） */
-interface Drag {
-  nodeId: NodeId;
-  startX: number;
-  startY: number;
-  /** しきい値を超えて、実際にドラッグが始まったか */
-  active: boolean;
-}
-
 const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
   ArrowRight: "firstChild",
   ArrowLeft: "parent",
@@ -82,8 +71,6 @@ const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
 /** 表示領域の最小の半径。マップが小さい間は拡大しすぎないようにする */
 const MIN_HALF_EXTENT = 450;
 const VIEW_MARGIN = 160;
-/** 選択したノードが、見える範囲の端から、これより近いと、表示位置を動かす */
-const FOLLOW_MARGIN = 40;
 /** 折りたたまれているノードを展開する（子を追加・貼り付けしても、見えなくならないように） */
 function expanded(map: MindMap, nodeId: NodeId): MindMap {
   return map.nodes[nodeId].collapsed ? toggleCollapse(map, nodeId) : map;
@@ -112,9 +99,6 @@ export default function App() {
   const [searchIndex, setSearchIndex] = useState(0);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
   const recent = useRecentFiles();
-  const dragRef = useRef<Drag | null>(null);
-  /** ドラッグ中に、離すとつなぎ替えられるノード（強調表示する） */
-  const [dropTarget, setDropTarget] = useState<{ id: NodeId; mode: "child" | "reorder" } | null>(null);
   /** コピーしたサブツリー。ファイルを開いても保持する */
   const [clipboard, setClipboard] = useState<Subtree | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -132,79 +116,6 @@ export default function App() {
   const currentMatch = matches[searchIndex];
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
-
-  // ノードのドラッグ移動: 押したノードを、別のノードの上で離すと、そのノードの子につなぎ替える
-  useEffect(() => {
-    /**
-     * マウスの下にあるノードのうち、離したときに移動できるもの。
-     * Shift を押していて、兄弟のノードなら、入れ替え（reorder）。そうでなければ、その子につなぎ替える（child）。
-     */
-    const dropTargetAt = (event: MouseEvent, nodeId: NodeId) => {
-      // ウィンドウの外などで離したときは、ノードではない（target が要素でないことがある）
-      const element = event.target instanceof Element ? event.target.closest("g[data-node-id]") : null;
-      const id = element?.getAttribute("data-node-id");
-      if (id === undefined || id === null) return null;
-      if (event.shiftKey && canReorderTo(mapRef.current, nodeId, id)) {
-        return { id, mode: "reorder" as const };
-      }
-      return canMoveTo(mapRef.current, nodeId, id) ? { id, mode: "child" as const } : null;
-    };
-    const cancel = () => {
-      dragRef.current = null;
-      setDropTarget(null);
-    };
-
-    const onMouseMove = (event: MouseEvent) => {
-      const pan = panRef.current;
-      if (pan !== null) {
-        // 内容を引いた向きと逆に、見ている範囲が動く
-        const scale = unitsPerPixel();
-        setViewport((v) => ({
-          ...v,
-          panX: pan.panX - (event.clientX - pan.startX) * scale,
-          panY: pan.panY - (event.clientY - pan.startY) * scale,
-        }));
-        return;
-      }
-      const drag = dragRef.current;
-      if (drag === null) return;
-      if (!drag.active) {
-        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) <= DRAG_THRESHOLD) {
-          return;
-        }
-        drag.active = true;
-        setHistory((h) => ({ ...h, present: { ...h.present, selectedId: drag.nodeId } }));
-      }
-      setDropTarget(dropTargetAt(event, drag.nodeId));
-    };
-    const onMouseUp = (event: MouseEvent) => {
-      panRef.current = null;
-      const drag = dragRef.current;
-      if (drag === null) return;
-      const target = drag.active ? dropTargetAt(event, drag.nodeId) : null;
-      cancel();
-      if (target !== null) {
-        setHistory((h) =>
-          record(h, {
-            map: dropNode(h.present.map, drag.nodeId, target.id, target.mode),
-            selectedId: drag.nodeId,
-          }),
-        );
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") cancel();
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, []);
 
   const autosaveReady = useAutosave({
     map,
@@ -244,42 +155,12 @@ export default function App() {
     ...nodes.map((n) => Math.max(Math.abs(n.position.x), Math.abs(n.position.y)) + VIEW_MARGIN),
   );
 
-  // ズームとパン（表示だけの状態で、ファイルには保存しない）
-  const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT);
-  const view = visibleRect(half, viewport);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const viewWidthRef = useRef(view.width);
-  viewWidthRef.current = view.width;
-  const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
-
-  /** 画面上の1pxが、マップの座標で、どれだけか（画面の幅が分からないときは、1） */
-  const unitsPerPixel = () => {
-    const width = svgRef.current!.getBoundingClientRect().width;
-    return width > 0 ? viewWidthRef.current / width : 1;
-  };
-
-  // 選択したノードが、見える範囲の外に出たら、そのノードが中心になるよう、表示位置を動かす
-  useEffect(() => {
-    const { position } = laidOut.nodes[selectedId];
-    setViewport((v) => panToInclude(v, half, position, FOLLOW_MARGIN));
-  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ホイール: Ctrl（ピンチ）か Cmd を押していれば拡大・縮小、そうでなければ、表示位置を動かす
-  useEffect(() => {
-    const svg = svgRef.current!;
-    const onWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      if (event.ctrlKey || event.metaKey) {
-        setViewport((v) => (event.deltaY < 0 ? zoomIn(v) : zoomOut(v)));
-      } else {
-        const scale = unitsPerPixel();
-        setViewport((v) => panBy(v, event.deltaX * scale, event.deltaY * scale));
-      }
-    };
-    // 画面のスクロールを止めるため、passive にしない
-    svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, []);
+  const { viewport, setViewport, view, svgRef, startPan } = useViewport(
+    half,
+    selectedId,
+    laidOut.nodes[selectedId].position,
+  );
+  const { dropTarget, startDrag } = useNodeDrag(mapRef, setHistory);
 
   useEffect(() => {
     if (editing) {
@@ -685,12 +566,7 @@ export default function App() {
         onMouseDown={(event) => {
           // 何もない場所（ノード以外）を、左ボタンで押したら、ドラッグで表示位置を動かす
           if (event.button !== 0 || (event.target as Element).closest("g[data-node-id]")) return;
-          panRef.current = {
-            startX: event.clientX,
-            startY: event.clientY,
-            panX: viewport.panX,
-            panY: viewport.panY,
-          };
+          startPan(event.clientX, event.clientY);
         }}
       >
         <rect x={view.x} y={view.y} width={view.width} height={view.height} fill={BACKGROUND} />
@@ -721,9 +597,7 @@ export default function App() {
             inputRef={inputRef}
             onSelect={() => select(node.id)}
             onStartEdit={() => startEdit(node.id)}
-            onDragStart={(x, y) => {
-              dragRef.current = { nodeId: node.id, startX: x, startY: y, active: false };
-            }}
+            onDragStart={(x, y) => startDrag(node.id, x, y)}
             onDraftChange={(current, draft) => setEditing({ ...current, draft })}
             onInputKeyDown={onInputKeyDown}
             onInputBlur={(current) => editingRef.current !== null && commitEdit(current)}
