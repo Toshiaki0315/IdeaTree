@@ -10,7 +10,6 @@ mod recent;
 pub fn run() {
     let app = tauri::Builder::default()
         .manage(open_file::PendingOpenFiles::default())
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
