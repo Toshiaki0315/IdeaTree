@@ -496,7 +496,12 @@ describe("deserialize（note・link: メモとリンク）", () => {
     expect(restored.nodes[ids.a].link).toBeUndefined();
   });
 
-  it.each([[1], [null], [{}], ["a".repeat(10001)]])("不正な note（%j）はエラーになる", (value) => {
+  it.each([
+    ["数値", 1],
+    ["null", null],
+    ["オブジェクト", {}],
+    ["長すぎる文字列", "a".repeat(10001)],
+  ])("不正な note（%s）はエラーになる", (_name, value) => {
     const { data, ids } = validData();
     data.nodes[ids.a].note = value;
 
