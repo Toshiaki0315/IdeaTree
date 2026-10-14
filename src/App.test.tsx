@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { BRANCH_COLORS } from "./domain/branchColor";
 import { addChild } from "./domain/addChild";
@@ -12,9 +12,11 @@ import { createMindMap } from "./domain/mindmap";
 import { ICON_PRESETS, setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle } from "./domain/nodeStyle";
+import { clearAutosave, readAutosave, writeAutosave } from "./files/autosave";
 import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
+import { confirmRestore } from "./files/confirmRestore";
 import { loadFile } from "./files/loadFile";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
@@ -25,6 +27,12 @@ vi.mock("./files/loadFile", () => ({ loadFile: vi.fn() }));
 vi.mock("./files/pickImage", () => ({ pickImage: vi.fn() }));
 vi.mock("./files/confirmDiscard", () => ({ confirmDiscard: vi.fn() }));
 vi.mock("./files/closeGuard", () => ({ registerCloseGuard: vi.fn() }));
+vi.mock("./files/autosave", () => ({
+  writeAutosave: vi.fn(),
+  readAutosave: vi.fn(),
+  clearAutosave: vi.fn(),
+}));
+vi.mock("./files/confirmRestore", () => ({ confirmRestore: vi.fn() }));
 vi.mock("./files/clipboard", () => ({ readClipboardText: vi.fn(), writeClipboardText: vi.fn() }));
 vi.mock("./files/svgExportFile", () => ({ svgExportFile: vi.fn() }));
 
@@ -34,6 +42,10 @@ const mockedPickImage = vi.mocked(pickImage);
 const mockedConfirmDiscard = vi.mocked(confirmDiscard);
 const mockedRegisterCloseGuard = vi.mocked(registerCloseGuard);
 const unlistenCloseGuard = vi.fn();
+const mockedReadAutosave = vi.mocked(readAutosave);
+const mockedWriteAutosave = vi.mocked(writeAutosave);
+const mockedClearAutosave = vi.mocked(clearAutosave);
+const mockedConfirmRestore = vi.mocked(confirmRestore);
 const mockedReadClipboard = vi.mocked(readClipboardText);
 const mockedWriteClipboard = vi.mocked(writeClipboardText);
 const mockedSvgExportFile = vi.mocked(svgExportFile);
@@ -50,6 +62,11 @@ beforeEach(() => {
   mockedConfirmDiscard.mockResolvedValue(true); // 既定では、破棄してよいと答える
   mockedRegisterCloseGuard.mockResolvedValue(unlistenCloseGuard);
   mockedPickImage.mockResolvedValue(null);
+  // 既定では、前回の自動保存はなく、書き込み・削除は成功する
+  mockedReadAutosave.mockResolvedValue(null);
+  mockedWriteAutosave.mockResolvedValue(undefined);
+  mockedClearAutosave.mockResolvedValue(undefined);
+  mockedConfirmRestore.mockResolvedValue(true);
   // 既定では、システムのクリップボードを読み書きできない（アプリの中のコピーだけを使う）状態にする
   mockedWriteClipboard.mockResolvedValue(undefined);
   mockedReadClipboard.mockRejectedValue(new Error("クリップボードを読み込めません: 利用できません"));
@@ -2386,7 +2403,8 @@ describe("App（マインドマップ編集UI）", () => {
       render(<App />);
 
       await waitFor(() => expect(mockedRegisterCloseGuard).toHaveBeenCalled());
-      expect(mockedRegisterCloseGuard.mock.calls[0][1]).toBe(confirmDiscard);
+      await mockedRegisterCloseGuard.mock.calls[0][1]();
+      expect(mockedConfirmDiscard).toHaveBeenCalledTimes(1);
     });
 
     it("未保存かどうかは、現在の状態を反映する（変更で未保存になり、保存で戻る）", async () => {
@@ -4245,6 +4263,275 @@ describe("App（マインドマップ編集UI）", () => {
       fireEvent.keyDown(window, { key: "k", metaKey: true });
       expect(help).toThrow();
       expect(screen.getByRole("dialog", { name: "スタイル" })).toBeInTheDocument();
+    });
+  });
+
+  describe("自動保存と復元", () => {
+    const savedMap = () => {
+      const base = createMindMap("前回のテーマ");
+      return addChild(base, base.rootId, "前回の子").map;
+    };
+    const SAVED_AT = new Date(2026, 9, 14, 8, 5);
+
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** 偽のタイマーを、指定したミリ秒だけ進める */
+    const advance = (ms: number) =>
+      act(async () => {
+        vi.advanceTimersByTime(ms);
+      });
+
+    describe("起動時の復元", () => {
+      it("前回の自動保存がなければ、確認せずに、そのまま起動する", async () => {
+        render(<App />);
+
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalledTimes(1));
+
+        expect(mockedConfirmRestore).not.toHaveBeenCalled();
+        expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+      });
+
+      it("自動保存があれば、時刻とファイルを示して確認し、「復元する」を選ぶと、前回の内容に置き換わる", async () => {
+        mockedReadAutosave.mockResolvedValue({ map: savedMap(), filePath: "/Users/me/map.json", savedAt: SAVED_AT });
+        const { container } = render(<App />);
+
+        expect(await screen.findByText("前回の子")).toBeInTheDocument();
+
+        expect(mockedConfirmRestore).toHaveBeenCalledWith(SAVED_AT, "/Users/me/map.json");
+        expect(screen.getByText("前回のテーマ")).toBeInTheDocument();
+        expect(container.querySelectorAll("g[data-node-id]")).toHaveLength(2);
+        expect(await screen.findByRole("status")).toHaveTextContent("前回の編集内容を復元しました");
+        expect(document.querySelector(".doc-state")?.textContent).toBe("map.json ● 未保存");
+      });
+
+      it("復元した内容は、未保存の変更として扱われる（保存で、変更なしになる）", async () => {
+        mockedReadAutosave.mockResolvedValue({ map: savedMap(), filePath: undefined, savedAt: SAVED_AT });
+        mockedSaveFile.mockResolvedValue("/Users/me/restored.json");
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await screen.findByText("前回の子");
+        expect(document.querySelector(".doc-state")?.textContent).toBe("無題 ● 未保存");
+
+        await user.keyboard("{Meta>}s{/Meta}");
+        await screen.findByText(/保存しました/);
+
+        expect(document.querySelector(".doc-state")?.textContent).toBe("restored.json");
+      });
+
+      it("「破棄する」を選ぶと、自動保存を削除して、通常どおり起動する", async () => {
+        mockedReadAutosave.mockResolvedValue({ map: savedMap(), filePath: undefined, savedAt: SAVED_AT });
+        mockedConfirmRestore.mockResolvedValue(false);
+        render(<App />);
+
+        await waitFor(() => expect(mockedClearAutosave).toHaveBeenCalledTimes(1));
+
+        expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+        expect(screen.queryByText("前回の子")).not.toBeInTheDocument();
+      });
+
+      it("自動保存を読み込めない（ブラウザなど）ときや、確認が失敗したときは、エラーにせず、そのまま起動する", async () => {
+        mockedReadAutosave.mockRejectedValueOnce(new Error("自動保存を読み込めません: x"));
+        const first = render(<App />);
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalledTimes(1));
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+        first.unmount();
+
+        mockedReadAutosave.mockResolvedValue({ map: savedMap(), filePath: undefined, savedAt: SAVED_AT });
+        mockedConfirmRestore.mockRejectedValueOnce(new Error("ダイアログを開けません"));
+        render(<App />);
+        await waitFor(() => expect(mockedConfirmRestore).toHaveBeenCalledTimes(1));
+
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+        expect(mockedClearAutosave).not.toHaveBeenCalled();
+      });
+
+      it("復元の確認が終わる前に、自動保存の削除や上書きを、しない", async () => {
+        let answer: (restore: boolean) => void = () => {};
+        mockedReadAutosave.mockResolvedValue({ map: savedMap(), filePath: undefined, savedAt: SAVED_AT });
+        mockedConfirmRestore.mockReturnValue(new Promise<boolean>((resolve) => (answer = resolve)));
+        render(<App />);
+        await waitFor(() => expect(mockedConfirmRestore).toHaveBeenCalled());
+
+        await advance(5000);
+
+        expect(mockedClearAutosave).not.toHaveBeenCalled();
+        expect(mockedWriteAutosave).not.toHaveBeenCalled();
+        await act(async () => answer(true));
+        await screen.findByText("前回の子");
+      });
+    });
+
+    describe("自動保存", () => {
+      it("変更がなければ、自動保存しない（削除もしない）", async () => {
+        render(<App />);
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalled());
+
+        await advance(10_000);
+
+        expect(mockedWriteAutosave).not.toHaveBeenCalled();
+        expect(mockedClearAutosave).not.toHaveBeenCalled();
+      });
+
+      it("変更してから、少し（2秒）待つと、現在のマップを自動保存する", async () => {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalled());
+        await addChildNamed(user, "企画");
+
+        await advance(1900);
+        expect(mockedWriteAutosave).not.toHaveBeenCalled();
+        await advance(200);
+
+        expect(mockedWriteAutosave).toHaveBeenCalledTimes(1);
+        const [map, filePath] = mockedWriteAutosave.mock.calls[0];
+        expect(Object.values(map.nodes).map((n) => n.text)).toEqual(["中心テーマ", "企画"]);
+        expect(filePath).toBeUndefined();
+      });
+
+      it("続けて変更している間は、書き込みを待ち、最後の変更から2秒後に、1回だけ書き込む", async () => {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalled());
+        await addChildNamed(user, "a");
+        await advance(1500);
+        await addSiblingNamed(user, "b");
+        await advance(1500);
+        expect(mockedWriteAutosave).not.toHaveBeenCalled();
+
+        await advance(600);
+
+        expect(mockedWriteAutosave).toHaveBeenCalledTimes(1);
+        const [map] = mockedWriteAutosave.mock.calls[0];
+        expect(Object.values(map.nodes).map((n) => n.text)).toEqual(["中心テーマ", "a", "b"]);
+      });
+
+      it("編集していたファイルのパスも、一緒に自動保存する", async () => {
+        mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalled());
+        await user.keyboard("{Meta>}s{/Meta}");
+        await screen.findByText(/保存しました/);
+        await addChildNamed(user, "追加");
+
+        await advance(2100);
+
+        expect(mockedWriteAutosave.mock.calls[0][1]).toBe("/Users/me/map.json");
+      });
+
+      it("書き込みに失敗しても、エラーは表示せず、編集は続けられる", async () => {
+        mockedWriteAutosave.mockRejectedValue(new Error("自動保存に失敗しました: x"));
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        const { container } = render(<App />);
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalled());
+        await addChildNamed(user, "企画");
+
+        await advance(2100);
+
+        expect(mockedWriteAutosave).toHaveBeenCalled();
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(container.querySelectorAll("g[data-node-id]")).toHaveLength(2);
+      });
+    });
+
+    describe("自動保存の削除（変更なしになったとき）", () => {
+      /** 自動保存まで済んだ状態にする */
+      async function withWrittenAutosave(user: ReturnType<typeof userEvent.setup>) {
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalled());
+        await addChildNamed(user, "企画");
+        await advance(2100);
+        expect(mockedWriteAutosave).toHaveBeenCalledTimes(1);
+      }
+
+      it("保存すると、自動保存を削除する", async () => {
+        mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await withWrittenAutosave(user);
+
+        await user.keyboard("{Meta>}s{/Meta}");
+
+        await waitFor(() => expect(mockedClearAutosave).toHaveBeenCalledTimes(1));
+      });
+
+      it("自動保存の前に保存した場合は、待っていた書き込みを取りやめる（削除もしない）", async () => {
+        mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalled());
+        await addChildNamed(user, "企画");
+        await user.keyboard("{Meta>}s{/Meta}");
+        await screen.findByText(/保存しました/);
+
+        await advance(5000);
+
+        expect(mockedWriteAutosave).not.toHaveBeenCalled();
+        expect(mockedClearAutosave).not.toHaveBeenCalled();
+      });
+
+      it("元に戻して、保存したときと同じ状態になったときも、削除する", async () => {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await withWrittenAutosave(user);
+
+        await user.keyboard("{Meta>}z{/Meta}");
+
+        await waitFor(() => expect(mockedClearAutosave).toHaveBeenCalledTimes(1));
+      });
+
+      it("ファイルを開いたときも、削除する", async () => {
+        mockedLoadFile.mockResolvedValue({ map: loadedMap(), path: "/Users/me/other.json" });
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await withWrittenAutosave(user);
+
+        await user.keyboard("{Meta>}o{/Meta}");
+
+        await waitFor(() => expect(mockedClearAutosave).toHaveBeenCalledTimes(1));
+      });
+
+      it("削除に失敗しても、エラーは表示しない", async () => {
+        mockedClearAutosave.mockRejectedValue(new Error("自動保存を削除できません: x"));
+        mockedSaveFile.mockResolvedValue("/Users/me/map.json");
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await withWrittenAutosave(user);
+
+        await user.keyboard("{Meta>}s{/Meta}");
+        await screen.findByText(/保存しました/);
+
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      });
+
+      it("ウィンドウを閉じるとき、変更を破棄して閉じることを選んだら、自動保存を削除する", async () => {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await withWrittenAutosave(user);
+        const confirmClose = mockedRegisterCloseGuard.mock.calls[0][1];
+
+        mockedConfirmDiscard.mockResolvedValueOnce(false);
+        expect(await confirmClose()).toBe(false);
+        expect(mockedClearAutosave).not.toHaveBeenCalled(); // キャンセルなら、残す
+
+        mockedConfirmDiscard.mockResolvedValueOnce(true);
+        expect(await confirmClose()).toBe(true);
+        expect(mockedClearAutosave).toHaveBeenCalledTimes(1);
+      });
+
+      it("閉じるときの削除に失敗しても、閉じる操作は進める", async () => {
+        mockedClearAutosave.mockRejectedValue(new Error("自動保存を削除できません: x"));
+        render(<App />);
+        await waitFor(() => expect(mockedRegisterCloseGuard).toHaveBeenCalled());
+
+        expect(await mockedRegisterCloseGuard.mock.calls[0][1]()).toBe(true);
+      });
     });
   });
 });
