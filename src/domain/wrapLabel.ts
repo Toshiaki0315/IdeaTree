@@ -1,4 +1,4 @@
-import { estimateTextWidth } from "./hitArea";
+import { estimateTextWidth } from "./textWidth";
 
 /** 1行に入れる幅の上限（文字サイズの何倍か。全角なら、この文字数） */
 export const MAX_LABEL_EM = 10;
@@ -56,4 +56,10 @@ export function labelBlock(label: string, fontSize: number): LabelBlock {
     width: Math.max(...lines.map((line) => estimateTextWidth(line, fontSize))),
     height: lines.length * fontSize * LINE_HEIGHT_RATIO,
   };
+}
+
+/** 行の数だけの、各行の中心の y 座標（全体の中心が centerY になるよう、上下に並べる） */
+export function lineCenters(count: number, fontSize: number, centerY: number): number[] {
+  const step = fontSize * LINE_HEIGHT_RATIO;
+  return Array.from({ length: count }, (_, i) => centerY + (i - (count - 1) / 2) * step);
 }

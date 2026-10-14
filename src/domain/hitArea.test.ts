@@ -21,12 +21,12 @@ describe("hitAreaSize（ノードのクリックできる範囲の大きさ）",
   });
 
   it("短いテキストでも、最小の大きさ以上になる（小さくて押しにくくならない）", () => {
-    expect(hitAreaSize("a", 16)).toEqual({ width: MIN_HIT_WIDTH, height: MIN_HIT_HEIGHT });
-    expect(hitAreaSize("", 16)).toEqual({ width: MIN_HIT_WIDTH, height: MIN_HIT_HEIGHT });
+    expect(hitAreaSize("a", 8)).toEqual({ width: MIN_HIT_WIDTH, height: MIN_HIT_HEIGHT });
+    expect(hitAreaSize("", 8)).toEqual({ width: MIN_HIT_WIDTH, height: MIN_HIT_HEIGHT });
   });
 
-  it("高さは、文字サイズに上下の余白を足した値（最小の高さ以上）", () => {
-    expect(hitAreaSize("企画", 40).height).toBe(40 + 20);
+  it("高さは、行の高さ（文字サイズの1.25倍）に上下の余白を足した値（最小の高さ以上）", () => {
+    expect(hitAreaSize("企画", 40).height).toBe(40 * 1.25 + 20);
     expect(hitAreaSize("企画", 8).height).toBe(MIN_HIT_HEIGHT);
   });
 

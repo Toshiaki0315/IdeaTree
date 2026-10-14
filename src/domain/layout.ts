@@ -1,5 +1,5 @@
-import { estimateTextWidth } from "./hitArea";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
+import { labelBlock } from "./wrapLabel";
 import { LABEL_CLEARANCE, centralEdgeDistance, iconWidth, nodeLabel, nodeTextStyle } from "./svgExport";
 
 /** 階層ごとの、親ノードからの距離（px） */
@@ -28,8 +28,10 @@ function countLeaves(map: MindMap, id: NodeId): number {
  */
 function labelLength(map: MindMap, node: MindMapNode, angle: number): number {
   const { fontSize } = nodeTextStyle(map, node);
-  const width = estimateTextWidth(nodeLabel(node), fontSize) + (node.icon ? iconWidth(fontSize) : 0);
-  return Math.abs(Math.cos(angle)) * width + Math.abs(Math.sin(angle)) * fontSize + LABEL_PADDING;
+  // 長いラベルは折り返すので、幅は上限まで、高さは行数の分になる
+  const block = labelBlock(nodeLabel(node), fontSize);
+  const width = block.width + (node.icon ? iconWidth(fontSize) : 0);
+  return Math.abs(Math.cos(angle)) * width + Math.abs(Math.sin(angle)) * block.height + LABEL_PADDING;
 }
 
 /**

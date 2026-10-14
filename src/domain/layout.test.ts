@@ -456,27 +456,27 @@ describe("layout（放射状レイアウト）", () => {
     });
 
     it("メインブランチは、ラベルが入りきるよう、中心の楕円の外側に、ラベルの幅の分の長さを取る", () => {
-      const { map, id } = oneMain(long(25)); // 幅 25 × 0.6 × 20 = 300
+      const { map, id } = oneMain(long(16)); // 幅 16 × 0.6 × 20 = 192
 
       // 楕円の端 70 + 余白 10 + 幅 300 + 余白 40
-      expect(distanceOf(layout(map), id)).toBeCloseTo(70 + 10 + 300 + 40);
+      expect(distanceOf(layout(map), id)).toBeCloseTo(70 + 10 + 192 + 40);
     });
 
     it("テキストが長いほど、枝も長くなる", () => {
-      const a = oneMain(long(30));
-      const b = oneMain(long(40));
+      const a = oneMain(long(10));
+      const b = oneMain(long(16));
 
       expect(distanceOf(layout(b.map), b.id)).toBeGreaterThan(distanceOf(layout(a.map), a.id));
     });
 
     it("サブブランチは、親からの距離として、ラベルの幅の分の長さを取る", () => {
       const { map, id } = oneMain("m");
-      const sub = addChild(map, id, long(25)); // 幅 25 × 0.6 × 16 = 240
+      const sub = addChild(map, id, long(16)); // 幅 16 × 0.6 × 16 = 153.6
 
       const laid = layout(sub.map);
 
       expect(distanceOf(laid, id)).toBeCloseTo(LEVEL_DISTANCE);
-      expect(distanceOf(laid, sub.nodeId)).toBeCloseTo(LEVEL_DISTANCE + 240 + 40);
+      expect(distanceOf(laid, sub.nodeId)).toBeCloseTo(LEVEL_DISTANCE + 153.6 + 40);
     });
 
     it("上下を向いたブランチは、横書きの文字が枝と交わる長さが短いので、長くならない", () => {
@@ -502,7 +502,7 @@ describe("layout（放射状レイアウト）", () => {
     });
 
     it("アイコンがあると、その分の幅も足される", () => {
-      const { map, id } = oneMain(long(25));
+      const { map, id } = oneMain(long(16));
       const withIcon = setNodeIcon(map, id, ICON_PRESETS[0].value);
 
       const extra = distanceOf(layout(withIcon), id) - distanceOf(layout(map), id);
@@ -511,38 +511,38 @@ describe("layout（放射状レイアウト）", () => {
     });
 
     it("文字サイズを大きくすると、枝も長くなる", () => {
-      const { map, id } = oneMain(long(25));
+      const { map, id } = oneMain(long(16));
       const big = setNodeStyle(map, id, { fontSize: 40 });
 
-      expect(distanceOf(layout(big), id)).toBeCloseTo(70 + 10 + 25 * 0.6 * 40 + 40);
+      expect(distanceOf(layout(big), id)).toBeCloseTo(70 + 10 + 16 * 0.6 * 40 + 40);
     });
 
     it("levelDistance を指定しても、ラベルが入りきるだけの長さは、確保される（長い方を使う）", () => {
-      const { map, id } = oneMain(long(25));
+      const { map, id } = oneMain(long(16));
 
-      expect(distanceOf(layout(map, { levelDistance: 100 }), id)).toBeCloseTo(420);
+      expect(distanceOf(layout(map, { levelDistance: 100 }), id)).toBeCloseTo(70 + 10 + 192 + 40);
       expect(distanceOf(layout(map, { levelDistance: 500 }), id)).toBeCloseTo(500);
     });
 
     it("中心ノードに画像があるときは、画像の枠の外側に、ラベルの幅の分の長さを取る", () => {
-      const { map, id, root } = oneMain(long(25));
+      const { map, id, root } = oneMain(long(16));
       const withImage = setNodeImage(
         map,
         root,
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
       );
 
-      // 画像の枠の半幅 80 + 余白 10 + 幅 300 + 余白 40
-      expect(distanceOf(layout(withImage), id)).toBeCloseTo(80 + 10 + 300 + 40);
+      // 画像の枠の半幅 80 + 余白 10 + 幅 192 + 余白 40
+      expect(distanceOf(layout(withImage), id)).toBeCloseTo(80 + 10 + 192 + 40);
     });
 
     it("折りたたまれたノードは、末尾の「…」の分の幅も数える", () => {
       const root = createMindMap("root");
-      const main = addChild(root, root.rootId, long(25));
+      const main = addChild(root, root.rootId, long(14));
       const child = addChild(main.map, main.nodeId, "c");
       const folded = toggleCollapse(child.map, main.nodeId);
 
-      expect(distanceOf(layout(folded), main.nodeId)).toBeCloseTo(70 + 10 + 300 + 20 * 1 + 40);
+      expect(distanceOf(layout(folded), main.nodeId)).toBeCloseTo(70 + 10 + 14 * 0.6 * 20 + 20 * 1 + 40);
     });
 
     it("折りたたまれて見えない子孫のテキストは、枝の長さに影響しない", () => {
@@ -592,18 +592,19 @@ describe("layout: ラベルの折り返しと枝の長さ", () => {
   });
 
   it("折り返して行数が増えると、真下に向いた枝は、行の高さの分だけ長くなる", () => {
-    /** 4本のメインブランチ（右・下・左・上）のうち、2本目（真下）に、指定のラベルを付ける */
-    const withSecond = (label: string) => {
+    /** 真下に向いたメインブランチの先に、指定のラベルのサブブランチを付ける */
+    const subDistance = (label: string) => {
       const root = createMindMap("root");
       const first = addChild(root, root.rootId, "あ");
-      const second = addChild(first.map, root.rootId, label);
-      const third = addChild(second.map, root.rootId, "い");
-      return { map: layout(addChild(third.map, root.rootId, "う").map), id: second.nodeId };
+      const down = addChild(first.map, root.rootId, "い");
+      const third = addChild(down.map, root.rootId, "う");
+      const fourth = addChild(third.map, root.rootId, "え");
+      const sub = addChild(fourth.map, down.nodeId, label);
+      const laid = layout(sub.map);
+      return distance(laid, sub.nodeId) - distance(laid, down.nodeId);
     };
-    const oneLine = withSecond("あ".repeat(10));
-    const threeLines = withSecond("あ".repeat(25));
 
-    // 3行 − 1行 = 2行分の高さ（行の高さ 20 × 1.25）が、真下には、そのまま足される
-    expect(distance(threeLines.map, threeLines.id) - distance(oneLine.map, oneLine.id)).toBeCloseTo(2 * 20 * 1.25, 0);
+    // サブブランチの文字サイズは 16（行の高さ 20）。8行と12行の差は、4行分
+    expect(subDistance("あ".repeat(120)) - subDistance("あ".repeat(80))).toBeCloseTo(4 * 20, 0);
   });
 });

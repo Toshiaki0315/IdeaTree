@@ -1,5 +1,5 @@
 import { getBranchColor } from "./branchColor";
-import { estimateTextWidth } from "./hitArea";
+import { labelBlock, lineCenters } from "./wrapLabel";
 import { iconShapes } from "./nodeIcon";
 import type { IconShape } from "./nodeIcon";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
@@ -153,8 +153,22 @@ export function iconPlacement(map: MindMap, node: MindMapNode): IconPlacement {
     return { x: node.position.x - size / 2, y: top - ROOT_ICON_GAP - size, size };
   }
   const { x, y } = labelPosition(map, node);
-  const labelWidth = estimateTextWidth(nodeLabel(node), look.fontSize);
+  const labelWidth = labelBlock(nodeLabel(node), look.fontSize).width;
   return { x: x - labelWidth / 2 - ICON_GAP - size, y: y - size / 2, size };
+}
+
+/**
+ * ラベルの <text> 要素。長いラベルは折り返し、行ごとの <tspan> に分けて、
+ * 全体の中心が (x, y) になるよう、上下に並べる。1行なら、tspan は使わない。
+ */
+export function svgLabel(attributes: string, label: string, fontSize: number, x: number, y: number): string {
+  const { lines } = labelBlock(label, fontSize);
+  if (lines.length === 1) {
+    return `<text ${attributes} x="${fmt(x)}" y="${fmt(y)}">${escapeXml(lines[0])}</text>`;
+  }
+  const ys = lineCenters(lines.length, fontSize, y);
+  const spans = lines.map((line, i) => `<tspan x="${fmt(x)}" y="${fmt(ys[i])}">${escapeXml(line)}</tspan>`);
+  return `<text ${attributes} x="${fmt(x)}" y="${fmt(y)}">${spans.join("")}</text>`;
 }
 
 /** アイコンの図形の、SVG の属性（塗りや線の指定がなければ、なし） */
@@ -272,7 +286,13 @@ export function exportSvg(map: MindMap): string {
         );
       }
       labels.push(
-        `<text data-node-id="${id}" x="${fmt(x)}" y="${fmt(centralLabelY(node))}" text-anchor="middle" dominant-baseline="central" ${font} fill="${look.color}">${escapeXml(nodeLabel(node))}</text>`,
+        svgLabel(
+          `data-node-id="${id}" text-anchor="middle" dominant-baseline="central" ${font} fill="${look.color}"`,
+          nodeLabel(node),
+          look.fontSize,
+          x,
+          centralLabelY(node),
+        ),
       );
       continue;
     }
@@ -285,7 +305,13 @@ export function exportSvg(map: MindMap): string {
     // ブランチのテキストは枝の中点に置く（枝の先で子ブランチと重ならない）
     const { x: labelX, y: labelY } = labelPosition(map, node);
     labels.push(
-      `<text data-node-id="${id}" x="${fmt(labelX)}" y="${fmt(labelY)}" text-anchor="middle" dominant-baseline="central" ${font} fill="${color}" stroke="${BACKGROUND}" stroke-width="${LABEL_HALO_WIDTH}" paint-order="stroke" stroke-linejoin="round">${escapeXml(nodeLabel(node))}</text>`,
+      svgLabel(
+        `data-node-id="${id}" text-anchor="middle" dominant-baseline="central" ${font} fill="${color}" stroke="${BACKGROUND}" stroke-width="${LABEL_HALO_WIDTH}" paint-order="stroke" stroke-linejoin="round"`,
+        nodeLabel(node),
+        look.fontSize,
+        labelX,
+        labelY,
+      ),
     );
   }
 
