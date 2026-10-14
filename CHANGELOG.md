@@ -2,7 +2,10 @@
 
 IdeaTree の、バージョンごとの変更点です（新しいものが上）。バージョンは `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` で、そろえています。
 
-## 未リリース
+## 0.6.4
+
+### ライセンス
+- MIT ライセンスを追加しました。
 
 ### 開発環境
 - ESLint（TypeScript・React のフック）と Prettier を導入し、CI と `make check` で確認します。Rust は `cargo fmt --check` を追加しました。
