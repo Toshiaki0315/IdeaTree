@@ -57,7 +57,7 @@ describe("buildPdf（JPEG 画像を 1 ページに載せた PDF の生成）", (
     const startxref = Number(/startxref\n(\d+)\n%%EOF/.exec(text)![1]);
     expect(text.slice(startxref, startxref + 9)).toBe("xref\n0 6\n");
 
-    const entries = text.slice(startxref + 9, startxref + 9 + 6 * 20).match(/.{20}/g)!;
+    const entries = text.slice(startxref + 9, startxref + 9 + 6 * 20).match(/[\s\S]{20}/g)!;
     expect(entries[0]).toBe("0000000000 65535 f \n");
     for (let n = 1; n <= 5; n++) {
       expect(entries[n]).toMatch(/^\d{10} 00000 n \n$/);
