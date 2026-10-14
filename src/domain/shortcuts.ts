@@ -71,6 +71,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
         keys: "Cmd + F",
         description: "ノードを検索（Enter / Shift + Enter で次 / 前の一致、Escape で閉じる）",
       },
+      { keys: "Cmd + ,", description: "設定（テーマ: 自動・ライト・ダーク）" },
       { keys: "Cmd + /", description: "ショートカット一覧を開く / 閉じる" },
     ],
   },

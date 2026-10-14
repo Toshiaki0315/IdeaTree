@@ -42,6 +42,7 @@ https://github.com/Toshiaki0315/IdeaTree.git
 | `Cmd + =` / `Cmd + -` / `Cmd + 0` | 拡大 / 縮小 / 元に戻す（ホイール・ドラッグでパン） |
 | `Cmd + Shift + 0` | 全体表示（マップ全体が収まるよう、表示を合わせる） |
 | `Cmd + F` | ノードを検索（`Enter` で次の一致へ） |
+| `Cmd + ,` | 設定（テーマ: 自動・ライト・ダーク） |
 | `Cmd + /` | ショートカット一覧を開く / 閉じる |
 
 詳しい仕様は [docs/spec.md](docs/spec.md) を参照してください。

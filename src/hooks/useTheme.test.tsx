@@ -95,10 +95,10 @@ describe("useTheme", () => {
 
   it("保存できない・読めない環境（localStorage が例外を投げる）でも、動く", () => {
     stubSystemTheme(false);
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    vi.spyOn(localStorage, "getItem").mockImplementation(() => {
       throw new Error("denied");
     });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    vi.spyOn(localStorage, "setItem").mockImplementation(() => {
       throw new Error("denied");
     });
     const { result } = renderHook(() => useTheme());

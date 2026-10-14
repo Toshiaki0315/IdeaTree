@@ -159,7 +159,12 @@ export interface NodeTextStyle {
 
 const DEFAULT_FONT_SIZES = { central: 24, main: 20, sub: 16 };
 
-export function nodeTextStyle(map: MindMap, node: MindMapNode): NodeTextStyle {
+export function nodeTextStyle(
+  map: MindMap,
+  node: MindMapNode,
+  /** 中心ノードの文字の色（指定がないとき）。テーマによって変わる */
+  centralColor: string = CENTRAL_STROKE,
+): NodeTextStyle {
   const style = node.style ?? {};
   const isRoot = node.parentId === null;
   const defaultSize = isRoot
@@ -171,7 +176,7 @@ export function nodeTextStyle(map: MindMap, node: MindMapNode): NodeTextStyle {
   const family = style.fontFamily?.replace(/['"\\]/g, "");
 
   return {
-    color: style.color ?? (isRoot ? CENTRAL_STROKE : (getBranchColor(map, node.id) as string)),
+    color: style.color ?? (isRoot ? centralColor : (getBranchColor(map, node.id) as string)),
     fontFamily: family ? `'${family}', ${FONT_FAMILY}` : FONT_FAMILY,
     fontSize: style.fontSize ?? defaultSize,
     fontWeight: style.bold ? "bold" : "normal",

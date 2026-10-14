@@ -13,6 +13,7 @@ import { deleteNode } from "./domain/deleteNode";
 import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
 import { layout } from "./domain/layout";
+import { PALETTES } from "./domain/theme";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeIcon } from "./domain/nodeIcon";
@@ -24,7 +25,6 @@ import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
 import { pasteTexts } from "./domain/pasteTexts";
 import {
-  BACKGROUND,
   BRANCH_OUTLINE_WIDTH,
   branchWidths,
   depthOf,
@@ -46,6 +46,7 @@ import { onOpenFileRequest, takePendingOpenFiles } from "./files/openRequests";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
 import { confirmDiscardAndClearAutosave, useAutosave } from "./hooks/useAutosave";
+import { useTheme } from "./hooks/useTheme";
 import { useNodeDrag } from "./hooks/useNodeDrag";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useViewport } from "./hooks/useViewport";
@@ -53,11 +54,12 @@ import { useSubscription } from "./hooks/useSubscription";
 import NodeView from "./NodeView";
 import RecentFilesPanel from "./RecentFilesPanel";
 import SearchBar from "./SearchBar";
+import SettingsPanel from "./SettingsPanel";
 import ShortcutHelp from "./ShortcutHelp";
 import StylePanel from "./StylePanel";
 
 /** 画面の上に重ねて開くパネル */
-type Panel = "style" | "help" | "search" | "recent";
+type Panel = "style" | "help" | "search" | "recent" | "settings";
 
 /** 画面下部に表示する、保存結果などのメッセージ */
 interface Message {
@@ -107,6 +109,8 @@ export default function App() {
   const [searchIndex, setSearchIndex] = useState(0);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
   const recent = useRecentFiles();
+  const { setting: themeSetting, theme, setSetting: setThemeSetting } = useTheme();
+  const palette = PALETTES[theme];
   /** コピーしたサブツリー。ファイルを開いても保持する */
   const [clipboard, setClipboard] = useState<Subtree | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -507,6 +511,11 @@ export default function App() {
         setSearchFocusToken((token) => token + 1);
         return;
       }
+      if (key === "," && !event.shiftKey) {
+        event.preventDefault();
+        togglePanel("settings");
+        return;
+      }
       if (key === "k" && !event.shiftKey) {
         event.preventDefault();
         togglePanel("style");
@@ -599,7 +608,7 @@ export default function App() {
           startPan(event.clientX, event.clientY);
         }}
       >
-        <rect x={view.x} y={view.y} width={view.width} height={view.height} fill={BACKGROUND} />
+        <rect x={view.x} y={view.y} width={view.width} height={view.height} fill={palette.background} />
         {nodes.map((node) => {
           if (node.parentId === null) return null;
           const color = nodeTextStyle(laidOut, node).color;
@@ -620,6 +629,7 @@ export default function App() {
           <NodeView
             key={node.id}
             map={laidOut}
+            palette={palette}
             node={node}
             selected={node.id === selectedId}
             dropMode={dropTarget?.id === node.id ? dropTarget.mode : null}
@@ -655,6 +665,13 @@ export default function App() {
           focusToken={searchFocusToken}
         />
       )}
+      {panel === "settings" && (
+        <SettingsPanel
+          theme={themeSetting}
+          onThemeChange={setThemeSetting}
+          onClose={() => closePanel("settings")}
+        />
+      )}
       {panel === "help" && <ShortcutHelp onClose={() => closePanel("help")} />}
       {panel === "recent" && (
         <RecentFilesPanel
@@ -666,7 +683,7 @@ export default function App() {
       {panel === "style" && (
         <StylePanel
           nodeId={selectedId}
-          defaultColor={nodeTextStyle(map, map.nodes[selectedId]).color}
+          defaultColor={nodeTextStyle(map, map.nodes[selectedId], palette.centralText).color}
           nodeText={map.nodes[selectedId].text}
           style={map.nodes[selectedId].style ?? {}}
           icon={map.nodes[selectedId].icon}

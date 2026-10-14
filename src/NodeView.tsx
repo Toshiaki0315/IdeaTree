@@ -2,7 +2,6 @@ import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { hitAreaSize } from "./domain/hitArea";
 import type { MindMap, MindMapNode } from "./domain/mindmap";
 import {
-  BACKGROUND,
   CENTRAL_RX,
   CENTRAL_RY,
   LABEL_HALO_WIDTH,
@@ -15,6 +14,7 @@ import {
   nodeTextStyle,
 } from "./domain/nodeGeometry";
 import { LINE_HEIGHT_RATIO, labelBlock, lineCenters, wrapLabel } from "./domain/wrapLabel";
+import type { Palette } from "./domain/theme";
 import type { Editing } from "./editorState";
 import NodeIcon from "./NodeIcon";
 
@@ -35,6 +35,8 @@ function hitRect(centerX: number, centerY: number, label: string, fontSize: numb
 interface Props {
   /** レイアウト済みのマップ */
   map: MindMap;
+  /** テーマの配色 */
+  palette: Palette;
   node: MindMapNode;
   selected: boolean;
   /** ドラッグ中に、離すとつなぎ替えられるノードなら、その方法 */
@@ -56,6 +58,7 @@ interface Props {
 /** マインドマップの1つのノード（ラベル・中心の楕円・画像・アイコン・編集中の入力欄）の描画 */
 export default function NodeView({
   map,
+  palette,
   node,
   selected,
   dropMode,
@@ -71,7 +74,7 @@ export default function NodeView({
   onInputBlur,
 }: Props) {
   const isRoot = node.parentId === null;
-  const look = nodeTextStyle(map, node);
+  const look = nodeTextStyle(map, node, palette.centralText);
   // 中心ノードは、ノードの位置（画像があれば、その下）に、それ以外は、枝の中点にラベルを置く
   const labelX = isRoot ? node.position.x : labelPosition(map, node).x;
   const labelY = isRoot ? centralLabelY(node) : labelPosition(map, node).y;
@@ -113,7 +116,7 @@ export default function NodeView({
           cy={node.position.y}
           rx={CENTRAL_RX}
           ry={CENTRAL_RY}
-          fill={BACKGROUND}
+          fill={palette.background}
           stroke={selected ? "#1A7FD1" : look.color}
           strokeWidth={selected ? 6 : 4}
         />
@@ -156,7 +159,7 @@ export default function NodeView({
           {...(isRoot
             ? {}
             : {
-                stroke: selected ? "#FFE066" : BACKGROUND,
+                stroke: selected ? "#FFE066" : palette.background,
                 strokeWidth: LABEL_HALO_WIDTH + (selected ? 3 : 0),
                 paintOrder: "stroke",
                 strokeLinejoin: "round" as const,
