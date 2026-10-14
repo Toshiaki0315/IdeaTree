@@ -93,7 +93,7 @@ describe("自動保存（フロントエンド）", () => {
       ["savedAt が不正な日付", JSON.stringify({ savedAt: "いつか", filePath: null, document: serialize(sampleMap()) })],
       ["savedAt が文字列でない", JSON.stringify({ savedAt: 1, filePath: null, document: serialize(sampleMap()) })],
       ["filePath の型が不正", JSON.stringify({ savedAt: "2026-10-14T00:00:00.000Z", filePath: 1, document: serialize(sampleMap()) })],
-      ["マップの内容が不正", JSON.stringify({ savedAt: "2026-10-14T00:00:00.000Z", filePath: null, document: "{\\"version\\":99}" })],
+      ["マップの内容が不正", JSON.stringify({ savedAt: "2026-10-14T00:00:00.000Z", filePath: null, document: JSON.stringify({ version: 99 }) })],
     ])("壊れた自動保存（%s）は、復元できないものとして null を返す", async (_name, contents) => {
       mockedInvoke.mockResolvedValue(contents);
 
