@@ -64,6 +64,9 @@ import SearchBar from "./SearchBar";
 import ShortcutHelp from "./ShortcutHelp";
 import StylePanel from "./StylePanel";
 
+/** 画面の上に重ねて開くパネル */
+type Panel = "style" | "help" | "search" | "recent";
+
 /** 履歴の1件分の状態（マップと、そのとき選択していたノード） */
 interface Snapshot {
   map: MindMap;
@@ -157,13 +160,12 @@ export default function App() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [filePath, setFilePath] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<Message | null>(null);
-  const [styleOpen, setStyleOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  /** 開いているパネル（同時には、1つしか開かない） */
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const searchOpen = panel === "search";
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
-  const [recentOpen, setRecentOpen] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const recentRef = useRef<RecentFile[]>([]);
   const dragRef = useRef<Drag | null>(null);
@@ -417,6 +419,11 @@ export default function App() {
     }
   }, [editing?.nodeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** パネルを開閉する（別のパネルが開いていれば、閉じる） */
+  const togglePanel = (name: Panel) => setPanel((current) => (current === name ? null : name));
+  /** 指定のパネルが開いているときだけ、閉じる（別のパネルに替わっていれば、そのまま） */
+  const closePanel = (name: Panel) => setPanel((current) => (current === name ? null : current));
+
   /** 現在の状態を、履歴に残さずに置き換える（選択の移動や、確定前のノードの表示に使う） */
   const replacePresent = (snapshot: Snapshot) => setHistory({ ...history, present: snapshot });
 
@@ -550,7 +557,7 @@ export default function App() {
   };
 
   const closeSearch = () => {
-    setSearchOpen(false);
+    closePanel("search");
     setSearchQuery("");
     setSearchIndex(0);
   };
@@ -631,7 +638,7 @@ export default function App() {
   const openPath = (path: string) =>
     runFileAction(async () => {
       if (dirty && !(await confirmDiscard())) return;
-      setRecentOpen(false);
+      closePanel("recent");
       try {
         showLoaded(await loadFileAt(path));
       } catch (error) {
@@ -679,10 +686,7 @@ export default function App() {
       }
       if (key === "o" && event.shiftKey) {
         event.preventDefault();
-        setRecentOpen((value) => !value);
-        setStyleOpen(false);
-        setHelpOpen(false);
-        setSearchOpen(false);
+        togglePanel("recent");
         return;
       }
       if (key === "o") {
@@ -723,27 +727,18 @@ export default function App() {
       }
       if (key === "/" || key === "?") {
         event.preventDefault();
-        setHelpOpen((open) => !open);
-        setStyleOpen(false);
-        setSearchOpen(false);
-        setRecentOpen(false);
+        togglePanel("help");
         return;
       }
       if (key === "f" && !event.shiftKey) {
         event.preventDefault();
-        setSearchOpen(true);
+        setPanel("search");
         setSearchFocusToken((token) => token + 1);
-        setStyleOpen(false);
-        setHelpOpen(false);
-        setRecentOpen(false);
         return;
       }
       if (key === "k" && !event.shiftKey) {
         event.preventDefault();
-        setStyleOpen((open) => !open);
-        setHelpOpen(false);
-        setSearchOpen(false);
-        setRecentOpen(false);
+        togglePanel("style");
         return;
       }
       if (key === "x") {
@@ -1015,15 +1010,15 @@ export default function App() {
           focusToken={searchFocusToken}
         />
       )}
-      {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
-      {recentOpen && (
+      {panel === "help" && <ShortcutHelp onClose={() => closePanel("help")} />}
+      {panel === "recent" && (
         <RecentFilesPanel
           files={recentFiles}
           onSelect={(path) => void openPath(path)}
-          onClose={() => setRecentOpen(false)}
+          onClose={() => closePanel("recent")}
         />
       )}
-      {styleOpen && (
+      {panel === "style" && (
         <StylePanel
           nodeId={selectedId}
           defaultColor={nodeTextStyle(map, map.nodes[selectedId]).color}
@@ -1035,7 +1030,7 @@ export default function App() {
           onChangeIcon={changeIcon}
           onChooseImage={() => void chooseImage()}
           onRemoveImage={removeImage}
-          onClose={() => setStyleOpen(false)}
+          onClose={() => closePanel("style")}
         />
       )}
       {message && (
