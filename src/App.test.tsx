@@ -4581,7 +4581,7 @@ describe("App（マインドマップ編集UI）", () => {
     const CMD_F = "{Meta>}f{/Meta}";
     const CMD_Z = "{Meta>}z{/Meta}";
     const bar = () => screen.getByRole("search", { name: "検索" });
-    const field = () => within(bar()).getByRole("searchbox", { name: "検索" });
+    const field = () => within(bar()).getByRole("searchbox", { name: "検索" }) as HTMLInputElement;
     const count = () => bar().querySelector("[data-role='search-count']")?.textContent;
     const matches = (container: HTMLElement) =>
       [...container.querySelectorAll("g[data-search-match]")].map((g) => g.textContent);
@@ -4761,6 +4761,25 @@ describe("App（マインドマップ編集UI）", () => {
 
       expect(field()).toHaveFocus();
       expect(field()).toHaveValue("abc");
+    });
+
+    it("入力欄にフォーカスがあるときの Cmd+F は、検索語を全選択する（Ctrl や Shift 付きでは、何もしない）", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard(CMD_F);
+      await user.type(field(), "abcdef");
+      field().setSelectionRange(2, 2);
+
+      // （user-event は、修飾キー付きでも文字を入力してしまうので、キーイベントを直接送る）
+      fireEvent.keyDown(field(), { key: "f", ctrlKey: true });
+      fireEvent.keyDown(field(), { key: "f", metaKey: true, shiftKey: true });
+      fireEvent.keyDown(field(), { key: "f", metaKey: true, altKey: true });
+      expect(field().selectionStart).toBe(2);
+
+      expect(fireEvent.keyDown(field(), { key: "f", metaKey: true })).toBe(false);
+      expect(field().selectionStart).toBe(0);
+      expect(field().selectionEnd).toBe(6);
+      expect(field()).toHaveValue("abcdef");
     });
 
     it("ブラウザ標準の動作を止める。Ctrl+F・Cmd+Shift+F・テキスト編集中は、開かない", async () => {

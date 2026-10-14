@@ -39,6 +39,7 @@ import {
   nodeTextStyle,
   strokeWidthAt,
 } from "./domain/svgExport";
+import { documentOrder, revealNode, searchNodes } from "./domain/search";
 import { updateText } from "./domain/updateText";
 import {
   DEFAULT_VIEWPORT,
@@ -60,6 +61,7 @@ import { loadFile } from "./files/loadFile";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
 import NodeIcon from "./NodeIcon";
+import SearchBar from "./SearchBar";
 import ShortcutHelp from "./ShortcutHelp";
 import StylePanel from "./StylePanel";
 
@@ -147,6 +149,10 @@ export default function App() {
   const [message, setMessage] = useState<Message | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchIndex, setSearchIndex] = useState(0);
+  const [searchFocusToken, setSearchFocusToken] = useState(0);
   const dragRef = useRef<Drag | null>(null);
   /** ドラッグ中に、離すとつなぎ替えられるノード（強調表示する） */
   const [dropTarget, setDropTarget] = useState<{ id: NodeId; mode: "child" | "reorder" } | null>(null);
@@ -158,6 +164,10 @@ export default function App() {
   const mapRef = useRef(map);
   mapRef.current = map;
   const dirty = map !== savedMap;
+  // 検索: 一致するノード（検索バーを開いている間だけ）と、今の一致
+  const matches = useMemo(() => (searchOpen ? searchNodes(map, searchQuery) : []), [map, searchOpen, searchQuery]);
+  const matchSet = new Set(matches);
+  const currentMatch = matches[searchIndex];
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
@@ -457,6 +467,43 @@ export default function App() {
   const deleteSelected = (parentId: NodeId) =>
     commit({ map: deleteNode(map, selectedId), selectedId: parentId });
 
+  /** 検索の一致を、選択する。折りたたまれた枝の中なら、展開して見せる（変更があれば、1手の履歴） */
+  const goToMatch = (nodeId: NodeId) => {
+    const revealed = revealNode(map, nodeId);
+    if (revealed === map) select(nodeId);
+    else commit({ map: revealed, selectedId: nodeId });
+  };
+
+  /** 検索語が変わったら、今の選択以降の、最初の一致（なければ、先頭）を選ぶ */
+  const changeSearchQuery = (query: string) => {
+    setSearchQuery(query);
+    const found = searchNodes(map, query);
+    if (found.length === 0) {
+      setSearchIndex(0);
+      return;
+    }
+    const order = documentOrder(map);
+    const from = order.indexOf(selectedId);
+    const next = found.findIndex((id) => order.indexOf(id) >= from);
+    const index = next === -1 ? 0 : next;
+    setSearchIndex(index);
+    goToMatch(found[index]);
+  };
+
+  /** 次（1）または前（-1）の一致へ移動する。端では、反対側へ回り込む */
+  const moveSearch = (step: number) => {
+    if (matches.length === 0) return;
+    const index = (searchIndex + step + matches.length) % matches.length;
+    setSearchIndex(index);
+    goToMatch(matches[index]);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchIndex(0);
+  };
+
   /** スタイルパネルでのアイコンの変更を、1手の履歴として記録する（選び直しは、変更にならない） */
   const changeIcon = (icon: string | undefined) =>
     commit({ map: setNodeIcon(map, selectedId, icon), selectedId });
@@ -583,12 +630,22 @@ export default function App() {
           event.preventDefault();
           setHelpOpen((open) => !open);
           setStyleOpen(false);
+          setSearchOpen(false);
+          return;
+        }
+        if (key === "f" && !event.shiftKey) {
+          event.preventDefault();
+          setSearchOpen(true);
+          setSearchFocusToken((token) => token + 1);
+          setStyleOpen(false);
+          setHelpOpen(false);
           return;
         }
         if (key === "k" && !event.shiftKey) {
           event.preventDefault();
           setStyleOpen((open) => !open);
           setHelpOpen(false);
+          setSearchOpen(false);
           return;
         }
         if (key === "x") {
@@ -709,6 +766,8 @@ export default function App() {
               data-selected={selected}
               data-drop-target={dropTarget?.id === node.id}
               data-drop-mode={dropTarget?.id === node.id ? dropTarget.mode : undefined}
+              data-search-match={matchSet.has(node.id) ? "true" : undefined}
+              data-search-current={node.id === currentMatch ? "true" : undefined}
               onMouseDown={(event) => {
                 // 左ボタンで、中心ノード以外を押したときだけ、ドラッグの候補にする（入力欄の操作は除く）
                 if (event.button !== 0 || isRoot || event.target instanceof HTMLInputElement) return;
@@ -824,6 +883,18 @@ export default function App() {
         {filePath === undefined ? "無題" : (filePath.split("/").pop() as string)}
         {dirty && " ● 未保存"}
       </div>
+      {searchOpen && (
+        <SearchBar
+          query={searchQuery}
+          onQueryChange={changeSearchQuery}
+          matchCount={matches.length}
+          currentIndex={searchIndex}
+          onNext={() => moveSearch(1)}
+          onPrevious={() => moveSearch(-1)}
+          onClose={closeSearch}
+          focusToken={searchFocusToken}
+        />
+      )}
       {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
       {styleOpen && (
         <StylePanel
