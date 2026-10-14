@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addChild } from "../domain/addChild";
 import { createMindMap } from "../domain/mindmap";
+import type { MindMap } from "../domain/mindmap";
 import { serialize } from "../domain/serialize";
 import { loadFile, loadFileAt } from "./loadFile";
 
@@ -11,6 +12,17 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 
 const mockedOpen = vi.mocked(open);
 const mockedInvoke = vi.mocked(invoke);
+
+/** ノードのテキストを、深さ優先で、(深さ, テキスト) にする */
+function shape(map: MindMap): [number, string][] {
+  const result: [number, string][] = [];
+  const walk = (id: string, depth: number) => {
+    result.push([depth, map.nodes[id].text]);
+    map.nodes[id].childIds.forEach((child) => walk(child, depth + 1));
+  };
+  walk(map.rootId, 0);
+  return result;
+}
 
 function sampleMap() {
   const base = createMindMap("アイデア");
@@ -31,7 +43,10 @@ describe("loadFile（JSON読み込み / Cmd+O）", () => {
       title: "マインドマップを開く",
       multiple: false,
       directory: false,
-      filters: [{ name: "IdeaTree", extensions: ["ideatree", "json"] }],
+      filters: [
+        { name: "IdeaTree", extensions: ["ideatree", "json"] },
+        { name: "アウトライン（Markdown・テキスト）", extensions: ["md", "markdown", "txt"] },
+      ],
     });
   });
 
@@ -92,6 +107,45 @@ describe("loadFile（JSON読み込み / Cmd+O）", () => {
 
       await expect(loadFile()).rejects.toThrow("読み込みに失敗しました: 子ノードが存在しません: ghost");
     });
+  });
+});
+
+describe("loadFileAt: アウトライン（.md・.txt）の取り込み", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it.each([["/Users/me/outline.md"], ["/Users/me/OUTLINE.TXT"], ["/Users/me/a.markdown"]])(
+    "%s は、アウトラインとして読み、取り込みの印（imported）を付けて返す",
+    async (path) => {
+      mockedInvoke.mockResolvedValue("# 計画\n- A\n  - A1\n- B\n");
+
+      const result = await loadFileAt(path);
+
+      expect(mockedInvoke).toHaveBeenCalledWith("load_file", { path });
+      expect(result.imported).toBe(true);
+      expect(result.path).toBe(path);
+      expect(shape(result.map)).toEqual([
+        [0, "計画"],
+        [1, "A"],
+        [2, "A1"],
+        [1, "B"],
+      ]);
+    },
+  );
+
+  it("アウトラインが読めなければ、理由を含むエラーにする", async () => {
+    mockedInvoke.mockResolvedValue("  \n");
+
+    await expect(loadFileAt("/Users/me/empty.md")).rejects.toThrow(
+      "読み込みに失敗しました: アウトラインにテキストがありません",
+    );
+  });
+
+  it("IdeaTree の形式のファイルには、取り込みの印を付けない", async () => {
+    mockedInvoke.mockResolvedValue(serialize(sampleMap()));
+
+    expect((await loadFileAt("/Users/me/map.ideatree")).imported).toBeUndefined();
   });
 });
 

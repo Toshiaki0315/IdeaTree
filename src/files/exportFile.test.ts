@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addChild } from "../domain/addChild";
 import { layout } from "../domain/layout";
 import { createMindMap } from "../domain/mindmap";
+import { toOutline } from "../domain/outline";
 import { exportSvg } from "../domain/svgExport";
 import { exportFile } from "./exportFile";
 import { rasterizeSvg } from "./rasterize";
@@ -36,7 +37,7 @@ describe("exportFile（SVG・PNG・PDF での書き出し / Cmd+Shift+E）", () 
     mockedInvoke.mockResolvedValue(undefined);
   });
 
-  it("SVG・PNG・PDF のフィルタと、既定のファイル名を指定して、保存ダイアログを開く", async () => {
+  it("SVG・PNG・PDF・アウトラインのフィルタと、既定のファイル名を指定して、保存ダイアログを開く", async () => {
     mockedSave.mockResolvedValue(null);
 
     await exportFile(sampleMap());
@@ -48,6 +49,7 @@ describe("exportFile（SVG・PNG・PDF での書き出し / Cmd+Shift+E）", () 
         { name: "SVG（ベクター画像）", extensions: ["svg"] },
         { name: "PNG（画像）", extensions: ["png"] },
         { name: "PDF", extensions: ["pdf"] },
+        { name: "アウトライン（Markdown・テキスト）", extensions: ["md", "txt"] },
       ],
     });
   });
@@ -79,12 +81,28 @@ describe("exportFile（SVG・PNG・PDF での書き出し / Cmd+Shift+E）", () 
       mockedSave.mockResolvedValueOnce("/Users/me/map");
       expect(await exportFile(sampleMap())).toBe("/Users/me/map.svg");
 
-      mockedSave.mockResolvedValueOnce("/Users/me/map.txt");
-      expect(await exportFile(sampleMap())).toBe("/Users/me/map.txt.svg");
+      mockedSave.mockResolvedValueOnce("/Users/me/map.docx");
+      expect(await exportFile(sampleMap())).toBe("/Users/me/map.docx.svg");
 
       mockedSave.mockResolvedValueOnce("/Users/me/MAP.SVG");
       expect(await exportFile(sampleMap())).toBe("/Users/me/MAP.SVG");
     });
+  });
+
+  describe("アウトライン", () => {
+    it.each([["/Users/me/map.md"], ["/Users/me/MAP.TXT"]])(
+      "%s なら、Markdown のアウトラインを、テキストとして書き込む",
+      async (path) => {
+        const map = sampleMap();
+        mockedSave.mockResolvedValue(path);
+
+        const result = await exportFile(map);
+
+        expect(mockedInvoke).toHaveBeenCalledWith("save_file", { path, contents: toOutline(map) });
+        expect(result).toBe(path);
+        expect(mockedRasterize).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("PNG", () => {
