@@ -26,7 +26,7 @@ export async function loadFile(): Promise<{ map: MindMap; path: string } | null>
     title: "マインドマップを開く",
     multiple: false,
     directory: false,
-    filters: [{ name: "IdeaTree (JSON)", extensions: ["json"] }],
+    filters: [{ name: "IdeaTree", extensions: ["ideatree", "json"] }],
   });
   if (path === null) return null;
   return loadFileAt(path);

@@ -3,7 +3,9 @@ import { save } from "@tauri-apps/plugin-dialog";
 import type { MindMap } from "../domain/mindmap";
 import { serialize } from "../domain/serialize";
 
-const EXTENSION = ".json";
+/** 保存するファイルの拡張子（どちらも、中身は同じ JSON）。IdeaTree の標準は .ideatree */
+const EXTENSIONS = [".ideatree", ".json"];
+const DEFAULT_EXTENSION = ".ideatree";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -19,11 +21,13 @@ export async function saveFile(map: MindMap, existingPath?: string): Promise<str
   if (path === undefined) {
     const chosen = await save({
       title: "マインドマップを保存",
-      defaultPath: "IdeaTree.json",
-      filters: [{ name: "IdeaTree (JSON)", extensions: ["json"] }],
+      defaultPath: "IdeaTree.ideatree",
+      filters: [{ name: "IdeaTree", extensions: ["ideatree", "json"] }],
     });
     if (chosen === null) return null;
-    path = chosen.toLowerCase().endsWith(EXTENSION) ? chosen : chosen + EXTENSION;
+    path = EXTENSIONS.some((extension) => chosen.toLowerCase().endsWith(extension))
+      ? chosen
+      : chosen + DEFAULT_EXTENSION;
   }
 
   try {
