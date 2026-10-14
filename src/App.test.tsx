@@ -4974,4 +4974,42 @@ describe("App（マインドマップ編集UI）", () => {
       expect(nodes(container).length).toBe(before);
     });
   });
+
+  describe("保存後の状態（キー操作が、古い状態を見ない）", () => {
+    it("同じファイルに上書き保存した直後は、Cmd+O で、破棄の確認を出さない", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/a.ideatree");
+      mockedLoadFile.mockResolvedValue(null);
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}x{Enter}");
+      fireEvent.keyDown(window, { key: "s", metaKey: true }); // 1回目: 保存先が決まる
+      await waitFor(() => expect(mockedSaveFile).toHaveBeenCalledTimes(1));
+      await user.keyboard("{Tab}y{Enter}");
+      fireEvent.keyDown(window, { key: "s", metaKey: true }); // 2回目: 同じパスへ上書き
+      await waitFor(() => expect(mockedSaveFile).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(document.querySelector(".doc-state")?.textContent).toBe("a.ideatree"));
+
+      fireEvent.keyDown(window, { key: "o", metaKey: true });
+
+      await waitFor(() => expect(mockedLoadFile).toHaveBeenCalledTimes(1));
+      expect(mockedConfirmDiscard).not.toHaveBeenCalled();
+    });
+
+    it("上書き保存のあとで、さらに編集すると、Cmd+O で、破棄の確認を出す", async () => {
+      mockedSaveFile.mockResolvedValue("/Users/me/a.ideatree");
+      mockedLoadFile.mockResolvedValue(null);
+      mockedConfirmDiscard.mockResolvedValue(false);
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}x{Enter}");
+      fireEvent.keyDown(window, { key: "s", metaKey: true });
+      await waitFor(() => expect(mockedSaveFile).toHaveBeenCalledTimes(1));
+      await user.keyboard("{Tab}y{Enter}");
+
+      fireEvent.keyDown(window, { key: "o", metaKey: true });
+
+      await waitFor(() => expect(mockedConfirmDiscard).toHaveBeenCalledTimes(1));
+      expect(mockedLoadFile).not.toHaveBeenCalled();
+    });
+  });
 });
