@@ -10,14 +10,7 @@ export function searchNodes(map: MindMap, query: string): NodeId[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return [];
 
-  const found: NodeId[] = [];
-  const walk = (id: NodeId) => {
-    const node = map.nodes[id];
-    if (node.text.toLowerCase().includes(needle)) found.push(id);
-    node.childIds.forEach(walk);
-  };
-  walk(map.rootId);
-  return found;
+  return documentOrder(map).filter((id) => map.nodes[id].text.toLowerCase().includes(needle));
 }
 
 /**
@@ -37,6 +30,13 @@ export function revealNode(map: MindMap, nodeId: NodeId): MindMap {
   return revealed;
 }
 
-export function documentOrder(_map: MindMap): NodeId[] {
-  throw new Error("未実装");
+/** 中心ノードから、子の順に、深さ優先で、全ノード（折りたたまれた子孫も含む）を並べた順序 */
+export function documentOrder(map: MindMap): NodeId[] {
+  const order: NodeId[] = [];
+  const walk = (id: NodeId) => {
+    order.push(id);
+    map.nodes[id].childIds.forEach(walk);
+  };
+  walk(map.rootId);
+  return order;
 }
