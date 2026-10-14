@@ -41,6 +41,7 @@ import { confirmDiscard } from "./files/confirmDiscard";
 import { errorMessage } from "./files/errorMessage";
 import { exportFile } from "./files/exportFile";
 import { loadFile, loadFileAt } from "./files/loadFile";
+import type { LoadedDocument } from "./files/loadFile";
 import { onOpenFileRequest, takePendingOpenFiles } from "./files/openRequests";
 import { pickImage } from "./files/pickImage";
 import { saveFile } from "./files/saveFile";
@@ -371,13 +372,23 @@ export default function App() {
       if (loaded !== null) showLoaded(loaded);
     });
 
-  /** 読み込んだ文書を表示する */
-  const showLoaded = (loaded: { map: MindMap; path: string }) => {
+  /**
+   * 読み込んだ文書を表示する。アウトラインの取り込みは、保存先のない、未保存の文書として開く
+   * （保存するときは、保存先を尋ねる。取り込み元のファイルを、上書きしない）。
+   */
+  const showLoaded = (loaded: LoadedDocument) => {
     // 別の文書を開くので、元に戻す履歴も新しくする
     setHistory(createHistory({ map: loaded.map, selectedId: loaded.map.rootId }));
+    setViewport(DEFAULT_VIEWPORT);
+    if (loaded.imported) {
+      setFilePath(undefined);
+      // 保存済みのマップは、取り込んだものとは別のマップにして、未保存の変更がある状態にする
+      setSavedMap(createMindMap(""));
+      setMessage({ kind: "status", text: `取り込みました: ${loaded.path}` });
+      return;
+    }
     setFilePath(loaded.path);
     setSavedMap(loaded.map);
-    setViewport(DEFAULT_VIEWPORT);
     recent.remember(loaded.path);
     setMessage({ kind: "status", text: `開きました: ${loaded.path}` });
   };

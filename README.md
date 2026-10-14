@@ -36,9 +36,9 @@ https://github.com/Toshiaki0315/IdeaTree.git
 | `Cmd + Shift + I` | 画像を選んで、選択ノードに設定（中心ノードなら、セントラルイメージ） |
 | `Cmd + S` | 保存（保存先が決まっていれば上書き） |
 | `Cmd + Shift + S` | 名前を付けて保存 |
-| `Cmd + O` | ファイルを開く |
+| `Cmd + O` | ファイルを開く（`.ideatree` / `.json`。`.md` / `.txt` のアウトラインは、取り込み） |
 | `Cmd + Shift + O` | 最近使ったファイルから開く |
-| `Cmd + Shift + E` | 書き出し（SVG・PNG・PDF。拡張子で形式を選ぶ） |
+| `Cmd + Shift + E` | 書き出し（SVG・PNG・PDF・Markdown アウトライン。拡張子で形式を選ぶ） |
 | `Cmd + =` / `Cmd + -` / `Cmd + 0` | 拡大 / 縮小 / 元に戻す（ホイール・ドラッグでパン） |
 | `Cmd + Shift + 0` | 全体表示（マップ全体が収まるよう、表示を合わせる） |
 | `Cmd + F` | ノードを検索（`Enter` で次の一致へ） |
