@@ -1,3 +1,4 @@
+mod autosave;
 mod file_io;
 mod image_io;
 
