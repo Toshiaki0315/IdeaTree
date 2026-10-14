@@ -9,6 +9,7 @@ import { copyNode } from "./domain/copyNode";
 import { hitAreaSize } from "./domain/hitArea";
 import { SHORTCUT_GROUPS } from "./domain/shortcuts";
 import { createMindMap } from "./domain/mindmap";
+import type { MindMap } from "./domain/mindmap";
 import { ICON_PRESETS, setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeStyle } from "./domain/nodeStyle";
@@ -4349,6 +4350,47 @@ describe("App（マインドマップ編集UI）", () => {
 
         expect(screen.queryByRole("alert")).not.toBeInTheDocument();
         expect(screen.getByText("中心テーマ")).toBeInTheDocument();
+        expect(mockedClearAutosave).not.toHaveBeenCalled();
+      });
+
+      it("「破棄する」を選んだあと、削除に失敗しても、エラーにせず、起動して自動保存も使える", async () => {
+        mockedReadAutosave.mockResolvedValue({ map: savedMap(), filePath: undefined, savedAt: SAVED_AT });
+        mockedConfirmRestore.mockResolvedValue(false);
+        mockedClearAutosave.mockRejectedValue(new Error("自動保存を削除できません: x"));
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await waitFor(() => expect(mockedClearAutosave).toHaveBeenCalledTimes(1));
+        await addChildNamed(user, "追加");
+
+        await advance(2100);
+
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(mockedWriteAutosave).toHaveBeenCalledTimes(1);
+      });
+
+      it("自動保存を読み込んでいる途中で、画面が閉じられたら、確認を出さない", async () => {
+        let finish: (value: null | { map: MindMap; filePath: undefined; savedAt: Date }) => void = () => {};
+        mockedReadAutosave.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+        const { unmount } = render(<App />);
+        await waitFor(() => expect(mockedReadAutosave).toHaveBeenCalled());
+        unmount();
+
+        await act(async () => finish({ map: savedMap(), filePath: undefined, savedAt: SAVED_AT }));
+
+        expect(mockedConfirmRestore).not.toHaveBeenCalled();
+      });
+
+      it("確認が失敗したときは、この回は自動保存せず、残っている内容も上書きしない", async () => {
+        mockedReadAutosave.mockResolvedValue({ map: savedMap(), filePath: undefined, savedAt: SAVED_AT });
+        mockedConfirmRestore.mockRejectedValue(new Error("ダイアログを開けません"));
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        render(<App />);
+        await waitFor(() => expect(mockedConfirmRestore).toHaveBeenCalled());
+        await addChildNamed(user, "追加");
+
+        await advance(5000);
+
+        expect(mockedWriteAutosave).not.toHaveBeenCalled();
         expect(mockedClearAutosave).not.toHaveBeenCalled();
       });
 
