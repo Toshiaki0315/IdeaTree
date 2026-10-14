@@ -3,7 +3,7 @@ import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
 import { toggleCollapse } from "./collapse";
 import { createMindMap } from "./mindmap";
-import { revealNode, searchNodes } from "./search";
+import { documentOrder, revealNode, searchNodes } from "./search";
 import { updateText } from "./updateText";
 
 /** 中心「Root」─ a「Apple」(a1「apple pie」(a11「Pineapple」), a2「banana」) / b「Berry」 の木 */
@@ -133,3 +133,21 @@ describe("revealNode（ノードが見えるよう、折りたたまれた祖先
     expect(folded).toEqual(before);
   });
 });
+
+describe("documentOrder（ノードを、深さ優先で並べた順序）", () => {
+  it("中心ノードから、子の順に、深さ優先で、全ノードを並べる（折りたたまれたノードの子孫も含む）", () => {
+    const { map, ids } = buildMap();
+
+    expect(documentOrder(map)).toEqual([ids.root, ids.a, ids.a1, ids.a11, ids.a2, ids.b]);
+    expect(documentOrder(toggleCollapse(map, ids.a))).toEqual(documentOrder(map));
+  });
+
+  it("検索の結果は、この順序に従う", () => {
+    const { map } = buildMap();
+    const order = documentOrder(map);
+    const found = searchNodes(map, "a");
+
+    expect(found).toEqual(order.filter((id) => found.includes(id)));
+  });
+});
+

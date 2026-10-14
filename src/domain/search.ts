@@ -36,3 +36,7 @@ export function revealNode(map: MindMap, nodeId: NodeId): MindMap {
   }
   return revealed;
 }
+
+export function documentOrder(_map: MindMap): NodeId[] {
+  throw new Error("未実装");
+}
