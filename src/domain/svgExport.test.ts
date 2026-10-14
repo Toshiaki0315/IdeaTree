@@ -514,59 +514,98 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
   });
 
   describe("ノードのアイコンへの対応", () => {
-    const star = ICON_PRESETS[0].value;
-    const heart = ICON_PRESETS[8].value;
+    const star = ICON_PRESETS[0];
+    const heart = ICON_PRESETS[8];
     const icon = (map: MindMap, id: NodeId) =>
-      parse(exportSvg(map)).querySelector(`text[data-icon-for="${id}"]`);
+      parse(exportSvg(map)).querySelector(`g[data-icon-for="${id}"]`);
+    /** アイコンの位置と大きさ（transform="translate(x y) scale(k)" から、24×24 の絵の左上と、1辺の長さ） */
+    function placement(el: Element) {
+      const m = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/.exec(el.getAttribute("transform")!)!;
+      const [x, y, k] = [Number(m[1]), Number(m[2]), Number(m[3])];
+      return { x, y, size: k * 24 };
+    }
 
-    it("アイコンのないノードには、アイコンの要素を出力しない", () => {
+    it("アイコンのないノードには、アイコンの図形を出力しない", () => {
       const { map } = buildMap();
 
-      expect(parse(exportSvg(map)).querySelectorAll("text[data-icon-for]")).toHaveLength(0);
+      expect(parse(exportSvg(map)).querySelectorAll("[data-icon-for]")).toHaveLength(0);
     });
 
-    it("ブランチのアイコンは、ラベルの左側に、同じ高さで、文字の幅を空けて描かれる", () => {
+    it("アイコンは、文字ではなく、オリジナルの図形（パス）として描かれ、識別子を持つ", () => {
       const { map, ids } = buildMap();
-      const withIcon = setNodeIcon(map, ids.a1, star);
-      const doc = parse(exportSvg(withIcon));
+      const el = icon(setNodeIcon(map, ids.a1, star.value), ids.a1)!;
 
-      const el = doc.querySelector(`text[data-icon-for="${ids.a1}"]`)!;
+      expect(el.localName).toBe("g");
+      expect(el.getAttribute("data-icon")).toBe(star.value);
+      expect(el.textContent).toBe("");
+      const paths = [...el.querySelectorAll("path")];
+      expect(paths.map((p) => p.getAttribute("d"))).toEqual(star.shapes.map((sh) => sh.d));
+      expect(paths[0].getAttribute("fill")).toBe(star.shapes[0].fill);
+      expect(paths[0].getAttribute("stroke")).toBe(star.shapes[0].stroke);
+      expect(paths[0].getAttribute("stroke-linecap")).toBe("round");
+      expect(paths[0].getAttribute("stroke-linejoin")).toBe("round");
+    });
+
+    it("すべてのアイコンが、それぞれの図形の数だけ、パスとして出力される", () => {
+      const { map, ids } = buildMap();
+
+      for (const preset of ICON_PRESETS) {
+        const el = icon(setNodeIcon(map, ids.a1, preset.value), ids.a1)!;
+        expect(el.querySelectorAll("path"), preset.name).toHaveLength(preset.shapes.length);
+      }
+    });
+
+    it("塗りや線を指定していない図形は、塗りなし・線なしになる（意図しない黒にならない）", () => {
+      const { map, ids } = buildMap();
+      const target = ICON_PRESETS.find((p) => p.value === "target")!; // 線の指定がない
+      const check = ICON_PRESETS.find((p) => p.value === "check")!; // 塗りの指定がない図形がある
+
+      const targetPaths = [...icon(setNodeIcon(map, ids.a1, target.value), ids.a1)!.querySelectorAll("path")];
+      const checkPaths = [...icon(setNodeIcon(map, ids.a1, check.value), ids.a1)!.querySelectorAll("path")];
+
+      expect(targetPaths.every((p) => p.getAttribute("stroke") === "none")).toBe(true);
+      expect(checkPaths[1].getAttribute("fill")).toBe("none");
+    });
+
+    it("ブランチのアイコンは、ラベルの左側に、ラベルと同じ高さの中心で、文字の幅を空けて描かれる", () => {
+      const { map, ids } = buildMap();
+      const doc = parse(exportSvg(setNodeIcon(map, ids.a1, star.value)));
+
+      const box = placement(doc.querySelector(`g[data-icon-for="${ids.a1}"]`)!);
       const label = byNodeId(doc, "text", ids.a1);
-      const labelWidth = estimateTextWidth("調査", Number(label.getAttribute("font-size")));
-      expect(el.textContent).toBe(star);
-      expect(el.getAttribute("text-anchor")).toBe("end");
-      expect(Number(el.getAttribute("y"))).toBeCloseTo(Number(label.getAttribute("y")), 1);
-      expect(Number(el.getAttribute("x"))).toBeCloseTo(Number(label.getAttribute("x")) - labelWidth / 2 - 6, 1);
-      expect(Number(el.getAttribute("font-size"))).toBeGreaterThanOrEqual(Number(label.getAttribute("font-size")));
+      const fontSize = Number(label.getAttribute("font-size"));
+      const labelWidth = estimateTextWidth("調査", fontSize);
+      expect(box.size).toBeCloseTo(fontSize * 1.1);
+      expect(box.x + box.size).toBeCloseTo(Number(label.getAttribute("x")) - labelWidth / 2 - 6, 1);
+      expect(box.y + box.size / 2).toBeCloseTo(Number(label.getAttribute("y")), 1);
     });
 
     it("ラベルのテキストは、アイコンがあっても変わらない", () => {
       const { map, ids } = buildMap();
-      const doc = parse(exportSvg(setNodeIcon(map, ids.a1, star)));
+      const doc = parse(exportSvg(setNodeIcon(map, ids.a1, star.value)));
 
       expect(byNodeId(doc, "text", ids.a1).textContent).toBe("調査");
     });
 
-    it("文字が大きいほど、アイコンは、より左に離れて描かれる", () => {
+    it("文字が大きいほど、アイコンは、大きく、より左に離れて描かれる", () => {
       const { map, ids } = buildMap();
-      const small = setNodeIcon(map, ids.a1, star);
+      const small = setNodeIcon(map, ids.a1, star.value);
       const big = setNodeStyle(small, ids.a1, { fontSize: 60 });
 
-      expect(Number(icon(big, ids.a1)!.getAttribute("x"))).toBeLessThan(
-        Number(icon(small, ids.a1)!.getAttribute("x")),
-      );
+      const [a, b] = [placement(icon(small, ids.a1)!), placement(icon(big, ids.a1)!)];
+
+      expect(b.size).toBeGreaterThan(a.size);
+      expect(b.x).toBeLessThan(a.x);
     });
 
     it("中心ノードのアイコンは、楕円の上に、中央揃えで描かれる", () => {
       const { map, ids } = buildMap();
-      const doc = parse(exportSvg(setNodeIcon(map, ids.root, heart)));
+      const doc = parse(exportSvg(setNodeIcon(map, ids.root, heart.value)));
 
-      const el = doc.querySelector(`text[data-icon-for="${ids.root}"]`)!;
+      const box = placement(doc.querySelector(`g[data-icon-for="${ids.root}"]`)!);
       const ellipse = byNodeId(doc, "ellipse", ids.root);
-      expect(el.textContent).toBe(heart);
-      expect(el.getAttribute("text-anchor")).toBe("middle");
-      expect(Number(el.getAttribute("x"))).toBeCloseTo(Number(ellipse.getAttribute("cx")));
-      expect(Number(el.getAttribute("y"))).toBeLessThan(
+      expect(box.x + box.size / 2).toBeCloseTo(Number(ellipse.getAttribute("cx")));
+      expect(box.y + box.size).toBeLessThanOrEqual(
         Number(ellipse.getAttribute("cy")) - Number(ellipse.getAttribute("ry")),
       );
     });
@@ -575,33 +614,33 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
       const { map, ids } = buildMap();
       const png =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
-      const doc = parse(exportSvg(setNodeIcon(setNodeImage(map, ids.root, png), ids.root, star)));
+      const doc = parse(exportSvg(setNodeIcon(setNodeImage(map, ids.root, png), ids.root, star.value)));
 
-      const el = doc.querySelector(`text[data-icon-for="${ids.root}"]`)!;
+      const box = placement(doc.querySelector(`g[data-icon-for="${ids.root}"]`)!);
       const image = doc.querySelector(`image[data-node-id="${ids.root}"]`)!;
-      expect(Number(el.getAttribute("y"))).toBeLessThan(Number(image.getAttribute("y")));
+      expect(box.y + box.size).toBeLessThanOrEqual(Number(image.getAttribute("y")));
     });
 
     it("折りたたまれて見えないノードのアイコンは、出力しない", () => {
       const { map, ids } = buildMap();
-      const hidden = toggleCollapse(setNodeIcon(map, ids.a1, star), ids.a);
+      const hidden = toggleCollapse(setNodeIcon(map, ids.a1, star.value), ids.a);
 
       expect(icon(hidden, ids.a1)).toBeNull();
     });
 
-    it("アイコンは、枝の上に、他のテキストと同じ層に描かれる（枝に隠れない）", () => {
+    it("アイコンは、枝より上の層に描かれる（枝に隠れない）", () => {
       const { map, ids } = buildMap();
-      const names = [
-        ...parse(exportSvg(setNodeIcon(map, ids.a, star))).documentElement.querySelectorAll("path, text"),
-      ].map((e) => e.localName);
+      const top = [...parse(exportSvg(setNodeIcon(map, ids.a, star.value))).documentElement.children].map(
+        (e) => e.localName,
+      );
 
-      expect(names.lastIndexOf("path")).toBeLessThan(names.indexOf("text"));
+      expect(top.indexOf("g")).toBeGreaterThan(top.lastIndexOf("path"));
     });
 
     it("アイコンを外すと、出力されなくなる", () => {
       const { map, ids } = buildMap();
 
-      expect(icon(setNodeIcon(setNodeIcon(map, ids.a, star), ids.a, undefined), ids.a)).toBeNull();
+      expect(icon(setNodeIcon(setNodeIcon(map, ids.a, star.value), ids.a, undefined), ids.a)).toBeNull();
     });
   });
 
