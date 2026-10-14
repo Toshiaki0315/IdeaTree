@@ -2,7 +2,7 @@
 
 IdeaTree の、バージョンごとの変更点です（新しいものが上）。バージョンは `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` で、そろえています。
 
-## 未リリース
+## 0.6.5
 
 ### 内部の整理
 - `App.tsx` から、ズーム・パン（`useViewport`）と、ノードのドラッグ移動（`useNodeDrag`）を切り出しました（1030 行 → 656 行）。
