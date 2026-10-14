@@ -21,7 +21,9 @@ pub fn run() {
             autosave::write_autosave,
             autosave::read_autosave,
             autosave::clear_autosave,
-            open_file::take_pending_open_files
+            open_file::take_pending_open_files,
+            recent::write_recent_files,
+            recent::read_recent_files
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
