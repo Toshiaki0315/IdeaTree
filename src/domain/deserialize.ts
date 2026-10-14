@@ -21,8 +21,8 @@ function isNode(key: string, value: unknown): value is MindMapNode {
     Array.isArray(childIds) &&
     childIds.every((childId) => typeof childId === "string") &&
     isRecord(position) &&
-    typeof position.x === "number" &&
-    typeof position.y === "number" &&
+    Number.isFinite(position.x) &&
+    Number.isFinite(position.y) &&
     (collapsed === undefined || typeof collapsed === "boolean") &&
     (style === undefined || isNodeStyle(style)) &&
     (branchColor === undefined || isColor(branchColor)) &&
@@ -31,8 +31,13 @@ function isNode(key: string, value: unknown): value is MindMapNode {
   );
 }
 
+export interface DeserializeOptions {
+  /** コピーしたサブツリーを読むとき true。ルートは、中心ノードでなくてもよい（ブランチでもよい） */
+  subtree?: boolean;
+}
+
 /** JSON文字列からマインドマップを復元する。不正なデータはエラーにする */
-export function deserialize(json: string): MindMap {
+export function deserialize(json: string, options: DeserializeOptions = {}): MindMap {
   let data: unknown;
   try {
     data = JSON.parse(json);
@@ -64,6 +69,15 @@ export function deserialize(json: string): MindMap {
   if (root.parentId !== null) throw new Error("ルートノードに親があります");
 
   for (const node of Object.values(map.nodes)) {
+    // 中心ノード（central）は、ルートだけ。ファイルのルートは、必ず中心ノード
+    const isRoot = node.id === rootId;
+    if ((node.kind === "central" && !isRoot) || (isRoot && !options.subtree && node.kind !== "central")) {
+      throw new Error(`ノードの種類が不整合です: ${node.id}`);
+    }
+    if (new Set(node.childIds).size !== node.childIds.length) {
+      const duplicated = node.childIds.find((id, i) => node.childIds.indexOf(id) !== i);
+      throw new Error(`子ノードが重複しています: ${duplicated}`);
+    }
     for (const childId of node.childIds) {
       const child = map.nodes[childId];
       if (!child) throw new Error(`子ノードが存在しません: ${childId}`);

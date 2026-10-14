@@ -195,6 +195,24 @@ describe("deserialize（JSON読み込み）", () => {
     });
   });
 
+  describe("subtree オプション（コピーしたサブツリー）", () => {
+    it("ルートがブランチでも読める（ファイルとしては、ルートは中心ノードが必要）", () => {
+      const { data, ids } = validData();
+      data.nodes[ids.root].kind = "branch";
+
+      expect(deserialize(JSON.stringify(data), { subtree: true }).rootId).toBe(ids.root);
+    });
+
+    it("ルート以外が中心ノードなら、サブツリーでも、エラーになる", () => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].kind = "central";
+
+      expect(() => deserialize(JSON.stringify(data), { subtree: true })).toThrow(
+        `ノードの種類が不整合です: ${ids.a}`,
+      );
+    });
+  });
+
   it.each([["1e999"], ["-1e999"]])("座標が有限の数でなければ（%s）エラーになる", (huge) => {
     const { data, ids } = validData();
     const json = JSON.stringify(data).replace(

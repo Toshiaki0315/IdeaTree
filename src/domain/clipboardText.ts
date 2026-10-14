@@ -27,7 +27,7 @@ export function subtreeToText(subtree: Subtree): string {
 function parseSubtree(text: string): Subtree | null {
   try {
     if (JSON.parse(text).type !== SUBTREE_TYPE) return null;
-    return deserialize(text);
+    return deserialize(text, { subtree: true });
   } catch {
     return null;
   }
