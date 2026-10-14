@@ -575,3 +575,39 @@ describe("deserialize（relations: 関連線）", () => {
     expect(() => deserialize(JSON.stringify(data))).toThrow("関連線が重複しています");
   });
 });
+
+describe("deserialize（offset: 手動配置のずれ）", () => {
+  it("ずれを、保存して読み込んでも保てる（往復）", () => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].offset = { x: 12.5, y: -3 };
+
+    expect(deserialize(JSON.stringify(data)).nodes[ids.a].offset).toEqual({ x: 12.5, y: -3 });
+  });
+
+  it("offset がないノード（従来のファイル）も、読み込める", () => {
+    const { data, ids } = validData();
+
+    expect(deserialize(JSON.stringify(data)).nodes[ids.a].offset).toBeUndefined();
+  });
+
+  it.each([
+    ["null", null],
+    ["配列", []],
+    ["x がない", { y: 1 }],
+    ["文字列の座標", { x: "1", y: 2 }],
+    ["有限でない座標", { x: 1e999, y: 0 }],
+  ])("不正な offset（%s）はエラーになる", (_name, value) => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].offset = value;
+    const json = JSON.stringify(data).replace('"x":null', '"x":1e999');
+
+    expect(() => deserialize(json)).toThrow(`ノードの形式が不正です: ${ids.a}`);
+  });
+
+  it("中心ノードの offset は、エラーになる（中心は、動かせない）", () => {
+    const { data, ids } = validData();
+    data.nodes[ids.root].offset = { x: 1, y: 1 };
+
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.root}`);
+  });
+});
