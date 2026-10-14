@@ -4915,4 +4915,63 @@ describe("App（マインドマップ編集UI）", () => {
       expect(height()).toBeGreaterThan(one);
     });
   });
+
+  describe("日本語入力（IME）の変換中のキー", () => {
+    const area = () => screen.getByRole("textbox", { name: "ノードのテキスト" }) as HTMLTextAreaElement;
+
+    async function startEditing(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}きかく");
+      return view;
+    }
+
+    it("変換中の Enter は、変換の確定だけで、ノードは確定しない。次の Enter で確定する", async () => {
+      const user = userEvent.setup();
+      const { container } = await startEditing(user);
+
+      fireEvent.keyDown(area(), { key: "Enter", isComposing: true });
+      expect(area()).toBeInTheDocument();
+
+      await user.keyboard("{Enter}");
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(selectedText(container)).toBe("きかく");
+    });
+
+    it("変換の確定直後の Enter（keyCode 229）も、ノードは確定しない", async () => {
+      const user = userEvent.setup();
+      await startEditing(user);
+
+      fireEvent.keyDown(area(), { key: "Enter", keyCode: 229 });
+
+      expect(area()).toBeInTheDocument();
+    });
+
+    it("変換中の Escape は、変換の取り消しだけで、編集は取り消さない", async () => {
+      const user = userEvent.setup();
+      await startEditing(user);
+
+      fireEvent.keyDown(area(), { key: "Escape", isComposing: true });
+
+      expect(area()).toBeInTheDocument();
+    });
+
+    it("変換中の Shift + Enter も、ノードは確定しない（変換の確定だけ）", async () => {
+      const user = userEvent.setup();
+      await startEditing(user);
+
+      fireEvent.keyDown(area(), { key: "Enter", shiftKey: true, isComposing: true });
+
+      expect(area()).toBeInTheDocument();
+    });
+
+    it("変換中のキーは、ノード操作のショートカットに渡さない", async () => {
+      const user = userEvent.setup();
+      const { container } = await startEditing(user);
+      const before = nodes(container).length;
+
+      fireEvent.keyDown(area(), { key: "Tab", isComposing: true });
+
+      expect(nodes(container).length).toBe(before);
+    });
+  });
 });
