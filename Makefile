@@ -1,6 +1,6 @@
 # IdeaTree の開発コマンド入口（OboeGaki と同じ流儀）。`make help` で一覧が出る。
 
-.PHONY: help setup dev test test-cov test-rust check app dmg
+.PHONY: help setup dev test test-cov test-rust check app dmg icon
 
 help:             ## コマンドの一覧
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | sed -E 's/:[^#]*## /\t/' | sort
@@ -40,3 +40,10 @@ dmg:              ## インストール用の DMG を作る（.app も一緒に�
 	npm run tauri build
 	@echo "DMG: src-tauri/target/release/bundle/dmg/"
 	@echo "※ 署名・公証はまだ（Apple Developer アカウント取得後）"
+
+icon:             ## アプリのアイコンを描き直して全サイズを作る（scripts/make_icon.swift）
+	swift scripts/make_icon.swift src-tauri/icons/icon-source.png
+	npx tauri icon src-tauri/icons/icon-source.png -o src-tauri/icons
+	@# macOS 専用のアプリなので、モバイル用のアイコンは要らない
+	rm -rf src-tauri/icons/android src-tauri/icons/ios
+

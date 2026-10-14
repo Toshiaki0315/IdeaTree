@@ -63,6 +63,7 @@ make test-rust  # バックエンド（Rust）のテスト
 make check      # コミット前チェック（型 + テスト + clippy）
 make app        # アプリ（.app）を組む → src-tauri/target/release/bundle/macos/IdeaTree.app
 make dmg        # インストール用の DMG を作る → src-tauri/target/release/bundle/dmg/
+make icon       # アプリのアイコンを描き直して、全サイズを作る（scripts/make_icon.swift）
 ```
 
 - `npm run dev` で、フロントエンドだけをブラウザで確認することもできます（ファイルの保存・読み込みなど、Tauri の機能は使えません）。
@@ -73,6 +74,7 @@ make dmg        # インストール用の DMG を作る → src-tauri/target/re
 - `src/files/` — ファイルの保存・読み込み・書き出し（Tauri のダイアログとコマンドを呼ぶ薄い層）。
 - `src/App.tsx`、`src/StylePanel.tsx` — 画面とキーボード操作。
 - `src-tauri/src/file_io.rs` — ファイルの読み書き（Rust）。
+- `scripts/make_icon.swift` — アプリのアイコンの元絵を描くスクリプト（macOS の CoreGraphics のみ。絵を変えるときは、これを直して `make icon`）。
 
 ### 開発ルール
 - AI エージェント向けの開発ルール（TDD、日本語のコミットメッセージなど）は [claude.md](claude.md) を参照してください。
