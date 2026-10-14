@@ -1,6 +1,7 @@
 mod autosave;
 mod file_io;
 mod image_io;
+mod open_file;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
