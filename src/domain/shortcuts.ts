@@ -29,6 +29,11 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "クリック", description: "ノードを選択" },
       { keys: "Option + ↑ / ↓", description: "兄弟の順序を入れ替える" },
       { keys: "Option + → / ←", description: "インデント / アウトデント" },
+      { keys: "Cmd + Option + 矢印キー", description: "選択ノードと子孫を、20 ずつ動かす（手動配置）" },
+      {
+        keys: "Cmd + Shift + R",
+        description: "手動配置を、自動配置に戻す（選択ノードと子孫。中心ノードなら、すべて）",
+      },
       { keys: "ドラッグ", description: "別のノードの上に落として、その子につなぎ替え（Escape で取り消し）" },
       { keys: "Shift + ドラッグ", description: "兄弟の上に落として、その位置に入れ替え" },
       { keys: "Space", description: "子孫を折りたたむ / 展開する" },

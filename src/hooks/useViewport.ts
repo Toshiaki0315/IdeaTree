@@ -81,6 +81,8 @@ export function useViewport(half: number, selectedId: string, selectedPosition: 
     /** SVG の viewBox にする、今見えている範囲 */
     view,
     svgRef,
+    /** 画面上の 1px が、マップの座標で、どれだけか */
+    unitsPerPixel,
     /** マウスの位置から、表示位置のドラッグを始める */
     startPan: (clientX: number, clientY: number) => {
       panRef.current = { startX: clientX, startY: clientY, panX: viewport.panX, panY: viewport.panY };

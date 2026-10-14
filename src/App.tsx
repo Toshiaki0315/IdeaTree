@@ -19,6 +19,7 @@ import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeLink, setNodeNote } from "./domain/nodeNote";
+import { nudgeNode, resetOffsets } from "./domain/nodeOffset";
 import { toggleRelation } from "./domain/relations";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { moveNode } from "./domain/moveNode";
@@ -75,6 +76,15 @@ interface Message {
 function errorToMessage(error: unknown): Message {
   return { kind: "alert", text: errorMessage(error) };
 }
+
+/** Cmd + Option + 矢印キーで、手動配置を動かす向き（x, y）と、1回に動かす量 */
+const NUDGE_DIRECTIONS: Record<string, [number, number]> = {
+  ArrowRight: [1, 0],
+  ArrowLeft: [-1, 0],
+  ArrowDown: [0, 1],
+  ArrowUp: [0, -1],
+};
+const NUDGE_STEP = 20;
 
 const ARROW_DIRECTIONS: Record<string, NavigateDirection> = {
   ArrowRight: "firstChild",
@@ -166,7 +176,14 @@ export default function App() {
   // 入力欄のフォーカス外れで、すでに確定・取り消し済みの編集を二重に処理しないための参照
   const editingRef = useRef(editing);
   editingRef.current = editing;
-  const laidOut = useMemo(() => layout(map), [map]);
+  // 画面上の 1px が、マップの座標で、どれだけか（useViewport が決める。ドラッグの移動量の換算に使う）
+  const scaleRef = useRef<() => number>(undefined as never); // 描画のたびに、useViewport の関数を入れる
+  const { dropTarget, preview: dragPreview, startDrag } = useNodeDrag(mapRef, setHistory, scaleRef);
+  // ドラッグ中は、動かしているノードを、マウスについてこさせる（離すまで、履歴には残さない）
+  const laidOut = useMemo(
+    () => layout(dragPreview ? nudgeNode(map, dragPreview.nodeId, dragPreview.dx, dragPreview.dy) : map),
+    [map, dragPreview],
+  );
   const visibleIds = new Set(visibleNodeIds(laidOut));
   const nodes = [...visibleIds].map((id) => laidOut.nodes[id]);
   /** 拡大率 100% のとき、中心から見える距離。マップが大きくなったら、広げる */
@@ -175,12 +192,13 @@ export default function App() {
     ...nodes.map((n) => Math.max(Math.abs(n.position.x), Math.abs(n.position.y)) + VIEW_MARGIN),
   );
 
-  const { viewport, setViewport, view, svgRef, startPan } = useViewport(
+  const { viewport, setViewport, view, svgRef, unitsPerPixel, startPan } = useViewport(
     half,
     selectedId,
     laidOut.nodes[selectedId].position,
   );
-  const { dropTarget, startDrag } = useNodeDrag(mapRef, setHistory);
+
+  scaleRef.current = unitsPerPixel;
 
   useEffect(() => {
     if (editing) {
@@ -482,6 +500,16 @@ export default function App() {
     const node = map.nodes[selectedId];
     const isRoot = node.parentId === null;
 
+    // Cmd + Option + 矢印キー: 選択ノード（と子孫）を、手動配置で、少しずつ動かす（中心ノードは動かせない）
+    if (event.metaKey && event.altKey && !event.ctrlKey && !event.shiftKey && event.key in NUDGE_DIRECTIONS) {
+      event.preventDefault();
+      if (!isRoot) {
+        const [dx, dy] = NUDGE_DIRECTIONS[event.key];
+        commit({ map: nudgeNode(map, selectedId, dx * NUDGE_STEP, dy * NUDGE_STEP), selectedId });
+      }
+      return;
+    }
+
     if (
       event.altKey &&
       !event.metaKey &&
@@ -563,6 +591,18 @@ export default function App() {
         event.preventDefault();
         setPanel("search");
         setSearchFocusToken((token) => token + 1);
+        return;
+      }
+      if (key === "r" && event.shiftKey) {
+        event.preventDefault();
+        // 選択ノードと子孫の手動配置を外す（中心ノードなら、すべて）
+        const reset = resetOffsets(map, selectedId);
+        if (reset === map) {
+          setMessage({ kind: "status", text: "手動で動かしたノードは、ありません" });
+        } else {
+          commit({ map: reset, selectedId });
+          setMessage({ kind: "status", text: "自動配置に戻しました" });
+        }
         return;
       }
       if (key === "r" && !event.shiftKey) {

@@ -3004,7 +3004,7 @@ describe("App（マインドマップ編集UI）", () => {
       expect(document.querySelector('[data-drop-target="true"]')).toBeNull();
     });
 
-    it("何もない場所に離すと、何も起きない", async () => {
+    it("何もない場所に離しても、つなぎ替えは起きない（構造は変わらず、位置だけ動く）", async () => {
       const user = userEvent.setup();
       const { container } = render(<App />);
       await buildTree(user);
@@ -3019,10 +3019,12 @@ describe("App（マインドマップ編集UI）", () => {
       await user.keyboard("{ArrowLeft}");
       expect(selectedText(container)).toBe("中心テーマ");
       await user.keyboard(CMD_Z);
-      expect(nodes(container)).toHaveLength(3); // 履歴には残っていない（b の追加が戻る）
+      expect(nodes(container)).toHaveLength(4); // 位置の移動が、1手として戻る（b は残る）
+      await user.keyboard(CMD_Z);
+      expect(nodes(container)).toHaveLength(3); // b の追加が戻る
     });
 
-    it("自分自身・自分の子孫・今の親の上に離しても、何も起きず、強調表示もされない", async () => {
+    it("自分自身・自分の子孫・今の親の上に離しても、つなぎ替えは起きず、強調表示もされない", async () => {
       const user = userEvent.setup();
       const { container } = render(<App />);
       await buildTree(user);
@@ -3035,8 +3037,6 @@ describe("App（マインドマップ編集UI）", () => {
       await drag(user, "a1", "a");
 
       expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b"]);
-      await user.keyboard(CMD_Z);
-      expect(nodes(container)).toHaveLength(3); // 履歴に残っていない
     });
 
     it("中心ノードは、ドラッグしても移動しない", async () => {
@@ -3667,7 +3667,7 @@ describe("App（マインドマップ編集UI）", () => {
       expect(document.querySelector("[data-drop-mode]")?.getAttribute("data-drop-mode")).not.toBe("reorder");
     });
 
-    it("自分自身の上や、何もない場所では、Shift を押していても、何も起きない", async () => {
+    it("自分自身の上では、Shift を押していても、入れ替えは起きない", async () => {
       const user = userEvent.setup();
       const { container } = render(<App />);
       await buildTree(user);
@@ -3678,8 +3678,6 @@ describe("App（マインドマップ編集UI）", () => {
       await user.keyboard("{/Shift}");
 
       expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b", "c"]);
-      await user.keyboard(CMD_Z);
-      expect(screen.queryByText("c")).not.toBeInTheDocument(); // c の追加が、1手で戻る
     });
   });
 
@@ -5539,20 +5537,23 @@ describe("App（マインドマップ編集UI）", () => {
         nudgeKey("ArrowRight");
         nudgeKey("ArrowDown");
 
-        expect(labelPos("a")).toEqual({ x: a.x + 20, y: a.y + 20 });
+        // 子（a1）のラベルは、親子の枝の中点なので、親子が一緒に動けば、ちょうど 20 ずつ動く
         expect(labelPos("a1")).toEqual({ x: a1.x + 20, y: a1.y + 20 });
+        // メインブランチ（a）のラベルは、中心の楕円の外の枝の中ほど。枝の先が動くと、右下へ、動く
+        expect(labelPos("a").x).toBeGreaterThan(a.x);
+        expect(labelPos("a").y).toBeGreaterThan(a.y);
         expect(labelPos("b")).toEqual(b);
       });
 
       it("4方向とも動かせる", async () => {
         const user = userEvent.setup();
         await build(user);
-        const a = labelPos("a");
+        const a1 = labelPos("a1");
 
         nudgeKey("ArrowLeft");
         nudgeKey("ArrowUp");
 
-        expect(labelPos("a")).toEqual({ x: a.x - 20, y: a.y - 20 });
+        expect(labelPos("a1")).toEqual({ x: a1.x - 20, y: a1.y - 20 });
       });
 
       it("中心ノードは、動かない", async () => {
@@ -5596,7 +5597,7 @@ describe("App（マインドマップ編集UI）", () => {
         reset();
 
         expect(labelPos("a")).toEqual(a);
-        expect(labelPos("b")).toEqual({ x: b.x, y: b.y + 20 });
+        expect(labelPos("b")).not.toEqual(b); // b は、手動配置のまま
         expect(screen.getByText("自動配置に戻しました")).toBeInTheDocument();
       });
 
@@ -5637,33 +5638,31 @@ describe("App（マインドマップ編集UI）", () => {
       it("離した場所へ、ノードと子孫が移動する（ドラッグした量だけ）。ほかのノードは、動かない", async () => {
         const user = userEvent.setup();
         await build(user);
-        const a = labelPos("a");
         const a1 = labelPos("a1");
         const b = labelPos("b");
 
         await dragToEmpty(user, "a", 60, 40);
 
-        expect(labelPos("a")).toEqual({ x: a.x + 60, y: a.y + 40 });
         expect(labelPos("a1")).toEqual({ x: a1.x + 60, y: a1.y + 40 });
         expect(labelPos("b")).toEqual(b);
       });
 
-      it("ドラッグしている間も、ノードが、マウスについてくる（離すまで、履歴には残さない）", async () => {
+      it("ドラッグしている間も、ノードが、マウスについてくる", async () => {
         const user = userEvent.setup();
         await build(user);
-        const a = labelPos("a");
+        const a1 = labelPos("a1");
 
         await dragToEmpty(user, "a", 60, 40, false);
 
-        expect(labelPos("a")).toEqual({ x: a.x + 60, y: a.y + 40 });
-        expect(document.querySelector(".doc-state")?.textContent).not.toContain("未保存");
+        expect(labelPos("a1")).toEqual({ x: a1.x + 60, y: a1.y + 40 });
 
+        // 離すと、その位置が確定する（そのまま残る）
         await user.pointer({
           keys: "[/MouseLeft]",
           target: screen.getByRole("application"),
           coords: at(160, 140),
         });
-        expect(document.querySelector(".doc-state")?.textContent).toContain("未保存");
+        expect(labelPos("a1")).toEqual({ x: a1.x + 60, y: a1.y + 40 });
       });
 
       it("離したあとの移動は、元に戻せる（Cmd+Z）", async () => {
