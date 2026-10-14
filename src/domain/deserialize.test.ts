@@ -403,5 +403,35 @@ describe("deserialize（icon: ノードのアイコン）", () => {
       expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
     },
   );
+
+  describe("以前の版の絵文字のアイコン", () => {
+    it.each([["⭐", "star"], ["✅", "check"], ["💡", "idea"], ["❤️", "heart"], ["💰", "money"]])(
+      "絵文字 %s は、新しいアイコンの識別子 %s に変換して読み込む",
+      (emoji, id) => {
+        const { data, ids } = validData();
+        data.nodes[ids.a].icon = emoji;
+
+        const map = deserialize(JSON.stringify(data));
+
+        expect(map.nodes[ids.a].icon).toBe(id);
+      },
+    );
+
+    it("変換したあとに保存すると、新しい識別子で保存される", () => {
+      const { data, ids } = validData();
+      data.nodes[ids.root].icon = "🎯";
+
+      const saved = JSON.parse(serialize(deserialize(JSON.stringify(data))));
+
+      expect(saved.nodes[ids.root].icon).toBe("target");
+    });
+
+    it("知らない絵文字は、これまでどおり、エラーになる", () => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].icon = "👍";
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+    });
+  });
 });
 
