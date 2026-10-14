@@ -1,5 +1,5 @@
-import { addChild } from "./addChild";
-import type { MindMap, NodeId } from "./mindmap";
+import { BRANCH_COLORS } from "./branchColor";
+import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 import { createMindMap } from "./mindmap";
 
 /** 読み込める行数の上限（巨大なファイルで、ノードが大量にできないようにする） */
@@ -55,7 +55,7 @@ function parseLine(line: string): Item {
  * 空行は無視する。テキストがなければ、エラーにする。
  */
 export function fromOutline(source: string): MindMap {
-  const rawLines = source.replace(/^﻿/, "").split(/\r?\n/);
+  const rawLines = source.replace(/^\uFEFF/, "").split(/\r?\n/);
   if (rawLines.length > MAX_OUTLINE_LINES) {
     throw new Error(`アウトラインの行数が多すぎます（上限 ${MAX_OUTLINE_LINES} 行）`);
   }
@@ -64,7 +64,8 @@ export function fromOutline(source: string): MindMap {
   const items: Item[] = [];
   for (const line of rawLines) {
     if (line.trim() === "") continue;
-    const heading = items.length === 0 && rootText === null ? /^#\s+(.+)$/.exec(line.trim()) : null;
+    const heading: RegExpExecArray | null =
+      items.length === 0 && rootText === null ? /^#\s+(.+)$/.exec(line.trim()) : null;
     if (heading) {
       rootText = heading[1].trim();
       continue;
@@ -98,14 +99,29 @@ export function fromOutline(source: string): MindMap {
     }
   }
 
-  let map = createMindMap(rootText);
+  // ノードは、直接組み立てる（1行ずつ addChild でマップを作り直すと、行数の2乗の時間がかかる）
+  const root = createMindMap(rootText);
+  const nodes: Record<NodeId, MindMapNode> = { ...root.nodes };
   // 深さ d の直前のノード（親の候補）。0 は、中心ノード
-  const lastAtDepth: NodeId[] = [map.rootId];
+  const lastAtDepth: NodeId[] = [root.rootId];
+  let mainCount = 0;
   items.forEach((item, i) => {
     const depth = depths[i] + (offset === 1 ? 0 : 1);
-    const added = addChild(map, lastAtDepth[depth - 1], item.text);
-    map = added.map;
-    lastAtDepth[depth] = added.nodeId;
+    const parent = nodes[lastAtDepth[depth - 1]];
+    const id = crypto.randomUUID();
+    const node: MindMapNode = {
+      id,
+      kind: "branch",
+      text: item.text,
+      parentId: parent.id,
+      childIds: [],
+      position: { ...parent.position },
+    };
+    // メインブランチ（中心ノードの子）には、パレットから、順に色を割り当てる
+    if (parent.parentId === null) node.branchColor = BRANCH_COLORS[mainCount++ % BRANCH_COLORS.length];
+    parent.childIds.push(id);
+    nodes[id] = node;
+    lastAtDepth[depth] = id;
   });
-  return map;
+  return { rootId: root.rootId, nodes };
 }
