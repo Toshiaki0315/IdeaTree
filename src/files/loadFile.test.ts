@@ -22,7 +22,7 @@ describe("loadFile（JSON読み込み / Cmd+O）", () => {
     vi.resetAllMocks();
   });
 
-  it("JSONフィルタを指定し、単一ファイルを選ぶ読み込みダイアログを開く", async () => {
+  it(".ideatree と .json のフィルタを指定し、単一ファイルを選ぶ読み込みダイアログを開く", async () => {
     mockedOpen.mockResolvedValue(null);
 
     await loadFile();
@@ -31,7 +31,7 @@ describe("loadFile（JSON読み込み / Cmd+O）", () => {
       title: "マインドマップを開く",
       multiple: false,
       directory: false,
-      filters: [{ name: "IdeaTree (JSON)", extensions: ["json"] }],
+      filters: [{ name: "IdeaTree", extensions: ["ideatree", "json"] }],
     });
   });
 

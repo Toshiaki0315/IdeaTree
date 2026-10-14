@@ -23,15 +23,15 @@ describe("saveFile（JSON保存 / Cmd+S）", () => {
   });
 
   describe("保存先が未決定のとき（名前を付けて保存）", () => {
-    it("JSONフィルタと既定のファイル名を指定して、保存ダイアログを開く", async () => {
+    it(".ideatree と .json のフィルタと、既定のファイル名を指定して、保存ダイアログを開く", async () => {
       mockedSave.mockResolvedValue("/Users/me/map.json");
 
       await saveFile(sampleMap());
 
       expect(mockedSave).toHaveBeenCalledWith({
         title: "マインドマップを保存",
-        defaultPath: "IdeaTree.json",
-        filters: [{ name: "IdeaTree (JSON)", extensions: ["json"] }],
+        defaultPath: "IdeaTree.ideatree",
+        filters: [{ name: "IdeaTree", extensions: ["ideatree", "json"] }],
       });
     });
 
@@ -49,24 +49,27 @@ describe("saveFile（JSON保存 / Cmd+S）", () => {
       expect(result).toBe("/Users/me/map.json");
     });
 
-    it("拡張子が .json でなければ補う", async () => {
-      mockedSave.mockResolvedValue("/Users/me/map");
+    it("拡張子が .ideatree でも .json でもなければ、.ideatree を補う", async () => {
       mockedInvoke.mockResolvedValue(undefined);
 
-      const result = await saveFile(sampleMap());
+      mockedSave.mockResolvedValueOnce("/Users/me/map");
+      expect(await saveFile(sampleMap())).toBe("/Users/me/map.ideatree");
 
-      expect(mockedInvoke).toHaveBeenCalledWith(
+      mockedSave.mockResolvedValueOnce("/Users/me/map.txt");
+      expect(await saveFile(sampleMap())).toBe("/Users/me/map.txt.ideatree");
+      expect(mockedInvoke).toHaveBeenLastCalledWith(
         "save_file",
-        expect.objectContaining({ path: "/Users/me/map.json" }),
+        expect.objectContaining({ path: "/Users/me/map.txt.ideatree" }),
       );
-      expect(result).toBe("/Users/me/map.json");
     });
 
-    it("拡張子の大文字小文字は区別せず、既に .JSON なら補わない", async () => {
-      mockedSave.mockResolvedValue("/Users/me/MAP.JSON");
+    it("拡張子の大文字小文字は区別せず、既に .ideatree や .json なら補わない", async () => {
       mockedInvoke.mockResolvedValue(undefined);
 
-      expect(await saveFile(sampleMap())).toBe("/Users/me/MAP.JSON");
+      for (const path of ["/Users/me/MAP.JSON", "/Users/me/map.json", "/Users/me/map.ideatree", "/Users/me/MAP.IdeaTree"]) {
+        mockedSave.mockResolvedValueOnce(path);
+        expect(await saveFile(sampleMap())).toBe(path);
+      }
     });
 
     it("ダイアログをキャンセルしたら、何も書き込まず null を返す", async () => {
