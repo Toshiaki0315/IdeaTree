@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MIN_TIP_WIDTH, branchWidths, strokeWidthAt, taperedBranchPath } from "./nodeGeometry";
+import {
+  MIN_TIP_WIDTH,
+  branchWidths,
+  relationGeometry,
+  strokeWidthAt,
+  taperedBranchPath,
+} from "./nodeGeometry";
 import type { MindMapNode } from "./mindmap";
 
 function node(x: number, y: number): MindMapNode {
@@ -89,5 +95,43 @@ describe("taperedBranchPath（先細りの枝）", () => {
     const d = taperedBranchPath(node(5, 5), node(5, 5), 12, 4);
 
     expect(d).not.toContain("NaN");
+  });
+});
+
+describe("relationGeometry（関連線の形）", () => {
+  const a = node(0, 0);
+  const b = node(300, 0);
+
+  it("線は、一方のノードから、もう一方のノードへ向かう曲線（M … Q …）", () => {
+    const { line } = relationGeometry(a, b);
+
+    expect(line).toMatch(/^M[^A-Za-z]+Q[^A-Za-z]+$/);
+    const values = numbers(line);
+    expect(values).toHaveLength(6);
+    // 端は、ノードの位置から、少し離れた位置（ノードの印に、重ならないように）
+    expect(values[0]).toBeGreaterThan(0);
+    expect(values[4]).toBeLessThan(300);
+  });
+
+  it("曲がりがあり、まっすぐではない（制御点が、2つのノードを結ぶ直線から、外れている）", () => {
+    const values = numbers(relationGeometry(a, b).line);
+
+    expect(Math.abs(values[3])).toBeGreaterThan(10);
+  });
+
+  it("矢印は、向かう先のノード側に、三角形（M … L … L … Z）で付く", () => {
+    const { arrow, line } = relationGeometry(a, b);
+    const tip = numbers(arrow).slice(0, 2);
+    const end = numbers(line).slice(4, 6);
+
+    expect(arrow).toMatch(/^M[^A-Za-z]+L[^A-Za-z]+L[^A-Za-z]+Z$/);
+    expect(tip[0]).toBeCloseTo(end[0], 1);
+    expect(tip[1]).toBeCloseTo(end[1], 1);
+  });
+
+  it("同じ位置の2ノードでも、NaN にならない", () => {
+    const { line, arrow } = relationGeometry(node(5, 5), node(5, 5));
+
+    expect(line + arrow).not.toContain("NaN");
   });
 });

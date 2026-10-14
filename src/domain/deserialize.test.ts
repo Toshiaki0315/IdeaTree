@@ -518,3 +518,60 @@ describe("deserialize（note・link: メモとリンク）", () => {
     },
   );
 });
+
+describe("deserialize（relations: 関連線）", () => {
+  const relation = (id: string, from: string, to: string) => ({ id, from, to });
+
+  it("関連線を、保存して読み込んでも保てる（往復）", () => {
+    const { data, ids } = validData();
+    data.relations = [relation("r1", ids.a, ids.b)];
+
+    const restored = deserialize(JSON.stringify(data));
+
+    expect(restored.relations).toEqual([relation("r1", ids.a, ids.b)]);
+  });
+
+  it("relations がないファイル（従来のファイル）も、読み込める", () => {
+    const { data } = validData();
+
+    expect(deserialize(JSON.stringify(data)).relations).toBeUndefined();
+  });
+
+  it("空の relations は、なかったことにする", () => {
+    const { data } = validData();
+    data.relations = [];
+
+    expect("relations" in deserialize(JSON.stringify(data))).toBe(false);
+  });
+
+  it.each([
+    ["配列でない", "x"],
+    ["要素が、オブジェクトでない", [1]],
+    ["id が文字列でない", [{ id: 1, from: "a", to: "b" }]],
+  ])("不正な relations（%s）はエラーになる", (_name, value) => {
+    const { data } = validData();
+    data.relations = value;
+
+    expect(() => deserialize(JSON.stringify(data))).toThrow("関連線の形式が不正です");
+  });
+
+  it("存在しないノードを指す関連線・同じノードを結ぶ関連線は、エラーになる", () => {
+    const { data, ids } = validData();
+
+    data.relations = [relation("r1", ids.a, "ghost")];
+    expect(() => deserialize(JSON.stringify(data))).toThrow("関連線の端のノードが存在しません: ghost");
+
+    data.relations = [relation("r1", ids.a, ids.a)];
+    expect(() => deserialize(JSON.stringify(data))).toThrow("関連線の形式が不正です");
+  });
+
+  it("id の重複・同じ2ノードを結ぶ関連線の重複は、エラーになる", () => {
+    const { data, ids } = validData();
+
+    data.relations = [relation("r1", ids.a, ids.b), relation("r1", ids.b, ids.root)];
+    expect(() => deserialize(JSON.stringify(data))).toThrow("関連線が重複しています");
+
+    data.relations = [relation("r1", ids.a, ids.b), relation("r2", ids.b, ids.a)];
+    expect(() => deserialize(JSON.stringify(data))).toThrow("関連線が重複しています");
+  });
+});
