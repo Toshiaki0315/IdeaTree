@@ -50,6 +50,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "Cmd + S", description: "保存（保存先が決まっていれば上書き）" },
       { keys: "Cmd + Shift + S", description: "名前を付けて保存" },
       { keys: "Cmd + O", description: "ファイルを開く" },
+      { keys: "Cmd + Shift + O", description: "最近使ったファイルから開く（↑↓で選び、Enter で開く）" },
       { keys: "Cmd + Shift + E", description: "SVG・PNG・PDF として書き出し（拡張子で形式を選ぶ）" },
     ],
   },

@@ -167,7 +167,7 @@ describe("最近使ったファイル", () => {
       const user = userEvent.setup();
       render(<App />);
       await settle();
-      await user.keyboard("{Tab}");
+      await user.keyboard("{Tab}子{Enter}");
 
       openPanel();
       await user.keyboard("{Enter}");
