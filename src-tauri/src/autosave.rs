@@ -1,5 +1,64 @@
 //! 自動保存（編集中の内容の一時保存）。アプリが落ちても、次の起動で復元できるようにする。
 
+use crate::file_io::{read_text_file, write_text_file};
+use std::fs;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+use tauri::Manager;
+
+/// 自動保存のファイル名（アプリのデータフォルダの中に置く）
+pub const AUTOSAVE_FILE: &str = "autosave.json";
+
+/// 自動保存を書き込む。フォルダがなければ作る。途中で失敗しても、前の内容を壊さない
+pub fn write_autosave_in(dir: &Path, contents: &str) -> Result<(), String> {
+    fs::create_dir_all(dir)
+        .map_err(|e| format!("自動保存の保存先を用意できません: {}: {e}", dir.display()))?;
+    write_text_file(&dir.join(AUTOSAVE_FILE), contents)
+}
+
+/// 自動保存を読み出す。なければ None
+pub fn read_autosave_in(dir: &Path) -> Result<Option<String>, String> {
+    let path = dir.join(AUTOSAVE_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    read_text_file(&path).map(Some)
+}
+
+/// 自動保存を削除する。なくてもエラーにしない
+pub fn clear_autosave_in(dir: &Path) -> Result<(), String> {
+    match fs::remove_file(dir.join(AUTOSAVE_FILE)) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("自動保存を削除できません: {e}")),
+    }
+}
+
+/// 自動保存を置く、アプリのデータフォルダ
+fn autosave_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("アプリのデータフォルダを取得できません: {e}"))
+}
+
+/// フロントエンドの `invoke("write_autosave", { contents })` から呼ばれるコマンド。
+#[tauri::command]
+pub fn write_autosave(app: tauri::AppHandle, contents: String) -> Result<(), String> {
+    write_autosave_in(&autosave_dir(&app)?, &contents)
+}
+
+/// フロントエンドの `invoke("read_autosave")` から呼ばれるコマンド。
+#[tauri::command]
+pub fn read_autosave(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    read_autosave_in(&autosave_dir(&app)?)
+}
+
+/// フロントエンドの `invoke("clear_autosave")` から呼ばれるコマンド。
+#[tauri::command]
+pub fn clear_autosave(app: tauri::AppHandle) -> Result<(), String> {
+    clear_autosave_in(&autosave_dir(&app)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
