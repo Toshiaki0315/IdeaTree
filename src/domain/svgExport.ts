@@ -14,6 +14,8 @@ import {
   labelPosition,
   nodeLabel,
   nodeTextStyle,
+  RELATION_STYLE,
+  relationGeometry,
   taperedBranchPath,
 } from "./nodeGeometry";
 import { iconShapeAttributes, iconShapes } from "./nodeIcon";
@@ -123,10 +125,24 @@ export function exportSvg(map: MindMap): string {
     );
   }
 
+  // 関連線は、ブランチより背面に描く（見えているノードどうしのものだけ）
+  const visible = new Set(nodes.map((n) => n.id));
+  const relations = (map.relations ?? [])
+    .filter((r) => visible.has(r.from) && visible.has(r.to))
+    .flatMap((r) => {
+      const { line, arrow } = relationGeometry(map.nodes[r.from], map.nodes[r.to]);
+      const id = escapeXml(r.id);
+      return [
+        `<path data-relation-id="${id}" d="${line}" fill="none" stroke="${RELATION_STYLE.color}" stroke-width="${RELATION_STYLE.width}" stroke-dasharray="${RELATION_STYLE.dash}" stroke-linecap="round"/>`,
+        `<path data-relation-arrow="${id}" d="${arrow}" fill="${RELATION_STYLE.color}" stroke="${RELATION_STYLE.color}" stroke-width="1" stroke-linejoin="round"/>`,
+      ];
+    });
+
   const viewBox = `${fmt(minX)} ${fmt(minY)} ${fmt(width)} ${fmt(height)}`;
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${fmt(width)}" height="${fmt(height)}">`,
     `<rect data-role="background" x="${fmt(minX)}" y="${fmt(minY)}" width="${fmt(width)}" height="${fmt(height)}" fill="${BACKGROUND}"/>`,
+    ...relations,
     ...branches,
     ...shapes,
     ...images,

@@ -246,6 +246,9 @@ export function taperedBranchPath(from: MindMapNode, to: MindMapNode, start: num
   return `M${left[0]} L${[...left.slice(1), ...right.reverse()].join(" L")} Z`;
 }
 
+/** 関連線の色・太さ・破線の間隔 */
+export const RELATION_STYLE = { color: "#8B949E", width: 2, dash: "6 4" } as const;
+
 /** 関連線の端を、ノードの位置から離す距離（ノードの印に、重ならないように） */
 const RELATION_GAP = 10;
 /** 関連線の曲がりの大きさ（2つのノードの距離に対する割合） */
