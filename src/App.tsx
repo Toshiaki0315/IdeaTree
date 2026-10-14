@@ -655,146 +655,151 @@ export default function App() {
       }
     });
 
-  useEffect(() => {
-    // 編集中のキー入力は、入力欄が受け取って伝播を止める（ここには届かない）
-    const onKeyDown = (event: KeyboardEvent) => {
-      const node = map.nodes[selectedId];
-      const isRoot = node.parentId === null;
+  // キー操作の処理は、描画のたびに作り直して ref に入れ、リスナーは一度だけ登録する。
+  // （依存配列で登録し直す方式だと、依存に入れ忘れた状態（保存済みかどうかなど）が古いままになる）
+  const keyDownRef = useRef<(event: KeyboardEvent) => void>(undefined as never);
+  // 編集中のキー入力は、入力欄が受け取って伝播を止める（ここには届かない）
+  const onKeyDown = (event: KeyboardEvent) => {
+    const node = map.nodes[selectedId];
+    const isRoot = node.parentId === null;
 
-      if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.key in ARROW_DIRECTIONS) {
+    if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.key in ARROW_DIRECTIONS) {
+      event.preventDefault();
+      if (!isRoot) moveSelected(event.key);
+      return;
+    }
+
+    if (event.metaKey && !event.ctrlKey && !event.altKey) {
+      const key = event.key.toLowerCase();
+      if (key === "s") {
         event.preventDefault();
-        if (!isRoot) moveSelected(event.key);
+        void save(event.shiftKey);
         return;
       }
-
-      if (event.metaKey && !event.ctrlKey && !event.altKey) {
-        const key = event.key.toLowerCase();
-        if (key === "s") {
-          event.preventDefault();
-          void save(event.shiftKey);
-          return;
-        }
-        if (key === "o" && event.shiftKey) {
-          event.preventDefault();
-          setRecentOpen((value) => !value);
-          setStyleOpen(false);
-          setHelpOpen(false);
-          setSearchOpen(false);
-          return;
-        }
-        if (key === "o") {
-          event.preventDefault();
-          void open();
-          return;
-        }
-        if (key === "c") {
-          event.preventDefault();
+      if (key === "o" && event.shiftKey) {
+        event.preventDefault();
+        setRecentOpen((value) => !value);
+        setStyleOpen(false);
+        setHelpOpen(false);
+        setSearchOpen(false);
+        return;
+      }
+      if (key === "o") {
+        event.preventDefault();
+        void open();
+        return;
+      }
+      if (key === "c") {
+        event.preventDefault();
+        copySelected();
+        return;
+      }
+      if (key === "i" && event.shiftKey) {
+        event.preventDefault();
+        void chooseImage();
+        return;
+      }
+      if ((key === "b" || key === "i") && !event.shiftKey) {
+        event.preventDefault();
+        const toggled = toggleStyle(map, selectedId, key === "b" ? "bold" : "italic");
+        commit({ map: toggled, selectedId });
+        return;
+      }
+      if (key === "=" || key === "+") {
+        event.preventDefault();
+        setViewport(zoomIn);
+        return;
+      }
+      if (key === "-") {
+        event.preventDefault();
+        setViewport(zoomOut);
+        return;
+      }
+      if (key === "0") {
+        event.preventDefault();
+        setViewport(DEFAULT_VIEWPORT);
+        return;
+      }
+      if (key === "/" || key === "?") {
+        event.preventDefault();
+        setHelpOpen((open) => !open);
+        setStyleOpen(false);
+        setSearchOpen(false);
+        setRecentOpen(false);
+        return;
+      }
+      if (key === "f" && !event.shiftKey) {
+        event.preventDefault();
+        setSearchOpen(true);
+        setSearchFocusToken((token) => token + 1);
+        setStyleOpen(false);
+        setHelpOpen(false);
+        setRecentOpen(false);
+        return;
+      }
+      if (key === "k" && !event.shiftKey) {
+        event.preventDefault();
+        setStyleOpen((open) => !open);
+        setHelpOpen(false);
+        setSearchOpen(false);
+        setRecentOpen(false);
+        return;
+      }
+      if (key === "x") {
+        event.preventDefault();
+        if (!isRoot) {
           copySelected();
-          return;
+          deleteSelected(node.parentId as NodeId);
         }
-        if (key === "i" && event.shiftKey) {
-          event.preventDefault();
-          void chooseImage();
-          return;
-        }
-        if ((key === "b" || key === "i") && !event.shiftKey) {
-          event.preventDefault();
-          const toggled = toggleStyle(map, selectedId, key === "b" ? "bold" : "italic");
-          commit({ map: toggled, selectedId });
-          return;
-        }
-        if (key === "=" || key === "+") {
-          event.preventDefault();
-          setViewport(zoomIn);
-          return;
-        }
-        if (key === "-") {
-          event.preventDefault();
-          setViewport(zoomOut);
-          return;
-        }
-        if (key === "0") {
-          event.preventDefault();
-          setViewport(DEFAULT_VIEWPORT);
-          return;
-        }
-        if (key === "/" || key === "?") {
-          event.preventDefault();
-          setHelpOpen((open) => !open);
-          setStyleOpen(false);
-          setSearchOpen(false);
-          setRecentOpen(false);
-          return;
-        }
-        if (key === "f" && !event.shiftKey) {
-          event.preventDefault();
-          setSearchOpen(true);
-          setSearchFocusToken((token) => token + 1);
-          setStyleOpen(false);
-          setHelpOpen(false);
-          setRecentOpen(false);
-          return;
-        }
-        if (key === "k" && !event.shiftKey) {
-          event.preventDefault();
-          setStyleOpen((open) => !open);
-          setHelpOpen(false);
-          setSearchOpen(false);
-          setRecentOpen(false);
-          return;
-        }
-        if (key === "x") {
-          event.preventDefault();
-          if (!isRoot) {
-            copySelected();
-            deleteSelected(node.parentId as NodeId);
-          }
-          return;
-        }
-        if (key === "v") {
-          event.preventDefault();
-          void paste();
-          return;
-        }
-        if (key === "z") {
-          event.preventDefault();
-          setHistory(event.shiftKey ? redo(history) : undo(history));
-          return;
-        }
-        if (key === "e" && event.shiftKey) {
-          event.preventDefault();
-          void exportImage();
-          return;
-        }
+        return;
       }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-
-      if (event.key === " ") {
+      if (key === "v") {
         event.preventDefault();
-        const toggled = toggleCollapse(map, selectedId);
-        if (toggled !== map) commit({ map: toggled, selectedId });
-      } else if (event.key === "Tab") {
-        event.preventDefault();
-        startNewNode(addChild(expanded(map, selectedId), selectedId, ""));
-      } else if (event.key === "Enter") {
-        event.preventDefault();
-        if (isRoot) return;
-        startNewNode(addSibling(map, selectedId, ""));
-      } else if (event.key === "F2") {
-        event.preventDefault();
-        startEdit(selectedId);
-      } else if (event.key === "Delete" || event.key === "Backspace") {
-        event.preventDefault();
-        if (!isRoot) deleteSelected(node.parentId as NodeId);
-      } else if (event.key in ARROW_DIRECTIONS) {
-        event.preventDefault();
-        replacePresent({ map, selectedId: navigate(map, selectedId, ARROW_DIRECTIONS[event.key]) });
+        void paste();
+        return;
       }
-    };
+      if (key === "z") {
+        event.preventDefault();
+        setHistory(event.shiftKey ? redo(history) : undo(history));
+        return;
+      }
+      if (key === "e" && event.shiftKey) {
+        event.preventDefault();
+        void exportImage();
+        return;
+      }
+    }
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [history, filePath, clipboard]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (event.key === " ") {
+      event.preventDefault();
+      const toggled = toggleCollapse(map, selectedId);
+      if (toggled !== map) commit({ map: toggled, selectedId });
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      startNewNode(addChild(expanded(map, selectedId), selectedId, ""));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (isRoot) return;
+      startNewNode(addSibling(map, selectedId, ""));
+    } else if (event.key === "F2") {
+      event.preventDefault();
+      startEdit(selectedId);
+    } else if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      if (!isRoot) deleteSelected(node.parentId as NodeId);
+    } else if (event.key in ARROW_DIRECTIONS) {
+      event.preventDefault();
+      replacePresent({ map, selectedId: navigate(map, selectedId, ARROW_DIRECTIONS[event.key]) });
+    }
+  };
+  keyDownRef.current = onKeyDown;
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => keyDownRef.current(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
 
   const onInputKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>, editing: Editing) => {
     event.stopPropagation();
