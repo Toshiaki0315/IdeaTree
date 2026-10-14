@@ -198,3 +198,13 @@ export function setNodeIcon(map: MindMap, nodeId: NodeId, icon: string | undefin
   if (icon === undefined) delete updated.icon;
   return { ...map, nodes: { ...map.nodes, [nodeId]: updated } };
 }
+
+/** アイコンの図形の、SVG の属性（塗りや線の指定がなければ、なし） */
+export function iconShapeAttributes(shape: IconShape) {
+  return {
+    d: shape.d,
+    fill: shape.fill ?? "none",
+    stroke: shape.stroke ?? "none",
+    strokeWidth: shape.strokeWidth ?? 0,
+  };
+}

@@ -23,7 +23,7 @@ import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
 import { pasteNode } from "./domain/pasteNode";
 import { pasteTexts } from "./domain/pasteTexts";
-import { BACKGROUND, branchPath, depthOf, nodeTextStyle, strokeWidthAt } from "./domain/svgExport";
+import { BACKGROUND, branchPath, depthOf, nodeTextStyle, strokeWidthAt } from "./domain/nodeGeometry";
 import { documentOrder, revealNode, searchNodes } from "./domain/search";
 import { updateText } from "./domain/updateText";
 import { DEFAULT_VIEWPORT, panBy, panToInclude, visibleRect, zoomIn, zoomOut } from "./domain/viewport";

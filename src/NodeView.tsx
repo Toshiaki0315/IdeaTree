@@ -13,7 +13,7 @@ import {
   labelPosition,
   nodeLabel,
   nodeTextStyle,
-} from "./domain/svgExport";
+} from "./domain/nodeGeometry";
 import { LINE_HEIGHT_RATIO, labelBlock, lineCenters, wrapLabel } from "./domain/wrapLabel";
 import type { Editing } from "./editorState";
 import NodeIcon from "./NodeIcon";

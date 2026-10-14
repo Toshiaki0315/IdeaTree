@@ -1,6 +1,6 @@
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 import { labelBlock } from "./wrapLabel";
-import { LABEL_CLEARANCE, centralEdgeDistance, iconWidth, nodeLabel, nodeTextStyle } from "./svgExport";
+import { LABEL_CLEARANCE, centralEdgeDistance, iconWidth, nodeLabel, nodeTextStyle } from "./nodeGeometry";
 
 /** 階層ごとの、親ノードからの距離（px） */
 export const LEVEL_DISTANCE = 180;

@@ -9,7 +9,8 @@ import { estimateTextWidth } from "./hitArea";
 import { ICON_PRESETS, setNodeIcon } from "./nodeIcon";
 import { setNodeImage } from "./nodeImage";
 import { setNodeStyle } from "./nodeStyle";
-import { exportSvg, labelPosition } from "./svgExport";
+import { labelPosition } from "./nodeGeometry";
+import { exportSvg } from "./svgExport";
 import { updateText } from "./updateText";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
