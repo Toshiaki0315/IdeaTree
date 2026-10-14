@@ -474,3 +474,42 @@ describe("deserialize（icon: ノードのアイコン）", () => {
     });
   });
 });
+
+describe("deserialize（note・link: メモとリンク）", () => {
+  it("メモとリンクを、保存して読み込んでも保てる（往復）", () => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].note = "補足の\n文章";
+    data.nodes[ids.a].link = "https://example.com/path";
+
+    const restored = deserialize(JSON.stringify(data));
+
+    expect(restored.nodes[ids.a].note).toBe("補足の\n文章");
+    expect(restored.nodes[ids.a].link).toBe("https://example.com/path");
+  });
+
+  it("note・link がないノード（従来のファイル）も、そのまま読み込める", () => {
+    const { data, ids } = validData();
+
+    const restored = deserialize(JSON.stringify(data));
+
+    expect(restored.nodes[ids.a].note).toBeUndefined();
+    expect(restored.nodes[ids.a].link).toBeUndefined();
+  });
+
+  it.each([[1], [null], [{}], ["a".repeat(10001)]])("不正な note（%j）はエラーになる", (value) => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].note = value;
+
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+  });
+
+  it.each([[1], [null], ["javascript:alert(1)"], ["example.com"], ["file:///etc/passwd"], ["https://"]])(
+    "不正な link（%j）はエラーになる",
+    (value) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].link = value;
+
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+    },
+  );
+});

@@ -3,6 +3,7 @@ import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
 import { toggleCollapse } from "./collapse";
 import { createMindMap } from "./mindmap";
+import { setNodeNote } from "./nodeNote";
 import { documentOrder, revealNode, searchNodes } from "./search";
 import { updateText } from "./updateText";
 
@@ -86,6 +87,22 @@ describe("searchNodes（ノードのテキストの検索）", () => {
     searchNodes(map, "apple");
 
     expect(map).toEqual(before);
+  });
+});
+
+describe("searchNodes（メモも検索の対象）", () => {
+  it("メモに、検索語を含むノードも、一致する（大文字小文字は区別しない）", () => {
+    const { map, ids } = buildMap();
+    const noted = setNodeNote(map, ids.b, "Needle in the Haystack");
+
+    expect(searchNodes(noted, "needle")).toEqual([ids.b]);
+  });
+
+  it("テキストとメモの両方に含むノードは、1回だけ返す", () => {
+    const { map, ids } = buildMap();
+    const noted = setNodeNote(map, ids.a, "apple のメモ");
+
+    expect(searchNodes(noted, "apple")).toEqual([ids.a, ids.a1, ids.a11]);
   });
 });
 
