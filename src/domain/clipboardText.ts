@@ -9,9 +9,7 @@ const SUBTREE_TYPE = "ideatree-subtree";
 export const MAX_PASTE_LINES = 200;
 
 export type ClipboardContent =
-  | { kind: "subtree"; subtree: Subtree }
-  | { kind: "lines"; lines: string[] }
-  | { kind: "none" };
+  { kind: "subtree"; subtree: Subtree } | { kind: "lines"; lines: string[] } | { kind: "none" };
 
 /** コピーしたサブツリーを、クリップボードに入れる文字列（JSON）にする */
 export function subtreeToText(subtree: Subtree): string {

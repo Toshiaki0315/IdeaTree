@@ -49,7 +49,9 @@ describe("自動保存（フロントエンド）", () => {
 
     it("失敗したら、理由を含む日本語のエラーにする（文字列でも Error でも）", async () => {
       mockedInvoke.mockRejectedValueOnce("disk full");
-      await expect(writeAutosave(sampleMap(), undefined)).rejects.toThrow("自動保存に失敗しました: disk full");
+      await expect(writeAutosave(sampleMap(), undefined)).rejects.toThrow(
+        "自動保存に失敗しました: disk full",
+      );
 
       mockedInvoke.mockRejectedValueOnce(new Error("busy"));
       await expect(writeAutosave(sampleMap(), undefined)).rejects.toThrow("自動保存に失敗しました: busy");
@@ -90,10 +92,30 @@ describe("自動保存（フロントエンド）", () => {
       ["JSON として不正", "{ not json"],
       ["オブジェクトでない", "[]"],
       ["document がない", JSON.stringify({ savedAt: "2026-10-14T00:00:00.000Z", filePath: null })],
-      ["savedAt が不正な日付", JSON.stringify({ savedAt: "いつか", filePath: null, document: serialize(sampleMap()) })],
-      ["savedAt が文字列でない", JSON.stringify({ savedAt: 1, filePath: null, document: serialize(sampleMap()) })],
-      ["filePath の型が不正", JSON.stringify({ savedAt: "2026-10-14T00:00:00.000Z", filePath: 1, document: serialize(sampleMap()) })],
-      ["マップの内容が不正", JSON.stringify({ savedAt: "2026-10-14T00:00:00.000Z", filePath: null, document: JSON.stringify({ version: 99 }) })],
+      [
+        "savedAt が不正な日付",
+        JSON.stringify({ savedAt: "いつか", filePath: null, document: serialize(sampleMap()) }),
+      ],
+      [
+        "savedAt が文字列でない",
+        JSON.stringify({ savedAt: 1, filePath: null, document: serialize(sampleMap()) }),
+      ],
+      [
+        "filePath の型が不正",
+        JSON.stringify({
+          savedAt: "2026-10-14T00:00:00.000Z",
+          filePath: 1,
+          document: serialize(sampleMap()),
+        }),
+      ],
+      [
+        "マップの内容が不正",
+        JSON.stringify({
+          savedAt: "2026-10-14T00:00:00.000Z",
+          filePath: null,
+          document: JSON.stringify({ version: 99 }),
+        }),
+      ],
     ])("壊れた自動保存（%s）は、復元できないものとして null を返す", async (_name, contents) => {
       mockedInvoke.mockResolvedValue(contents);
 

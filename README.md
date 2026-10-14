@@ -64,7 +64,10 @@ make dev        # アプリを起動（Tauri dev。初回は Rust のビルド�
 make test       # フロントエンドのテスト
 make test-cov   # カバレッジ付きでテスト（閾値 95%）
 make test-rust  # バックエンド（Rust）のテスト
-make check      # コミット前チェック（型 + テスト + clippy）
+make test-rust-cov  # Rust のテスト（カバレッジ付き。要 cargo install cargo-llvm-cov）
+make format     # ソースを整形する（Prettier）
+make check      # コミット前チェック（型 + lint + 整形 + テスト + Rust の整形・clippy・テスト）
+make version V=0.6.4  # バージョンを、すべての場所で書き換える（CHANGELOG は手で更新）
 make app        # アプリ（.app）を組む → src-tauri/target/release/bundle/macos/IdeaTree.app
 make dmg        # インストール用の DMG を作る → src-tauri/target/release/bundle/dmg/
 make icon       # アプリのアイコンを描き直して、全サイズを作る（scripts/make_icon.swift）
@@ -78,6 +81,7 @@ make icon       # アプリのアイコンを描き直して、全サイズを�
 - `src/files/` — ファイルの保存・読み込み・書き出し（Tauri のダイアログとコマンドを呼ぶ薄い層）。
 - `src/App.tsx`、`src/StylePanel.tsx` — 画面とキーボード操作。
 - `src-tauri/src/file_io.rs` — ファイルの読み書き（Rust）。
+- `scripts/set-version.mjs` — バージョンを、各ファイルでそろえて書き換えるスクリプト（`make version V=x.y.z`）。
 - `scripts/make_icon.swift` — アプリのアイコンの元絵を描くスクリプト（macOS の CoreGraphics のみ。絵を変えるときは、これを直して `make icon`）。
 
 ### 開発ルール

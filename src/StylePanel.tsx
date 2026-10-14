@@ -4,12 +4,7 @@ import type { NodeStyle } from "./domain/mindmap";
 import { ICON_PRESETS } from "./domain/nodeIcon";
 import NodeIcon from "./NodeIcon";
 import { isColor } from "./domain/nodeStyle";
-import {
-  COLOR_PRESETS,
-  FONT_PRESETS,
-  FONT_SIZE_PRESETS,
-  IMAGE_SCALE_PRESETS,
-} from "./domain/stylePresets";
+import { COLOR_PRESETS, FONT_PRESETS, FONT_SIZE_PRESETS, IMAGE_SCALE_PRESETS } from "./domain/stylePresets";
 
 interface Props {
   /** 選択中のノードのID（選択が変わったら、入力欄の表示を切り替えるため） */
@@ -105,13 +100,7 @@ export default function StylePanel({
   );
 
   return (
-    <div
-      ref={panelRef}
-      className="style-panel"
-      role="dialog"
-      aria-label="スタイル"
-      onKeyDown={onKeyDown}
-    >
+    <div ref={panelRef} className="style-panel" role="dialog" aria-label="スタイル" onKeyDown={onKeyDown}>
       <p className="style-panel-target">選択中: {nodeText}</p>
 
       <fieldset className="style-panel-colors" role="radiogroup" aria-label="色">

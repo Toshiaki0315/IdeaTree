@@ -50,9 +50,7 @@ describe("addSibling（兄弟ノードの追加 / Enterキー）", () => {
   it("ルート（セントラルイメージ）には兄弟を追加できない", () => {
     const map = createMindMap("A");
 
-    expect(() => addSibling(map, map.rootId, "x")).toThrow(
-      "ルートノードには兄弟ノードを追加できません",
-    );
+    expect(() => addSibling(map, map.rootId, "x")).toThrow("ルートノードには兄弟ノードを追加できません");
   });
 
   it("存在しないノードIDを指定するとエラーになる", () => {

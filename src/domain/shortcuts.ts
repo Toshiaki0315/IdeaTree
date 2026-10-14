@@ -39,7 +39,10 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "Cmd + Z", description: "元に戻す" },
       { keys: "Cmd + Shift + Z", description: "やり直す" },
-      { keys: "Cmd + C / V / X", description: "コピー / ペースト / カット（テキストを貼ると、1 行 1 ノード）" },
+      {
+        keys: "Cmd + C / V / X",
+        description: "コピー / ペースト / カット（テキストを貼ると、1 行 1 ノード）",
+      },
       { keys: "Cmd + B / I", description: "太字 / 斜体" },
       { keys: "Cmd + K", description: "スタイルパネル（色・フォント・文字サイズ・アイコン・画像）" },
       { keys: "Cmd + Shift + I", description: "画像を選んで設定（中心ノードなら、セントラルイメージ）" },
@@ -60,7 +63,10 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "Cmd + = / Cmd + - / Cmd + 0", description: "拡大 / 縮小 / 元に戻す" },
       { keys: "ホイール・何もない場所のドラッグ", description: "表示位置を動かす（パン）" },
-      { keys: "Cmd + F", description: "ノードを検索（Enter / Shift + Enter で次 / 前の一致、Escape で閉じる）" },
+      {
+        keys: "Cmd + F",
+        description: "ノードを検索（Enter / Shift + Enter で次 / 前の一致、Escape で閉じる）",
+      },
       { keys: "Cmd + /", description: "ショートカット一覧を開く / 閉じる" },
     ],
   },

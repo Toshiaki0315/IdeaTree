@@ -103,7 +103,9 @@ body,
 
 .style-panel-color input:checked + .style-panel-swatch {
   border-color: #1f2328;
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #1a7fd1;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 4px #1a7fd1;
 }
 
 .style-panel-color input:focus-visible + .style-panel-swatch {

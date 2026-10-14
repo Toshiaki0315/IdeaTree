@@ -4,6 +4,11 @@ IdeaTree の、バージョンごとの変更点です（新しいものが上�
 
 ## 未リリース
 
+### 開発環境
+- ESLint（TypeScript・React のフック）と Prettier を導入し、CI と `make check` で確認します。Rust は `cargo fmt --check` を追加しました。
+- `make version V=x.y.z` で、バージョンを全ファイルでそろえて書き換えられます。
+- Dependabot（npm・cargo・GitHub Actions）を設定しました。
+
 ### セキュリティ
 - **CSP（Content Security Policy）を設定**: 外部への通信・外部スクリプトの読み込みを禁止し、自分自身（`self`）、画像の `data:`、Tauri の IPC だけを許可しました（以前は無効）。
 - 使っていなかった `opener` プラグイン（外部のURL・ファイルを開く権限）を削除しました。

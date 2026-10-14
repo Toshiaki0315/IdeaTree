@@ -92,7 +92,11 @@ describe("exportFile（SVG・PNG・PDF での書き出し / Cmd+Shift+E）", () 
       const map = sampleMap();
       const { svg, width, height } = svgSizeOf(map);
       mockedSave.mockResolvedValue("/Users/me/map.PNG");
-      mockedRasterize.mockResolvedValue({ bytes: new Uint8Array([0x89, 0x50, 0xff, 0x00]), width: 1, height: 1 });
+      mockedRasterize.mockResolvedValue({
+        bytes: new Uint8Array([0x89, 0x50, 0xff, 0x00]),
+        width: 1,
+        height: 1,
+      });
 
       const result = await exportFile(map);
 
@@ -123,9 +127,13 @@ describe("exportFile（SVG・PNG・PDF での書き出し / Cmd+Shift+E）", () 
       expect(text.startsWith("%PDF-1.4")).toBe(true);
       expect(text).toContain("/Width 2000");
       expect(text).toContain("/Height 1000");
-      expect(text).toContain(`stream\n${Array.from(jpeg, (b) => String.fromCharCode(b)).join("")}\nendstream`);
+      expect(text).toContain(
+        `stream\n${Array.from(jpeg, (b) => String.fromCharCode(b)).join("")}\nendstream`,
+      );
       // ページの大きさは、画面の大きさ（96dpi の px）を、pt（72dpi）にしたもの
-      expect(text).toContain(`/MediaBox [0 0 ${Number((width * 0.75).toFixed(2))} ${Number((height * 0.75).toFixed(2))}]`);
+      expect(text).toContain(
+        `/MediaBox [0 0 ${Number((width * 0.75).toFixed(2))} ${Number((height * 0.75).toFixed(2))}]`,
+      );
       expect(result).toBe("/Users/me/map.pdf");
     });
   });
@@ -144,7 +152,9 @@ describe("exportFile（SVG・PNG・PDF での書き出し / Cmd+Shift+E）", () 
       mockedSave.mockResolvedValue("/Users/me/map.png");
       mockedRasterize.mockRejectedValue(new Error("SVG を画像に変換できません"));
 
-      await expect(exportFile(sampleMap())).rejects.toThrow("書き出しに失敗しました: SVG を画像に変換できません");
+      await expect(exportFile(sampleMap())).rejects.toThrow(
+        "書き出しに失敗しました: SVG を画像に変換できません",
+      );
       expect(mockedInvoke).not.toHaveBeenCalled();
     });
   });

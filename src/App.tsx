@@ -42,14 +42,7 @@ import {
 } from "./domain/svgExport";
 import { documentOrder, revealNode, searchNodes } from "./domain/search";
 import { updateText } from "./domain/updateText";
-import {
-  DEFAULT_VIEWPORT,
-  panBy,
-  panToInclude,
-  visibleRect,
-  zoomIn,
-  zoomOut,
-} from "./domain/viewport";
+import { DEFAULT_VIEWPORT, panBy, panToInclude, visibleRect, zoomIn, zoomOut } from "./domain/viewport";
 import type { Viewport } from "./domain/viewport";
 import { visibleNodeIds } from "./domain/visibleNodeIds";
 import { clearAutosave, readAutosave, writeAutosave } from "./files/autosave";
@@ -185,7 +178,10 @@ export default function App() {
   mapRef.current = map;
   const dirty = map !== savedMap;
   // 検索: 一致するノード（検索バーを開いている間だけ）と、今の一致
-  const matches = useMemo(() => (searchOpen ? searchNodes(map, searchQuery) : []), [map, searchOpen, searchQuery]);
+  const matches = useMemo(
+    () => (searchOpen ? searchNodes(map, searchQuery) : []),
+    [map, searchOpen, searchQuery],
+  );
   const matchSet = new Set(matches);
   const currentMatch = matches[searchIndex];
   const dirtyRef = useRef(dirty);
@@ -431,8 +427,7 @@ export default function App() {
   const select = (nodeId: NodeId) => replacePresent({ map, selectedId: nodeId });
 
   /** 既存のノードのテキスト編集を始める */
-  const startEdit = (nodeId: NodeId) =>
-    setEditing({ nodeId, draft: map.nodes[nodeId].text, base: null });
+  const startEdit = (nodeId: NodeId) => setEditing({ nodeId, draft: map.nodes[nodeId].text, base: null });
 
   /** ノードを追加して選択し、テキストの入力を始める。確定するまで履歴には残さない */
   const startNewNode = (added: { map: MindMap; nodeId: NodeId }) => {
@@ -663,7 +658,13 @@ export default function App() {
     const node = map.nodes[selectedId];
     const isRoot = node.parentId === null;
 
-    if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.key in ARROW_DIRECTIONS) {
+    if (
+      event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      event.key in ARROW_DIRECTIONS
+    ) {
       event.preventDefault();
       if (!isRoot) moveSelected(event.key);
       return;
@@ -818,7 +819,6 @@ export default function App() {
     }
   };
 
-
   return (
     <>
       <svg
@@ -952,7 +952,11 @@ export default function App() {
                   {labelLines.length === 1
                     ? labelLines[0]
                     : labelLines.map((line, i) => (
-                        <tspan key={i} x={labelX} y={lineCenters(labelLines.length, look.fontSize, labelY)[i]}>
+                        <tspan
+                          key={i}
+                          x={labelX}
+                          y={lineCenters(labelLines.length, look.fontSize, labelY)[i]}
+                        >
                           {line}
                         </tspan>
                       ))}
@@ -969,7 +973,12 @@ export default function App() {
                 </g>
               )}
               {isEditing && editing && (
-                <foreignObject x={labelX - 80} y={labelY - editorHeight(editing.draft) / 2} width={160} height={editorHeight(editing.draft)}>
+                <foreignObject
+                  x={labelX - 80}
+                  y={labelY - editorHeight(editing.draft) / 2}
+                  width={160}
+                  height={editorHeight(editing.draft)}
+                >
                   <textarea
                     ref={inputRef}
                     className="node-input"
@@ -1008,7 +1017,11 @@ export default function App() {
       )}
       {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
       {recentOpen && (
-        <RecentFilesPanel files={recentFiles} onSelect={(path) => void openPath(path)} onClose={() => setRecentOpen(false)} />
+        <RecentFilesPanel
+          files={recentFiles}
+          onSelect={(path) => void openPath(path)}
+          onClose={() => setRecentOpen(false)}
+        />
       )}
       {styleOpen && (
         <StylePanel

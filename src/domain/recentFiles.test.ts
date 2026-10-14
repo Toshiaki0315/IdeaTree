@@ -73,12 +73,14 @@ describe("serializeRecentFiles・parseRecentFiles（保存と読み込み）", (
     expect(parseRecentFiles(serializeRecentFiles(list))).toEqual(list);
   });
 
-  it.each([["JSONとして不正", "{ not json"], ["配列でない", "{}"], ["null", "null"], ["空文字列", ""]])(
-    "読み込めない内容（%s）は、空の一覧になる",
-    (_name, text) => {
-      expect(parseRecentFiles(text)).toEqual([]);
-    },
-  );
+  it.each([
+    ["JSONとして不正", "{ not json"],
+    ["配列でない", "{}"],
+    ["null", "null"],
+    ["空文字列", ""],
+  ])("読み込めない内容（%s）は、空の一覧になる", (_name, text) => {
+    expect(parseRecentFiles(text)).toEqual([]);
+  });
 
   it("不正な項目（パスが文字列でない・空、時刻が不正）は、取り除き、正しい項目だけを残す", () => {
     const text = JSON.stringify([

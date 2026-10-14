@@ -97,9 +97,7 @@ describe("setNodeStyle（ノードのスタイル設定）", () => {
       (color) => {
         const { map, ids } = buildMap();
 
-        expect(() => setNodeStyle(map, ids.a, { color })).toThrow(
-          "色は #RRGGBB の形式で指定してください",
-        );
+        expect(() => setNodeStyle(map, ids.a, { color })).toThrow("色は #RRGGBB の形式で指定してください");
       },
     );
 
@@ -145,9 +143,7 @@ describe("setNodeStyle（ノードのスタイル設定）", () => {
   it("存在しないノードIDを指定するとエラーになる", () => {
     const { map } = buildMap();
 
-    expect(() => setNodeStyle(map, "missing", { bold: true })).toThrow(
-      "ノードが存在しません: missing",
-    );
+    expect(() => setNodeStyle(map, "missing", { bold: true })).toThrow("ノードが存在しません: missing");
   });
 });
 
@@ -222,4 +218,3 @@ describe("setNodeStyle（画像の倍率: imageScale）", () => {
     expect(setNodeStyle(styled, ids.a, { imageScale: undefined }).nodes[ids.a].style).toEqual({ bold: true });
   });
 });
-

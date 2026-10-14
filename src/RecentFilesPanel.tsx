@@ -51,12 +51,7 @@ export default function RecentFilesPanel({ files, onSelect, onClose }: Props) {
       ) : (
         <ul role="listbox" aria-label="ファイル">
           {files.map((file, i) => (
-            <li
-              key={file.path}
-              role="option"
-              aria-selected={i === index}
-              onClick={() => onSelect(file.path)}
-            >
+            <li key={file.path} role="option" aria-selected={i === index} onClick={() => onSelect(file.path)}>
               <span className="recent-name">{recentFileName(file.path)}</span>
               <span className="recent-folder">{recentFileFolder(file.path)}</span>
             </li>

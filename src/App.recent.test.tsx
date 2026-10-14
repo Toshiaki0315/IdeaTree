@@ -74,10 +74,11 @@ describe("最近使ったファイル", () => {
       await settle();
 
       openPanel();
-      expect(within(panel()).getAllByRole("option").map((o) => o.textContent)).toEqual([
-        "first.ideatree/Users/me",
-        "second.json/Users/me",
-      ]);
+      expect(
+        within(panel())
+          .getAllByRole("option")
+          .map((o) => o.textContent),
+      ).toEqual(["first.ideatree/Users/me", "second.json/Users/me"]);
 
       await userEvent.setup().keyboard("{Escape}");
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -235,10 +236,11 @@ describe("最近使ったファイル", () => {
       await act(async () => resolveRead(RECENT));
 
       openPanel();
-      expect(within(panel()).getAllByRole("option").map((o) => o.textContent)).toEqual([
-        "first.ideatree/Users/me",
-        "second.json/Users/me",
-      ]);
+      expect(
+        within(panel())
+          .getAllByRole("option")
+          .map((o) => o.textContent),
+      ).toEqual(["first.ideatree/Users/me", "second.json/Users/me"]);
     });
   });
 

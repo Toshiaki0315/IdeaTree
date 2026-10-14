@@ -20,19 +20,12 @@ export const isColor = (value: unknown): value is string =>
   typeof value === "string" && COLOR_PATTERN.test(value);
 
 const isFontSize = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isFinite(value) &&
-  value >= MIN_FONT_SIZE &&
-  value <= MAX_FONT_SIZE;
+  typeof value === "number" && Number.isFinite(value) && value >= MIN_FONT_SIZE && value <= MAX_FONT_SIZE;
 
 const isImageScale = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isFinite(value) &&
-  value >= MIN_IMAGE_SCALE &&
-  value <= MAX_IMAGE_SCALE;
+  typeof value === "number" && Number.isFinite(value) && value >= MIN_IMAGE_SCALE && value <= MAX_IMAGE_SCALE;
 
-const isFontFamily = (value: unknown): value is string =>
-  typeof value === "string" && value.trim() !== "";
+const isFontFamily = (value: unknown): value is string => typeof value === "string" && value.trim() !== "";
 
 /** 各項目の検証。ファイルの読み込みと、操作での設定で、同じ規則を使う */
 const VALIDATORS: Record<keyof NodeStyle, (value: unknown) => boolean> = {

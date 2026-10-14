@@ -1,6 +1,6 @@
 # IdeaTree の開発コマンド入口（OboeGaki と同じ流儀）。`make help` で一覧が出る。
 
-.PHONY: version help setup dev test test-cov test-rust test-rust-cov check app dmg icon
+.PHONY: version help setup dev format test test-cov test-rust test-rust-cov check app dmg icon
 
 help:             ## コマンドの一覧
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | sed -E 's/:[^#]*## /\t/' | sort
@@ -10,6 +10,9 @@ setup:            ## 初回セットアップ（依存パッケージのイン�
 
 dev:              ## アプリを起動（Tauri dev）。初回は Rust のビルドで数分かかる
 	npm run tauri dev
+
+format:           ## ソースを整形する（Prettier）
+	npm run format
 
 test:             ## フロントエンドのテスト
 	npx vitest run
@@ -23,8 +26,10 @@ test-rust:        ## Rust 側のテスト
 test-rust-cov:    ## Rust 側のテスト（カバレッジ付き。要 cargo install cargo-llvm-cov）
 	cd src-tauri && cargo llvm-cov --summary-only --ignore-filename-regex '(lib|main)\.rs'
 
-check:            ## コミット前チェック（型 + テスト + Rust の整形・clippy・テスト）
+check:            ## コミット前チェック（型 + lint + 整形 + テスト + Rust の整形・clippy・テスト）
 	npx tsc --noEmit
+	npm run lint
+	npm run format:check
 	npx vitest run --coverage
 	cd src-tauri && cargo fmt --check
 	cd src-tauri && cargo clippy --all-targets -- -D warnings

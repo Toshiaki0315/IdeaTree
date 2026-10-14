@@ -93,8 +93,6 @@ describe("pasteTexts（テキストの行を、子ノードとして貼り付け
   it("貼り付け先のノードが存在しなければエラーになる", () => {
     const { map } = buildMap();
 
-    expect(() => pasteTexts(map, "missing", ["x"])).toThrow(
-      "貼り付け先のノードが存在しません: missing",
-    );
+    expect(() => pasteTexts(map, "missing", ["x"])).toThrow("貼り付け先のノードが存在しません: missing");
   });
 });

@@ -66,7 +66,12 @@ describe("saveFile（JSON保存 / Cmd+S）", () => {
     it("拡張子の大文字小文字は区別せず、既に .ideatree や .json なら補わない", async () => {
       mockedInvoke.mockResolvedValue(undefined);
 
-      for (const path of ["/Users/me/MAP.JSON", "/Users/me/map.json", "/Users/me/map.ideatree", "/Users/me/MAP.IdeaTree"]) {
+      for (const path of [
+        "/Users/me/MAP.JSON",
+        "/Users/me/map.json",
+        "/Users/me/map.ideatree",
+        "/Users/me/MAP.IdeaTree",
+      ]) {
         mockedSave.mockResolvedValueOnce(path);
         expect(await saveFile(sampleMap())).toBe(path);
       }

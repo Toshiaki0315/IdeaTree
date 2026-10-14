@@ -80,7 +80,8 @@ describe("rasterizeSvg（SVG を PNG・JPEG の画像にする）", () => {
     vi.restoreAllMocks();
   });
 
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><text>日本語 & 記号</text></svg>';
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><text>日本語 & 記号</text></svg>';
 
   it("SVG をデータURLとして画像に読み込み、倍率をかけた大きさのキャンバスに、白い背景で描く", async () => {
     const calls = setupFakes();
@@ -129,7 +130,9 @@ describe("rasterizeSvg（SVG を PNG・JPEG の画像にする）", () => {
   it("キャンバスを使えないときは、日本語のエラーにする", async () => {
     setupFakes({ noContext: true });
 
-    await expect(rasterizeSvg(svg, 800, 600, "png")).rejects.toThrow("画像を作れません（キャンバスを使えません）");
+    await expect(rasterizeSvg(svg, 800, 600, "png")).rejects.toThrow(
+      "画像を作れません（キャンバスを使えません）",
+    );
   });
 
   it("画像のデータを取り出せなかったら、日本語のエラーにする", async () => {

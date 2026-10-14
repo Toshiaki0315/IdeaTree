@@ -6,7 +6,11 @@ import { readRecentFiles, writeRecentFiles } from "./recent";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 const mockedInvoke = vi.mocked(invoke);
-const sample = addRecentFile(addRecentFile([], "/a.ideatree", new Date(2026, 9, 14)), "/b.ideatree", new Date(2026, 9, 15));
+const sample = addRecentFile(
+  addRecentFile([], "/a.ideatree", new Date(2026, 9, 14)),
+  "/b.ideatree",
+  new Date(2026, 9, 15),
+);
 
 describe("最近使ったファイルの読み書き", () => {
   beforeEach(() => {

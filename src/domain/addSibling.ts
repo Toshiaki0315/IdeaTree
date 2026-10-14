@@ -2,11 +2,7 @@ import { nextBranchColor } from "./branchColor";
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
 
 /** 指定ノードの直後に兄弟ブランチを追加する（元のマップは変更しない） */
-export function addSibling(
-  map: MindMap,
-  nodeId: NodeId,
-  text: string,
-): { map: MindMap; nodeId: NodeId } {
+export function addSibling(map: MindMap, nodeId: NodeId, text: string): { map: MindMap; nodeId: NodeId } {
   const base = map.nodes[nodeId];
   if (!base) {
     throw new Error(`ノードが存在しません: ${nodeId}`);

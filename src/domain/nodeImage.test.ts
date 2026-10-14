@@ -3,7 +3,8 @@ import { addChild } from "./addChild";
 import { createMindMap } from "./mindmap";
 import { MAX_IMAGE_BYTES, isImageDataUrl, setNodeImage } from "./nodeImage";
 
-const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+const PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
 
 function buildMap() {
   const base = createMindMap("root");

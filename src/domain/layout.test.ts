@@ -187,9 +187,7 @@ describe("layout（放射状レイアウト）", () => {
     (levelDistance) => {
       const map = createMindMap("root");
 
-      expect(() => layout(map, { levelDistance })).toThrow(
-        "levelDistance は正の数でなければなりません",
-      );
+      expect(() => layout(map, { levelDistance })).toThrow("levelDistance は正の数でなければなりません");
     },
   );
 
@@ -576,7 +574,8 @@ function updateTextFor(map: MindMap, id: NodeId, text: string): MindMap {
 }
 
 describe("layout: ラベルの折り返しと枝の長さ", () => {
-  const distance = (map: MindMap, id: NodeId) => Math.hypot(map.nodes[id].position.x, map.nodes[id].position.y);
+  const distance = (map: MindMap, id: NodeId) =>
+    Math.hypot(map.nodes[id].position.x, map.nodes[id].position.y);
 
   function oneMain(label: string) {
     const root = createMindMap("root");

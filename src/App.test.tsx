@@ -367,9 +367,7 @@ describe("App（マインドマップ編集UI）", () => {
 
       await user.keyboard(CMD_S);
 
-      expect(await screen.findByRole("status")).toHaveTextContent(
-        "保存しました: /Users/me/map.json",
-      );
+      expect(await screen.findByRole("status")).toHaveTextContent("保存しました: /Users/me/map.json");
     });
 
     it("2回目以降は、前回の保存先へ上書き保存する（ダイアログを開かない）", async () => {
@@ -504,9 +502,7 @@ describe("App（マインドマップ編集UI）", () => {
 
       await user.keyboard(CMD_O);
 
-      expect(await screen.findByRole("status")).toHaveTextContent(
-        "開きました: /Users/me/map.json",
-      );
+      expect(await screen.findByRole("status")).toHaveTextContent("開きました: /Users/me/map.json");
     });
 
     it("読み込んだファイルが保存先になり、Cmd+S でそのファイルへ上書き保存する", async () => {
@@ -653,9 +649,7 @@ describe("App（マインドマップ編集UI）", () => {
 
       await user.keyboard(CMD_SHIFT_E);
 
-      expect(await screen.findByRole("status")).toHaveTextContent(
-        "書き出しました: /Users/me/map.svg",
-      );
+      expect(await screen.findByRole("status")).toHaveTextContent("書き出しました: /Users/me/map.svg");
     });
 
     it("書き出しても、Cmd+S の保存先は変わらない", async () => {
@@ -692,9 +686,7 @@ describe("App（マインドマップ編集UI）", () => {
 
       await user.keyboard(CMD_SHIFT_E);
 
-      expect(await screen.findByRole("alert")).toHaveTextContent(
-        "書き出しに失敗しました: disk full",
-      );
+      expect(await screen.findByRole("alert")).toHaveTextContent("書き出しに失敗しました: disk full");
     });
 
     it("Error 以外の値で失敗した場合も、その内容を表示する", async () => {
@@ -1083,9 +1075,7 @@ describe("App（マインドマップ編集UI）", () => {
     const CMD_Z = "{Meta>}z{/Meta}";
 
     const selectedNodeId = (container: HTMLElement) =>
-      container
-        .querySelector('g[data-node-id][data-selected="true"]')
-        ?.getAttribute("data-node-id");
+      container.querySelector('g[data-node-id][data-selected="true"]')?.getAttribute("data-node-id");
     const nodeIdOf = (text: string) =>
       screen.getByText(text).closest("g[data-node-id]")?.getAttribute("data-node-id");
 
@@ -1965,7 +1955,9 @@ describe("App（マインドマップ編集UI）", () => {
         await user.keyboard(CMD_K);
 
         const group = within(panel()).getByRole("radiogroup", { name: "色" });
-        const names = within(group).getAllByRole("radio").map((r) => r.getAttribute("aria-label"));
+        const names = within(group)
+          .getAllByRole("radio")
+          .map((r) => r.getAttribute("aria-label"));
 
         expect(names).toEqual(["自動", ...COLOR_NAMES]);
         expect(radio("自動")).toBeChecked();
@@ -2721,8 +2713,7 @@ describe("App（マインドマップ編集UI）", () => {
     const CMD_Z = "{Meta>}z{/Meta}";
 
     /** 描かれている順（深さ優先）のノードのテキスト */
-    const order = (container: HTMLElement) =>
-      [...nodes(container)].map((g) => g.textContent);
+    const order = (container: HTMLElement) => [...nodes(container)].map((g) => g.textContent);
 
     /** 中心 ─ a / b / c を作り、b を選択した状態にする */
     async function buildTree(user: User) {
@@ -2905,8 +2896,7 @@ describe("App（マインドマップ編集UI）", () => {
     const at = (x: number, y: number) => ({ clientX: x, clientY: y });
 
     /** 描かれている順（深さ優先）のノードのテキスト */
-    const order = (container: HTMLElement) =>
-      [...nodes(container)].map((g) => g.textContent);
+    const order = (container: HTMLElement) => [...nodes(container)].map((g) => g.textContent);
     const nodeG = (text: string) => screen.getByText(text).closest("g[data-node-id]") as Element;
 
     /** ノードを押して、十分に動かしてから、別のノードの上まで移動する（まだ離さない） */
@@ -3338,7 +3328,9 @@ describe("App（マインドマップ編集UI）", () => {
       await buildTree(user);
 
       expect(container.querySelectorAll('rect[data-role="hit-area"]')).toHaveLength(3);
-      expect(screen.getByText("中心テーマ").closest("g")!.querySelector('rect[data-role="hit-area"]')).toBeNull();
+      expect(
+        screen.getByText("中心テーマ").closest("g")!.querySelector('rect[data-role="hit-area"]'),
+      ).toBeNull();
       expect(hitArea("a")!.getAttribute("fill")).toBe("transparent");
     });
 
@@ -3347,7 +3339,11 @@ describe("App（マインドマップ編集UI）", () => {
       render(<App />);
       await buildTree(user);
 
-      for (const [text, size] of [["a", 20], ["a1", 16], ["b", 20]] as const) {
+      for (const [text, size] of [
+        ["a", 20],
+        ["a1", 16],
+        ["b", 20],
+      ] as const) {
         const rect = hitArea(text)!;
         const label = screen.getByText(text);
         const { width, height } = hitAreaSize(text, size);
@@ -3554,8 +3550,7 @@ describe("App（マインドマップ編集UI）", () => {
   describe("ドラッグでの兄弟の順序の指定（Shift を押しながら、兄弟の上で離す）", () => {
     const CMD_Z = "{Meta>}z{/Meta}";
     const at = (x: number, y: number) => ({ clientX: x, clientY: y });
-    const order = (container: HTMLElement) =>
-      [...nodes(container)].map((g) => g.textContent);
+    const order = (container: HTMLElement) => [...nodes(container)].map((g) => g.textContent);
     const nodeG = (text: string) => screen.getByText(text).closest("g[data-node-id]") as Element;
 
     async function dragOver(user: User, from: string, to: string) {
@@ -3929,7 +3924,9 @@ describe("App（マインドマップ編集UI）", () => {
       render(<App />);
       await user.keyboard(CMD_K);
 
-      const names = within(iconGroup()).getAllByRole("radio").map((r) => r.getAttribute("aria-label"));
+      const names = within(iconGroup())
+        .getAllByRole("radio")
+        .map((r) => r.getAttribute("aria-label"));
 
       expect(names).toEqual(["なし", ...ICON_PRESETS.map((p) => p.name)]);
       expect(iconRadio("なし")).toBeChecked();
@@ -4071,7 +4068,8 @@ describe("App（マインドマップ編集UI）", () => {
     const CMD_Z = "{Meta>}z{/Meta}";
     const panel = () => screen.getByRole("dialog", { name: "スタイル" });
     const scaleSelect = () => within(panel()).getByRole("combobox", { name: "画像の大きさ" });
-    const imageWidth = (container: HTMLElement) => Number(container.querySelector("image")!.getAttribute("width"));
+    const imageWidth = (container: HTMLElement) =>
+      Number(container.querySelector("image")!.getAttribute("width"));
 
     /** 中心ノードに画像を付けて、スタイルパネルを開く（中心画像の幅は、標準で 160） */
     async function withCentralImage(user: User) {
@@ -4099,7 +4097,9 @@ describe("App（マインドマップ編集UI）", () => {
       const user = userEvent.setup();
       await withCentralImage(user);
 
-      const options = within(scaleSelect()).getAllByRole("option").map((o) => o.textContent);
+      const options = within(scaleSelect())
+        .getAllByRole("option")
+        .map((o) => o.textContent);
 
       expect(options).toEqual(["自動（100%）", "50%", "75%", "150%", "200%", "300%"]);
       expect(scaleSelect()).toHaveDisplayValue("自動（100%）");
@@ -4298,7 +4298,11 @@ describe("App（マインドマップ編集UI）", () => {
       });
 
       it("自動保存があれば、時刻とファイルを示して確認し、「復元する」を選ぶと、前回の内容に置き換わる", async () => {
-        mockedReadAutosave.mockResolvedValue({ map: savedMap(), filePath: "/Users/me/map.json", savedAt: SAVED_AT });
+        mockedReadAutosave.mockResolvedValue({
+          map: savedMap(),
+          filePath: "/Users/me/map.json",
+          savedAt: SAVED_AT,
+        });
         const { container } = render(<App />);
 
         expect(await screen.findByText("前回の子")).toBeInTheDocument();
@@ -4867,7 +4871,9 @@ describe("App（マインドマップ編集UI）", () => {
   describe("Shift + Enter: ラベルの手動の改行", () => {
     const area = () => screen.getByRole("textbox", { name: "ノードのテキスト" }) as HTMLTextAreaElement;
     const selectedLines = (container: HTMLElement) =>
-      [...container.querySelectorAll('g[data-node-id][data-selected="true"] text tspan')].map((t) => t.textContent);
+      [...container.querySelectorAll('g[data-node-id][data-selected="true"] text tspan')].map(
+        (t) => t.textContent,
+      );
 
     it("Shift + Enter で、編集を続けたまま、改行が入る", async () => {
       const user = userEvent.setup();

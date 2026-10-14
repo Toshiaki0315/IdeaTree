@@ -81,9 +81,7 @@ describe("loadFile（JSON読み込み / Cmd+O）", () => {
       data.version = 2;
       mockedInvoke.mockResolvedValue(JSON.stringify(data));
 
-      await expect(loadFile()).rejects.toThrow(
-        "読み込みに失敗しました: 未対応のバージョンです: 2",
-      );
+      await expect(loadFile()).rejects.toThrow("読み込みに失敗しました: 未対応のバージョンです: 2");
     });
 
     it("親子関係が壊れたデータは、読み込まずにエラーにする", async () => {
@@ -92,9 +90,7 @@ describe("loadFile（JSON読み込み / Cmd+O）", () => {
       data.nodes[map.rootId].childIds.push("ghost");
       mockedInvoke.mockResolvedValue(JSON.stringify(data));
 
-      await expect(loadFile()).rejects.toThrow(
-        "読み込みに失敗しました: 子ノードが存在しません: ghost",
-      );
+      await expect(loadFile()).rejects.toThrow("読み込みに失敗しました: 子ノードが存在しません: ghost");
     });
   });
 });
@@ -123,4 +119,3 @@ describe("loadFileAt（パスを指定してファイルを読み込む）", () 
     await expect(loadFileAt("/x")).rejects.toThrow("読み込みに失敗しました: JSONの形式が不正です");
   });
 });
-

@@ -96,12 +96,7 @@ export function canReorderTo(map: MindMap, nodeId: NodeId, targetId: NodeId): bo
  * ドラッグで離したときの移動。
  * child: ドロップ先の子の末尾につなぎ替える。reorder: 兄弟の上で離し、そのノードがあった位置に入れる。
  */
-export function dropNode(
-  map: MindMap,
-  nodeId: NodeId,
-  targetId: NodeId,
-  mode: "child" | "reorder",
-): MindMap {
+export function dropNode(map: MindMap, nodeId: NodeId, targetId: NodeId, mode: "child" | "reorder"): MindMap {
   if (mode === "child") return moveNode(map, nodeId, targetId);
   if (!canReorderTo(map, nodeId, targetId)) {
     throw new Error("兄弟のノードの上でのみ、入れ替えられます");

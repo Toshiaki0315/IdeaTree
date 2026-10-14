@@ -65,11 +65,7 @@ describe("moveNode（ノードの移動・並べ替え）", () => {
       const { map, ids } = buildMap();
 
       expect(moveNode(map, ids.b, ids.a, -5).nodes[ids.a].childIds[0]).toBe(ids.b);
-      expect(moveNode(map, ids.b, ids.a, 99).nodes[ids.a].childIds).toEqual([
-        ids.a1,
-        ids.a2,
-        ids.b,
-      ]);
+      expect(moveNode(map, ids.b, ids.a, 99).nodes[ids.a].childIds).toEqual([ids.a1, ids.a2, ids.b]);
     });
 
     it("ノードのテキスト・スタイル・折りたたみ状態は、そのまま保たれる", () => {
@@ -114,11 +110,7 @@ describe("moveNode（ノードの移動・並べ替え）", () => {
     it("位置を省略すると、同じ親の末尾へ移動する", () => {
       const { map, ids } = buildMap();
 
-      expect(moveNode(map, ids.a, ids.root).nodes[ids.root].childIds).toEqual([
-        ids.b,
-        ids.c,
-        ids.a,
-      ]);
+      expect(moveNode(map, ids.a, ids.root).nodes[ids.root].childIds).toEqual([ids.b, ids.c, ids.a]);
     });
 
     it("位置が変わらないときは、同じマップをそのまま返す", () => {
@@ -302,4 +294,3 @@ describe("dropNode（ドラッグで離したときの移動）", () => {
     expect(() => dropNode(map, ids.a, ids.a1, "reorder")).toThrow("兄弟のノードの上でのみ、入れ替えられます");
   });
 });
-

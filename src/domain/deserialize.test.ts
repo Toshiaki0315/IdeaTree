@@ -44,12 +44,9 @@ describe("deserialize（JSON読み込み）", () => {
     expect(() => deserialize("{ not json")).toThrow("JSONの形式が不正です");
   });
 
-  it.each([["null"], ["[]"], ['"text"'], ["123"]])(
-    "オブジェクトでないJSON（%s）はエラーになる",
-    (json) => {
-      expect(() => deserialize(json)).toThrow("保存データの形式が不正です");
-    },
-  );
+  it.each([["null"], ["[]"], ['"text"'], ["123"]])("オブジェクトでないJSON（%s）はエラーになる", (json) => {
+    expect(() => deserialize(json)).toThrow("保存データの形式が不正です");
+  });
 
   it("未対応のバージョンはエラーになる", () => {
     const { data } = validData();
@@ -97,18 +94,14 @@ describe("deserialize（JSON読み込み）", () => {
     const { data, ids } = validData();
     delete data.nodes[ids.a].text;
 
-    expect(() => deserialize(JSON.stringify(data))).toThrow(
-      `ノードの形式が不正です: ${ids.a}`,
-    );
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
   });
 
   it("ノードのキーと id が一致しない場合はエラーになる", () => {
     const { data, ids } = validData();
     data.nodes[ids.a].id = "other";
 
-    expect(() => deserialize(JSON.stringify(data))).toThrow(
-      `ノードの形式が不正です: ${ids.a}`,
-    );
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
   });
 
   it("childIds が存在しないノードを指していればエラーになる", () => {
@@ -122,9 +115,7 @@ describe("deserialize（JSON読み込み）", () => {
     const { data, ids } = validData();
     data.nodes[ids.a].parentId = ids.b;
 
-    expect(() => deserialize(JSON.stringify(data))).toThrow(
-      `親子関係が不整合です: ${ids.a}`,
-    );
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`親子関係が不整合です: ${ids.a}`);
   });
 
   it("ルートから到達できないノードがあればエラーになる", () => {
@@ -141,17 +132,16 @@ describe("deserialize（JSON読み込み）", () => {
     expect(() => deserialize(JSON.stringify(data))).toThrow("到達できないノードがあります: orphan");
   });
 
-  it.each([["null", null], ["配列", []], ["文字列", "x"]])(
-    "ノードの値が不正（%s）な場合はエラーになる",
-    (_label, value) => {
-      const { data, ids } = validData();
-      data.nodes[ids.a] = value;
+  it.each([
+    ["null", null],
+    ["配列", []],
+    ["文字列", "x"],
+  ])("ノードの値が不正（%s）な場合はエラーになる", (_label, value) => {
+    const { data, ids } = validData();
+    data.nodes[ids.a] = value;
 
-      expect(() => deserialize(JSON.stringify(data))).toThrow(
-        `ノードの形式が不正です: ${ids.a}`,
-      );
-    },
-  );
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+  });
 
   it.each([[null], [{ x: 1 }], [{ x: "1", y: 2 }]])(
     "position が不正（%j）な場合はエラーになる",
@@ -159,9 +149,7 @@ describe("deserialize（JSON読み込み）", () => {
       const { data, ids } = validData();
       data.nodes[ids.a].position = position;
 
-      expect(() => deserialize(JSON.stringify(data))).toThrow(
-        `ノードの形式が不正です: ${ids.a}`,
-      );
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
     },
   );
 
@@ -256,17 +244,12 @@ describe("deserialize（JSON読み込み）", () => {
       expect(deserialize(JSON.stringify(data)).nodes[ids.b].collapsed).toBe(true);
     });
 
-    it.each([[1], ["true"], [null], [{}], [[]]])(
-      "真偽値でない値（%j）はエラーになる",
-      (value) => {
-        const { data, ids } = validData();
-        data.nodes[ids.a].collapsed = value;
+    it.each([[1], ["true"], [null], [{}], [[]]])("真偽値でない値（%j）はエラーになる", (value) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].collapsed = value;
 
-        expect(() => deserialize(JSON.stringify(data))).toThrow(
-          `ノードの形式が不正です: ${ids.a}`,
-        );
-      },
-    );
+      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+    });
   });
 
   describe("style（ノードのスタイル）", () => {
@@ -445,28 +428,34 @@ describe("deserialize（icon: ノードのアイコン）", () => {
     expect(deserialize(JSON.stringify(data)).nodes[ids.a].icon).toBeUndefined();
   });
 
-  it.each([["選択肢にない記号", "👍"], ["任意の文字列", "<script>"], ["空文字列", ""], ["数値", 1], ["null", null]])(
-    "不正な icon（%s）はエラーになる",
-    (_name, value) => {
-      const { data, ids } = validData();
-      data.nodes[ids.a].icon = value;
+  it.each([
+    ["選択肢にない記号", "👍"],
+    ["任意の文字列", "<script>"],
+    ["空文字列", ""],
+    ["数値", 1],
+    ["null", null],
+  ])("不正な icon（%s）はエラーになる", (_name, value) => {
+    const { data, ids } = validData();
+    data.nodes[ids.a].icon = value;
 
-      expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
-    },
-  );
+    expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.a}`);
+  });
 
   describe("以前の版の絵文字のアイコン", () => {
-    it.each([["⭐", "star"], ["✅", "check"], ["💡", "idea"], ["❤️", "heart"], ["💰", "money"]])(
-      "絵文字 %s は、新しいアイコンの識別子 %s に変換して読み込む",
-      (emoji, id) => {
-        const { data, ids } = validData();
-        data.nodes[ids.a].icon = emoji;
+    it.each([
+      ["⭐", "star"],
+      ["✅", "check"],
+      ["💡", "idea"],
+      ["❤️", "heart"],
+      ["💰", "money"],
+    ])("絵文字 %s は、新しいアイコンの識別子 %s に変換して読み込む", (emoji, id) => {
+      const { data, ids } = validData();
+      data.nodes[ids.a].icon = emoji;
 
-        const map = deserialize(JSON.stringify(data));
+      const map = deserialize(JSON.stringify(data));
 
-        expect(map.nodes[ids.a].icon).toBe(id);
-      },
-    );
+      expect(map.nodes[ids.a].icon).toBe(id);
+    });
 
     it("変換したあとに保存すると、新しい識別子で保存される", () => {
       const { data, ids } = validData();
@@ -485,4 +474,3 @@ describe("deserialize（icon: ノードのアイコン）", () => {
     });
   });
 });
-

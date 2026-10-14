@@ -10,7 +10,10 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write src scripts eslint.config.js",
+    "format:check": "prettier --check src scripts eslint.config.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

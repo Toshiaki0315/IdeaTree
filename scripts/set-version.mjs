@@ -40,4 +40,6 @@ edit("src-tauri/Cargo.toml", (text) => text.replace(/^version = ".*"$/m, `versio
 edit("src-tauri/Cargo.lock", (text) =>
   text.replace(/(name = "idea-tree"\nversion = )".*"/, `$1"${version}"`),
 );
-edit("README.md", (text) => text.replace(/現在のバージョン: \*\*[\d.]+\*\*/, `現在のバージョン: **${version}**`));
+edit("README.md", (text) =>
+  text.replace(/現在のバージョン: \*\*[\d.]+\*\*/, `現在のバージョン: **${version}**`),
+);

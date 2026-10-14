@@ -26,4 +26,3 @@ export const FONT_SIZE_PRESETS: number[] = [12, 14, 16, 20, 24, 32, 40, 48];
 
 /** スタイルパネルの、画像の倍率の選択肢（標準の 100% は「自動」） */
 export const IMAGE_SCALE_PRESETS: number[] = [0.5, 0.75, 1.5, 2, 3];
-

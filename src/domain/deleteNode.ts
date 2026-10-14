@@ -18,9 +18,7 @@ export function deleteNode(map: MindMap, nodeId: NodeId): MindMap {
     stack.push(...map.nodes[id].childIds);
   }
 
-  const nodes = Object.fromEntries(
-    Object.entries(map.nodes).filter(([id]) => !removed.has(id)),
-  );
+  const nodes = Object.fromEntries(Object.entries(map.nodes).filter(([id]) => !removed.has(id)));
   const parent = nodes[target.parentId];
   nodes[parent.id] = {
     ...parent,

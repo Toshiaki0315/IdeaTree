@@ -150,4 +150,3 @@ describe("documentOrder（ノードを、深さ優先で並べた順序）", () 
     expect(found).toEqual(order.filter((id) => found.includes(id)));
   });
 });
-

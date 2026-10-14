@@ -26,9 +26,7 @@ describe("システムのクリップボードの読み書き", () => {
 
     it("書き込みに失敗したら、理由を含む日本語のエラーにする（文字列でも Error でも）", async () => {
       mockedWriteText.mockRejectedValueOnce("denied");
-      await expect(writeClipboardText("x")).rejects.toThrow(
-        "クリップボードに書き込めません: denied",
-      );
+      await expect(writeClipboardText("x")).rejects.toThrow("クリップボードに書き込めません: denied");
 
       mockedWriteText.mockRejectedValueOnce(new Error("busy"));
       await expect(writeClipboardText("x")).rejects.toThrow("クリップボードに書き込めません: busy");
@@ -50,9 +48,7 @@ describe("システムのクリップボードの読み書き", () => {
 
     it("読み込みに失敗したら（文字列以外が入っている場合を含む）、理由を含む日本語のエラーにする", async () => {
       mockedReadText.mockRejectedValueOnce("not supported");
-      await expect(readClipboardText()).rejects.toThrow(
-        "クリップボードを読み込めません: not supported",
-      );
+      await expect(readClipboardText()).rejects.toThrow("クリップボードを読み込めません: not supported");
 
       mockedReadText.mockRejectedValueOnce(new Error("busy"));
       await expect(readClipboardText()).rejects.toThrow("クリップボードを読み込めません: busy");

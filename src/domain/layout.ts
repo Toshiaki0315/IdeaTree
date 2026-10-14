@@ -67,20 +67,12 @@ export function layout(map: MindMap, options: LayoutOptions = {}): MindMap {
     return parentRadius + Math.max(levelDistance, needed);
   };
 
-  const place = (
-    id: NodeId,
-    depth: number,
-    parentRadius: number,
-    start: number,
-    end: number,
-  ): void => {
+  const place = (id: NodeId, depth: number, parentRadius: number, start: number, end: number): void => {
     const node = map.nodes[id];
     const angle = (start + end) / 2;
     const radius = radiusOf(node, depth, parentRadius, angle);
     const position =
-      depth === 0
-        ? { x: 0, y: 0 }
-        : { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+      depth === 0 ? { x: 0, y: 0 } : { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
     nodes[id] = { ...node, position };
 
     if (node.collapsed) {

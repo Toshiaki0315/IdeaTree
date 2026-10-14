@@ -448,7 +448,8 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
   describe("ノードの画像への対応", () => {
     const PNG =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
-    const image = (map: MindMap, id: NodeId) => parse(exportSvg(map)).querySelector(`image[data-node-id="${id}"]`);
+    const image = (map: MindMap, id: NodeId) =>
+      parse(exportSvg(map)).querySelector(`image[data-node-id="${id}"]`);
     const num = (el: Element, name: string) => Number(el.getAttribute(name));
 
     it("画像のないノードには、画像の要素を出力しない（中心ノードは、従来どおり楕円）", () => {
@@ -489,9 +490,9 @@ describe("exportSvg（SVGエクスポート / Cmd+Shift+E）", () => {
     it("画像は、枝の上、テキストの下に重ねて描かれる（文字が隠れない）", () => {
       const { map, ids } = buildMap();
       const withImage = setNodeImage(setNodeImage(map, ids.root, PNG), ids.a, PNG);
-      const names = [...parse(exportSvg(withImage)).documentElement.querySelectorAll("path, image, text")].map(
-        (e) => e.localName,
-      );
+      const names = [
+        ...parse(exportSvg(withImage)).documentElement.querySelectorAll("path, image, text"),
+      ].map((e) => e.localName);
 
       expect(names.lastIndexOf("path")).toBeLessThan(names.indexOf("image"));
       expect(names.lastIndexOf("image")).toBeLessThan(names.indexOf("text"));
