@@ -30,6 +30,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["ideatree"],
+        "name": "IdeaTree マインドマップ",
+        "description": "IdeaTree のマインドマップ",
+        "role": "Editor",
+        "mimeType": "application/json"
+      }
     ]
   }
 }
