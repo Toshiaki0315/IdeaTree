@@ -143,4 +143,15 @@ mod tests {
 
         assert!(read_autosave_in(dir.path()).is_err());
     }
+
+    #[test]
+    fn 削除できないときは_エラーにする() {
+        let dir = tempdir().unwrap();
+        // 自動保存のファイルの位置にフォルダがあると、ファイルとしては削除できない
+        fs::create_dir(dir.path().join(AUTOSAVE_FILE)).unwrap();
+
+        let err = clear_autosave_in(dir.path()).unwrap_err();
+
+        assert!(err.contains("自動保存を削除できません"), "{err}");
+    }
 }

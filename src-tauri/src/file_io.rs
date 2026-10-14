@@ -344,4 +344,36 @@ mod tests {
         assert!(err.contains("書き込むデータの形式が不正です"), "{err}");
         assert!(!path.exists());
     }
+
+    #[test]
+    fn 親フォルダを持たないパス_ルート_は書き込めない() {
+        let err = write_bytes_file(Path::new("/"), b"x").unwrap_err();
+
+        assert!(err.contains("ファイルを書き込めません"), "{err}");
+    }
+
+    #[test]
+    fn 一時ファイルを作れないときは_エラーにして_元のファイルを残す() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("map.json");
+        fs::write(&path, "元の内容").unwrap();
+        // 一時ファイルと同じ名前のフォルダがあると、書き込みに失敗する
+        fs::create_dir(dir.path().join(".map.json.tmp")).unwrap();
+
+        let err = write_text_file(&path, "新しい内容").unwrap_err();
+
+        assert!(err.contains("ファイルを書き込めません"), "{err}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "元の内容");
+    }
+
+    #[test]
+    fn ファイルの下のパスを読もうとすると_見つからない以外のエラーになる() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("a.json");
+        fs::write(&file, "{}").unwrap();
+
+        let err = read_text_file(&file.join("b.json")).unwrap_err();
+
+        assert!(err.contains("ファイルを読み込めません"), "{err}");
+    }
 }

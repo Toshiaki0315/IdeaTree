@@ -203,4 +203,15 @@ mod tests {
 
         assert!(url.starts_with("data:image/png;base64,"));
     }
+
+    #[test]
+    fn ファイルの下のパスを読もうとすると_見つからない以外のエラーになる() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("a.png");
+        fs::write(&file, PNG_HEADER).unwrap();
+
+        let err = read_image_data_url(&file.join("b.png")).unwrap_err();
+
+        assert!(err.contains("ファイルを読み込めません"), "{err}");
+    }
 }
