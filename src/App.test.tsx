@@ -5267,6 +5267,30 @@ describe("App（マインドマップ編集UI）", () => {
       expect(mockedOpenLink).toHaveBeenCalledWith("https://example.com/");
     });
 
+    it("メモとリンクの両方があるときは、2つの印が、重ならずに並ぶ", async () => {
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+      await user.type(memoField(), "メモ");
+      await user.type(linkField(), "example.com{Enter}");
+      await user.keyboard("{Escape}");
+
+      const x = (kind: "note" | "link") =>
+        Number(/translate\(([-\d.]+)/.exec(marker(container, kind)!.getAttribute("transform")!)![1]);
+
+      expect(x("link") - x("note")).toBe(18);
+    });
+
+    it("印をダブルクリックしても、ノードの編集は、始まらない", async () => {
+      const user = userEvent.setup();
+      const { container } = await openPanelOnChild(user);
+      await user.type(memoField(), "メモ");
+      await user.keyboard("{Escape}");
+
+      await user.dblClick(marker(container, "note")!);
+
+      expect(screen.queryByRole("textbox", { name: "ノードのテキスト" })).not.toBeInTheDocument();
+    });
+
     it("メモの印を押すと、そのノードを選んで、パネルを開く", async () => {
       const user = userEvent.setup();
       const { container } = await openPanelOnChild(user);

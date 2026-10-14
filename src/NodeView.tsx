@@ -53,6 +53,75 @@ interface Props {
   onDraftChange: (editing: Editing, draft: string) => void;
   onInputKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>, editing: Editing) => void;
   onInputBlur: (editing: Editing) => void;
+  /** メモの印を押した */
+  onOpenNote: () => void;
+  /** リンクの印を押した（リンクを開く） */
+  onOpenLink: (url: string) => void;
+}
+
+/** メモの印の、ツールチップ（印の名前）に使う、メモの先頭の長さ */
+const NOTE_PREVIEW_LENGTH = 50;
+/** ラベルと印の間、印どうしの間隔 */
+const MARKER_GAP = 14;
+const MARKER_SPACING = 18;
+
+/** メモ・リンクの印（ラベルの右に並べる、押せる小さな絵）。押しても、ノードの選択やドラッグにならない */
+function Marker({
+  kind,
+  x,
+  y,
+  label,
+  onActivate,
+}: {
+  kind: "note" | "link";
+  x: number;
+  y: number;
+  label: string;
+  onActivate: () => void;
+}) {
+  return (
+    <g
+      data-marker={kind}
+      role="button"
+      aria-label={label}
+      transform={`translate(${x} ${y})`}
+      style={{ cursor: "pointer" }}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onActivate();
+      }}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
+      <title>{label}</title>
+      {kind === "note" ? (
+        <>
+          <rect
+            x={-6}
+            y={-7}
+            width={12}
+            height={14}
+            rx={2}
+            fill="#FFF8C5"
+            stroke="#C9A227"
+            strokeWidth={1.2}
+          />
+          <path d="M-3 -3H3M-3 0H3M-3 3H1" stroke="#C9A227" strokeWidth={1.2} strokeLinecap="round" />
+        </>
+      ) : (
+        <>
+          <circle r={7} fill="#DDF4FF" stroke="#1A7FD1" strokeWidth={1.2} />
+          <path
+            d="M-3 3L3 -3M-1 -3H3V1"
+            fill="none"
+            stroke="#1A7FD1"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+        </>
+      )}
+    </g>
+  );
 }
 
 /** マインドマップの1つのノード（ラベル・中心の楕円・画像・アイコン・編集中の入力欄）の描画 */
@@ -72,13 +141,18 @@ export default function NodeView({
   onDraftChange,
   onInputKeyDown,
   onInputBlur,
+  onOpenNote,
+  onOpenLink,
 }: Props) {
   const isRoot = node.parentId === null;
   const look = nodeTextStyle(map, node, palette.centralText);
   // 中心ノードは、ノードの位置（画像があれば、その下）に、それ以外は、枝の中点にラベルを置く
   const labelX = isRoot ? node.position.x : labelPosition(map, node).x;
   const labelY = isRoot ? centralLabelY(node) : labelPosition(map, node).y;
-  const labelLines = labelBlock(nodeLabel(node), look.fontSize).lines;
+  const block = labelBlock(nodeLabel(node), look.fontSize);
+  const labelLines = block.lines;
+  // メモ・リンクの印は、ラベルの右に、並べる
+  const markerX = labelX + block.width / 2 + MARKER_GAP;
   const box = node.image ? imageBox(map, node) : null;
 
   return (
@@ -179,6 +253,24 @@ export default function NodeView({
         <g data-icon-for={node.id} data-icon={node.icon} transform={iconTransform(iconPlacement(map, node))}>
           <NodeIcon id={node.icon} />
         </g>
+      )}
+      {node.note !== undefined && (
+        <Marker
+          kind="note"
+          x={markerX}
+          y={labelY}
+          label={`メモ: ${node.note.length > NOTE_PREVIEW_LENGTH ? `${node.note.slice(0, NOTE_PREVIEW_LENGTH)}…` : node.note}`}
+          onActivate={onOpenNote}
+        />
+      )}
+      {node.link !== undefined && (
+        <Marker
+          kind="link"
+          x={markerX + (node.note !== undefined ? MARKER_SPACING : 0)}
+          y={labelY}
+          label={`リンクを開く: ${node.link}`}
+          onActivate={() => onOpenLink(node.link as string)}
+        />
       )}
       {editing !== null && (
         <foreignObject

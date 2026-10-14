@@ -18,6 +18,7 @@ import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
+import { setNodeLink, setNodeNote } from "./domain/nodeNote";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
@@ -40,6 +41,7 @@ import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { errorMessage } from "./files/errorMessage";
 import { exportFile } from "./files/exportFile";
+import { openLink } from "./files/openLink";
 import { loadFile, loadFileAt } from "./files/loadFile";
 import type { LoadedDocument } from "./files/loadFile";
 import { onOpenFileRequest, takePendingOpenFiles } from "./files/openRequests";
@@ -52,6 +54,7 @@ import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useViewport } from "./hooks/useViewport";
 import { useSubscription } from "./hooks/useSubscription";
 import NodeView from "./NodeView";
+import NotePanel from "./NotePanel";
 import RecentFilesPanel from "./RecentFilesPanel";
 import SearchBar from "./SearchBar";
 import SettingsPanel from "./SettingsPanel";
@@ -59,7 +62,7 @@ import ShortcutHelp from "./ShortcutHelp";
 import StylePanel from "./StylePanel";
 
 /** 画面の上に重ねて開くパネル */
-type Panel = "style" | "help" | "search" | "recent" | "settings";
+type Panel = "style" | "help" | "search" | "recent" | "settings" | "note";
 
 /** 画面下部に表示する、保存結果などのメッセージ */
 interface Message {
@@ -411,6 +414,19 @@ export default function App() {
     });
   openPathRef.current = openPath;
 
+  /** リンクを、既定のブラウザで開く（開けなければ、エラーを表示する） */
+  const openLinkAction = (url: string) => runFileAction(() => openLink(url));
+
+  /** 選択ノードのリンクを開く。リンクがなければ、その旨を表示する */
+  const openSelectedLink = () => {
+    const url = map.nodes[selectedId].link;
+    if (url === undefined) {
+      setMessage({ kind: "status", text: "このノードには、リンクがありません" });
+      return;
+    }
+    void openLinkAction(url);
+  };
+
   /** SVG・PNG・PDF として書き出す（保存先は変えない） */
   const exportImage = () =>
     runFileAction(async () => {
@@ -509,6 +525,16 @@ export default function App() {
         event.preventDefault();
         setPanel("search");
         setSearchFocusToken((token) => token + 1);
+        return;
+      }
+      if (key === "l" && event.shiftKey) {
+        event.preventDefault();
+        openSelectedLink();
+        return;
+      }
+      if (key === "l") {
+        event.preventDefault();
+        togglePanel("note");
         return;
       }
       if (key === "," && !event.shiftKey) {
@@ -643,6 +669,11 @@ export default function App() {
             onDraftChange={(current, draft) => setEditing({ ...current, draft })}
             onInputKeyDown={onInputKeyDown}
             onInputBlur={(current) => editingRef.current !== null && commitEdit(current)}
+            onOpenNote={() => {
+              select(node.id);
+              setPanel("note");
+            }}
+            onOpenLink={(url) => void openLinkAction(url)}
           />
         ))}
       </svg>
@@ -663,6 +694,18 @@ export default function App() {
           onPrevious={() => moveSearch(-1)}
           onClose={closeSearch}
           focusToken={searchFocusToken}
+        />
+      )}
+      {panel === "note" && (
+        <NotePanel
+          key={selectedId}
+          nodeText={map.nodes[selectedId].text}
+          note={map.nodes[selectedId].note}
+          link={map.nodes[selectedId].link}
+          onNoteChange={(note) => commit({ map: setNodeNote(map, selectedId, note), selectedId })}
+          onLinkChange={(link) => commit({ map: setNodeLink(map, selectedId, link), selectedId })}
+          onOpenLink={(url) => void openLinkAction(url)}
+          onClose={() => closePanel("note")}
         />
       )}
       {panel === "settings" && (

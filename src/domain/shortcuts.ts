@@ -44,6 +44,11 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
         description: "コピー / ペースト / カット（テキストを貼ると、1 行 1 ノード）",
       },
       { keys: "Cmd + B / I", description: "太字 / 斜体" },
+      {
+        keys: "Cmd + L",
+        description: "メモとリンクのパネルを開く / 閉じる（ノードに、補足の文章と URL を付ける）",
+      },
+      { keys: "Cmd + Shift + L", description: "選択ノードのリンクを、ブラウザで開く" },
       { keys: "Cmd + K", description: "スタイルパネル（色・フォント・文字サイズ・アイコン・画像）" },
       { keys: "Cmd + Shift + I", description: "画像を選んで設定（中心ノードなら、セントラルイメージ）" },
     ],
