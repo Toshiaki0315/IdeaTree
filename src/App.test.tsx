@@ -4824,4 +4824,43 @@ describe("App（マインドマップ編集UI）", () => {
       expect(screen.queryByRole("search")).not.toBeInTheDocument();
     });
   });
+
+  describe("長いラベルの折り返し", () => {
+    const LONG = "あ".repeat(25);
+
+    /** 中心の下に、長いラベルのブランチを1つ作る */
+    async function withLongBranch(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}");
+      await user.keyboard(LONG + "{Enter}");
+      return view;
+    }
+    const textOf = (container: HTMLElement) =>
+      container.querySelector('g[data-node-id][data-selected="true"] text') as SVGTextElement;
+
+    it("短いラベルは、tspan を使わず、1行のまま", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard("{Tab}短い{Enter}");
+
+      expect(textOf(container).querySelector("tspan")).toBeNull();
+    });
+
+    it("長いラベルは、行ごとの tspan に折り返して表示する", async () => {
+      const { container } = await withLongBranch(userEvent.setup());
+
+      const lines = [...textOf(container).querySelectorAll("tspan")].map((t) => t.textContent);
+      expect(lines).toEqual(["あ".repeat(10), "あ".repeat(10), "あ".repeat(5)]);
+    });
+
+    it("クリックできる範囲は、折り返したラベル全体を覆う", async () => {
+      const { container } = await withLongBranch(userEvent.setup());
+      const hit = container.querySelector(
+        'g[data-node-id][data-selected="true"] rect[data-role="hit-area"]',
+      ) as SVGRectElement;
+
+      expect(Number(hit.getAttribute("height"))).toBeCloseTo(3 * 20 * 1.25 + 20);
+      expect(Number(hit.getAttribute("width"))).toBeCloseTo(10 * 20 + 24);
+    });
+  });
 });
