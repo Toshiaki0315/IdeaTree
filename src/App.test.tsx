@@ -5018,4 +5018,34 @@ describe("App（マインドマップ編集UI）", () => {
       expect(mockedLoadFile).not.toHaveBeenCalled();
     });
   });
+
+  describe("アクセシビリティ（ノードの役割・名前・選択状態）", () => {
+    it("各ノードは、treeitem として、ラベルを名前に持ち、選択状態を伝える", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}企画{Enter}");
+
+      const items = screen.getAllByRole("treeitem");
+      expect(items.map((item) => item.getAttribute("aria-label"))).toEqual(["中心テーマ", "企画"]);
+      expect(items.map((item) => item.getAttribute("aria-selected"))).toEqual(["false", "true"]);
+    });
+
+    it("折りたたまれたノードは、折りたたまれていることを伝える", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}企画{Enter}{Tab}子{Enter}{ArrowLeft}{ }");
+
+      const item = screen.getByRole("treeitem", { name: /企画/ });
+      expect(item.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("子を持つ、展開されたノードは、展開されていることを伝える。子のないノードは、何も伝えない", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}企画{Enter}");
+
+      expect(screen.getByRole("treeitem", { name: "中心テーマ" }).getAttribute("aria-expanded")).toBe("true");
+      expect(screen.getByRole("treeitem", { name: "企画" }).hasAttribute("aria-expanded")).toBe(false);
+    });
+  });
 });
