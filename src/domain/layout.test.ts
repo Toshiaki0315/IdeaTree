@@ -242,7 +242,7 @@ describe("layout（放射状レイアウト）", () => {
       expectDirection(laid, mains.ids[3], -Math.PI / 2);
     });
 
-    it("子ノードは、メインブランチの扇形を分け合って広がる（左右のブランチが、それぞれ半円を使う）", () => {
+    it("子ノードは、メインブランチの向きを中心に、扇形（最大 120°）を分け合って広がる", () => {
       const root = createMindMap("root");
       const mains = addChildren(root, root.rootId, 2);
       const right = addChildren(mains.map, mains.ids[0], 2);
@@ -250,11 +250,11 @@ describe("layout（放射状レイアウト）", () => {
 
       const laid = layout(left.map);
 
-      // 右のブランチの扇形は [-π/2, π/2]、左のブランチは [π/2, 3π/2]
-      expectDirection(laid, right.ids[0], -Math.PI / 4);
-      expectDirection(laid, right.ids[1], Math.PI / 4);
-      expectDirection(laid, left.ids[0], (3 * Math.PI) / 4);
-      expectDirection(laid, left.ids[1], (-3 * Math.PI) / 4);
+      // 右のブランチ（0°）は ±30°、左のブランチ（180°）は 180° ± 30°
+      expectDirection(laid, right.ids[0], -Math.PI / 6);
+      expectDirection(laid, right.ids[1], Math.PI / 6);
+      expectDirection(laid, left.ids[0], (5 * Math.PI) / 6);
+      expectDirection(laid, left.ids[1], (-5 * Math.PI) / 6);
     });
   });
 
@@ -606,5 +606,69 @@ describe("layout: ラベルの折り返しと枝の長さ", () => {
 
     // サブブランチの文字サイズは 16（行の高さ 20）。8行と12行の差は、4行分
     expect(subDistance("あ".repeat(120)) - subDistance("あ".repeat(80))).toBeCloseTo(4 * 20, 0);
+  });
+});
+
+describe("layout: 子ブランチの広がりの上限", () => {
+  const MAX_FAN = (2 * Math.PI) / 3; // 120°
+
+  it("メインブランチが1本だけでも、子ブランチは、そのブランチの向き（右）に広がり、後ろへ回り込まない", () => {
+    const root = createMindMap("root");
+    const main = addChild(root, root.rootId, "aaa");
+    const kids = addChildren(main.map, main.nodeId, 2);
+
+    const laid = layout(kids.map);
+
+    // 子は、メインブランチ（右向き）の ±30°。どちらも、メインブランチより右にある
+    expectDirection(laid, kids.ids[0], -Math.PI / 6);
+    expectDirection(laid, kids.ids[1], Math.PI / 6);
+    for (const id of kids.ids) {
+      expect(laid.nodes[id].position.x).toBeGreaterThan(laid.nodes[main.nodeId].position.x);
+    }
+  });
+
+  it("子が多くても、メインブランチの向きから ±60° の範囲に収まる", () => {
+    const root = createMindMap("root");
+    const main = addChild(root, root.rootId, "aaa");
+    const kids = addChildren(main.map, main.nodeId, 7);
+
+    const laid = layout(kids.map);
+
+    for (const id of kids.ids) {
+      expect(Math.abs(wrap(angleOf(laid, id)))).toBeLessThanOrEqual(MAX_FAN / 2 + 1e-9);
+    }
+  });
+
+  it("扇形が上限より狭いときは、これまでどおり、扇形いっぱいに広がる（4本なら 90° の中）", () => {
+    const root = createMindMap("root");
+    const mains = addChildren(root, root.rootId, 4);
+    // どのブランチにも、子を2つずつ付ける（葉の数が同じなので、扇形は、どれも 90°）
+    let current = mains.map;
+    const kids = mains.ids.map((id) => {
+      const added = addChildren(current, id, 2);
+      current = added.map;
+      return added.ids;
+    });
+
+    const laid = layout(current);
+
+    expectDirection(laid, kids[0][0], -Math.PI / 8);
+    expectDirection(laid, kids[0][1], Math.PI / 8);
+  });
+
+  it("孫ブランチは、子ブランチの向きを中心に、その子の扇形の中に広がる", () => {
+    const root = createMindMap("root");
+    const main = addChild(root, root.rootId, "aaa");
+    const kid = addChild(main.map, main.nodeId, "k");
+    const grand = addChildren(kid.map, kid.nodeId, 2);
+
+    const laid = layout(grand.map);
+
+    // 子は 0°（1つだけ）、その扇形 ±60° を 2 つの孫が分け合う → ±30°
+    // （親からの方向ではなく、原点から見た角度なので、位置を比べる）
+    const [a, b] = grand.ids.map((id) => laid.nodes[id].position);
+    expect(a.y).toBeLessThan(b.y);
+    expect(Math.abs(wrap(angleOf(laid, grand.ids[0])))).toBeLessThan(MAX_FAN / 2);
+    expect(Math.abs(wrap(angleOf(laid, grand.ids[1])))).toBeLessThan(MAX_FAN / 2);
   });
 });
