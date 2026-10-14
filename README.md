@@ -40,6 +40,7 @@ https://github.com/Toshiaki0315/IdeaTree.git
 | `Cmd + Shift + O` | 最近使ったファイルから開く |
 | `Cmd + Shift + E` | 書き出し（SVG・PNG・PDF。拡張子で形式を選ぶ） |
 | `Cmd + =` / `Cmd + -` / `Cmd + 0` | 拡大 / 縮小 / 元に戻す（ホイール・ドラッグでパン） |
+| `Cmd + Shift + 0` | 全体表示（マップ全体が収まるよう、表示を合わせる） |
 | `Cmd + F` | ノードを検索（`Enter` で次の一致へ） |
 | `Cmd + /` | ショートカット一覧を開く / 閉じる |
 

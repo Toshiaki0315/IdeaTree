@@ -26,7 +26,7 @@ import { pasteTexts } from "./domain/pasteTexts";
 import { BACKGROUND, branchPath, depthOf, nodeTextStyle, strokeWidthAt } from "./domain/nodeGeometry";
 import { documentOrder, revealNode, searchNodes } from "./domain/search";
 import { updateText } from "./domain/updateText";
-import { DEFAULT_VIEWPORT, zoomIn, zoomOut } from "./domain/viewport";
+import { DEFAULT_VIEWPORT, fitViewport, zoomIn, zoomOut } from "./domain/viewport";
 import { visibleNodeIds } from "./domain/visibleNodeIds";
 import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
@@ -459,6 +459,18 @@ export default function App() {
       if (key === "-") {
         event.preventDefault();
         setViewport(zoomOut);
+        return;
+      }
+      // Cmd + Shift + 0（キーボードの配列によって、key は ")" か "0"）: 全体表示
+      if (key === ")" || (key === "0" && event.shiftKey)) {
+        event.preventDefault();
+        setViewport(
+          fitViewport(
+            half,
+            nodes.map((node) => node.position),
+            VIEW_MARGIN,
+          ),
+        );
         return;
       }
       if (key === "0") {

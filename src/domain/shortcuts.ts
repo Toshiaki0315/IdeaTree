@@ -62,6 +62,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: "表示",
     items: [
       { keys: "Cmd + = / Cmd + - / Cmd + 0", description: "拡大 / 縮小 / 元に戻す" },
+      { keys: "Cmd + Shift + 0", description: "全体表示（マップ全体が収まるよう、表示を合わせる）" },
       { keys: "ホイール・何もない場所のドラッグ", description: "表示位置を動かす（パン）" },
       {
         keys: "Cmd + F",

@@ -62,3 +62,22 @@ export function panToInclude(
     point.y <= rect.y + rect.height - margin;
   return inside ? viewport : { ...viewport, panX: point.x, panY: point.y };
 }
+
+/**
+ * すべての点が、余白（margin）つきで収まるよう、表示を合わせる（全体表示）。
+ * 中心は、点を囲む長方形の中心。拡大はしない（小さいマップは 100% のまま）。縮小は、MIN_ZOOM まで。
+ * 点がなければ、既定の表示にする。
+ */
+export function fitViewport(half: number, points: { x: number; y: number }[], margin: number): Viewport {
+  if (points.length === 0) return DEFAULT_VIEWPORT;
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  // 長い方の辺に、両側の余白を足した長さが、見える範囲（half × 2 ÷ 拡大率）に収まる拡大率
+  const needed = Math.max(maxX - minX, maxY - minY) + margin * 2;
+  const zoom = Math.min(1, Math.max(MIN_ZOOM, (half * 2) / needed));
+  return { zoom, panX: (minX + maxX) / 2, panY: (minY + maxY) / 2 };
+}
