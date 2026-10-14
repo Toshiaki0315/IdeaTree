@@ -3,6 +3,7 @@ name = "idea-tree"
 version = "0.6.3"
 description = "トニー・ブザンの法則に忠実な、macOS 向けのマインドマップツール"
 authors = ["Toshiaki Nomura"]
+license = "MIT"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
