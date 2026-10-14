@@ -39,3 +39,19 @@ export function setNodeIcon(map: MindMap, nodeId: NodeId, icon: string | undefin
   if (icon === undefined) delete updated.icon;
   return { ...map, nodes: { ...map.nodes, [nodeId]: updated } };
 }
+
+export interface IconShape {
+  d: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+}
+
+export function iconShapes(_id: string): IconShape[] {
+  throw new Error("未実装");
+}
+
+export function legacyIconToId(_value: unknown): string | undefined {
+  throw new Error("未実装");
+}
+

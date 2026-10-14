@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { createMindMap } from "./mindmap";
-import { ICON_PRESETS, isIcon, setNodeIcon } from "./nodeIcon";
+import { ICON_PRESETS, iconShapes, isIcon, legacyIconToId, setNodeIcon } from "./nodeIcon";
 
 function buildMap() {
   const base = createMindMap("root");
@@ -10,29 +10,87 @@ function buildMap() {
   return { map: b.map, ids: { root: base.rootId, a: a.nodeId, b: b.nodeId } };
 }
 
-describe("ICON_PRESETS（アイコンの選択肢）", () => {
-  it("10個以上あり、名前も記号も、重複しない", () => {
+describe("ICON_PRESETS（オリジナルのアイコンの選択肢）", () => {
+  it("10個以上あり、名前も識別子（value）も、重複しない", () => {
     expect(ICON_PRESETS.length).toBeGreaterThanOrEqual(10);
     expect(new Set(ICON_PRESETS.map((p) => p.name)).size).toBe(ICON_PRESETS.length);
     expect(new Set(ICON_PRESETS.map((p) => p.value)).size).toBe(ICON_PRESETS.length);
     for (const preset of ICON_PRESETS) {
       expect(preset.name).not.toBe("");
-      expect(preset.value).not.toBe("");
+      expect(preset.value).toMatch(/^[a-z]+$/); // 絵文字ではなく、英小文字の識別子
+    }
+  });
+
+  it("それぞれ、24×24 の座標で描いた、1つ以上の図形（パス）を持つ", () => {
+    for (const preset of ICON_PRESETS) {
+      expect(preset.shapes.length, preset.name).toBeGreaterThan(0);
+      for (const shape of preset.shapes) {
+        expect(shape.d, preset.name).toMatch(/^[MmLlHhVvCcSsQqTtAaZz0-9.,\s-]+$/);
+        for (const color of [shape.fill, shape.stroke]) {
+          if (color !== undefined) expect(color, preset.name).toMatch(/^(#[0-9A-Fa-f]{6}|none)$/);
+        }
+        if (shape.strokeWidth !== undefined) expect(shape.strokeWidth).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("どの図形も、塗りか線の、どちらかは見える（透明なだけの図形がない）", () => {
+    for (const preset of ICON_PRESETS) {
+      for (const shape of preset.shapes) {
+        const visible = (shape.fill ?? "none") !== "none" || (shape.stroke ?? "none") !== "none";
+        expect(visible, preset.name).toBe(true);
+      }
     }
   });
 });
 
+describe("iconShapes（アイコンの図形）", () => {
+  it("選択肢の識別子から、そのアイコンの図形を返す", () => {
+    for (const preset of ICON_PRESETS) expect(iconShapes(preset.value)).toBe(preset.shapes);
+  });
+
+  it("選択肢にない識別子では、空の一覧を返す", () => {
+    expect(iconShapes("unknown")).toEqual([]);
+  });
+});
+
 describe("isIcon（選択肢のアイコンか）", () => {
-  it("選択肢にある記号は、有効", () => {
+  it("選択肢の識別子は、有効", () => {
     for (const preset of ICON_PRESETS) expect(isIcon(preset.value)).toBe(true);
   });
 
-  it.each([[""], ["x"], ["<b>"], ["⭐⭐"], ["👍"], [123], [null], [undefined]])(
-    "選択肢にないもの（%j）は、無効",
+  it.each([[""], ["x"], ["<b>"], ["star star"], ["⭐"], ["👍"], [123], [null], [undefined]])(
+    "選択肢にないもの（%j）は、無効（以前の絵文字も、そのままでは無効）",
     (value) => {
       expect(isIcon(value)).toBe(false);
     },
   );
+});
+
+describe("legacyIconToId（以前の絵文字のアイコンを、識別子に変換）", () => {
+  it.each([
+    ["⭐", "star"],
+    ["✅", "check"],
+    ["⚠️", "warning"],
+    ["❓", "question"],
+    ["💡", "idea"],
+    ["🎯", "target"],
+    ["⏰", "deadline"],
+    ["❗", "urgent"],
+    ["❤️", "heart"],
+    ["📌", "memo"],
+    ["🔍", "research"],
+    ["💰", "money"],
+  ])("%s は %s に変換する", (emoji, id) => {
+    expect(legacyIconToId(emoji)).toBe(id);
+    expect(isIcon(id)).toBe(true);
+  });
+
+  it("絵文字でないもの、知らない絵文字は、undefined", () => {
+    expect(legacyIconToId("star")).toBeUndefined();
+    expect(legacyIconToId("👍")).toBeUndefined();
+    expect(legacyIconToId(1)).toBeUndefined();
+  });
 });
 
 describe("setNodeIcon（ノードのアイコンの設定）", () => {
