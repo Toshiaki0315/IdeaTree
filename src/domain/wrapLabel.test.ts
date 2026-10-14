@@ -65,6 +65,30 @@ describe("wrapLabel（ラベルの折り返し）", () => {
   });
 });
 
+describe("wrapLabel: 手動の改行", () => {
+  it("改行（\\n）で、必ず行を分ける", () => {
+    expect(wrapLabel("企画\n予算", 20)).toEqual(["企画", "予算"]);
+  });
+
+  it("空の行も、そのまま残す", () => {
+    expect(wrapLabel("企画\n\n予算", 20)).toEqual(["企画", "", "予算"]);
+  });
+
+  it("改行で分けた各行が長ければ、さらに折り返す", () => {
+    const long = "あ".repeat(MAX_LABEL_EM + 2);
+
+    expect(wrapLabel(`${long}\nい`, 20)).toEqual(["あ".repeat(MAX_LABEL_EM), "ああ", "い"]);
+  });
+
+  it("行末の空白は捨てる", () => {
+    expect(wrapLabel("企画 \n予算", 20)).toEqual(["企画", "予算"]);
+  });
+
+  it("labelBlock の高さは、手動の改行の行数の分", () => {
+    expect(labelBlock("a\nb\nc", 20).height).toBeCloseTo(3 * 20 * LINE_HEIGHT_RATIO);
+  });
+});
+
 describe("labelBlock（折り返したラベルの大きさ）", () => {
   it("1行なら、幅はその行の幅、高さは行の高さ", () => {
     expect(labelBlock("企画案", 20)).toEqual({

@@ -4863,4 +4863,56 @@ describe("App（マインドマップ編集UI）", () => {
       expect(Number(hit.getAttribute("width"))).toBeCloseTo(10 * 20 + 24);
     });
   });
+
+  describe("Shift + Enter: ラベルの手動の改行", () => {
+    const area = () => screen.getByRole("textbox", { name: "ノードのテキスト" }) as HTMLTextAreaElement;
+    const selectedLines = (container: HTMLElement) =>
+      [...container.querySelectorAll('g[data-node-id][data-selected="true"] text tspan')].map((t) => t.textContent);
+
+    it("Shift + Enter で、編集を続けたまま、改行が入る", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}企画{Shift>}{Enter}{/Shift}予算");
+
+      expect(area().value).toBe("企画\n予算");
+    });
+
+    it("Enter で確定すると、改行を含むラベルになり、行ごとに表示される", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard("{Tab}企画{Shift>}{Enter}{/Shift}予算{Enter}");
+
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(selectedLines(container)).toEqual(["企画", "予算"]);
+    });
+
+    it("既存の改行入りのラベルを編集し直しても、改行は保たれる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}企画{Shift>}{Enter}{/Shift}予算{Enter}{F2}");
+
+      expect(area().value).toBe("企画\n予算");
+    });
+
+    it("Escape で、改行を含む編集を取り消せる", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<App />);
+      await user.keyboard("{Tab}企画{Enter}{F2}{Shift>}{Enter}{/Shift}予算{Escape}");
+
+      expect(selectedLines(container)).toEqual([]);
+      expect(selectedText(container)).toBe("企画");
+    });
+
+    it("入力欄は、行数に合わせて高くなる", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await user.keyboard("{Tab}あ");
+      const height = () => Number(area().closest("foreignObject")!.getAttribute("height"));
+      const one = height();
+
+      await user.keyboard("{Shift>}{Enter}{/Shift}い{Shift>}{Enter}{/Shift}う");
+
+      expect(height()).toBeGreaterThan(one);
+    });
+  });
 });
