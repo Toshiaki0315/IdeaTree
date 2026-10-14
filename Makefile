@@ -1,6 +1,6 @@
 # IdeaTree の開発コマンド入口（OboeGaki と同じ流儀）。`make help` で一覧が出る。
 
-.PHONY: help setup dev test test-cov test-rust check app dmg icon
+.PHONY: help setup dev test test-cov test-rust test-rust-cov check app dmg icon
 
 help:             ## コマンドの一覧
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | sed -E 's/:[^#]*## /\t/' | sort
@@ -19,6 +19,9 @@ test-cov:         ## フロントエンドのテスト（カバレッジ付き�
 
 test-rust:        ## Rust 側のテスト
 	cd src-tauri && cargo test
+
+test-rust-cov:    ## Rust 側のテスト（カバレッジ付き。要 cargo install cargo-llvm-cov）
+	cd src-tauri && cargo llvm-cov --summary-only --ignore-filename-regex '(lib|main)\.rs'
 
 check:            ## コミット前チェック（型 + テスト + Rust のテスト・clippy）
 	npx tsc --noEmit
