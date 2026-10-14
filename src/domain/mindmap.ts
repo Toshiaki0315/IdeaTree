@@ -39,9 +39,20 @@ export interface MindMapNode {
   link?: string;
 }
 
+/** 離れた2つのノードを結ぶ、関連線（矢印）。ツリーの親子とは、別のつながり */
+export interface Relation {
+  id: string;
+  /** 矢印の元 */
+  from: NodeId;
+  /** 矢印の先 */
+  to: NodeId;
+}
+
 export interface MindMap {
   rootId: NodeId;
   nodes: Record<NodeId, MindMapNode>;
+  /** 関連線（なければ、省略） */
+  relations?: Relation[];
 }
 
 /** セントラルイメージ（中央ノード）だけを持つマインドマップを作成する */

@@ -1,4 +1,4 @@
-import type { MindMap, MindMapNode, NodeId } from "./mindmap";
+import type { MindMap, MindMapNode, NodeId, Relation } from "./mindmap";
 import { isIcon, legacyIconToId } from "./nodeIcon";
 import { isImageDataUrl } from "./nodeImage";
 import { isLink, isNote } from "./nodeNote";
@@ -6,6 +6,7 @@ import { isColor, isNodeStyle } from "./nodeStyle";
 import { SAVE_FORMAT_VERSION } from "./serialize";
 
 const FORMAT_ERROR = "保存データの形式が不正です";
+const RELATION_ERROR = "関連線の形式が不正です";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -112,5 +113,35 @@ export function deserialize(json: string, options: DeserializeOptions = {}): Min
   const orphan = Object.keys(map.nodes).find((id) => !reachable.has(id));
   if (orphan !== undefined) throw new Error(`到達できないノードがあります: ${orphan}`);
 
-  return map;
+  const relations = parseRelations(data.relations, map);
+  return relations === undefined ? map : { ...map, relations };
+}
+
+/** 関連線の項目を検証して返す。なければ（空も）undefined */
+function parseRelations(value: unknown, map: MindMap): Relation[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error(RELATION_ERROR);
+
+  const ids = new Set<string>();
+  const pairs = new Set<string>();
+  const relations = value.map((item): Relation => {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== "string" ||
+      typeof item.from !== "string" ||
+      typeof item.to !== "string"
+    ) {
+      throw new Error(RELATION_ERROR);
+    }
+    for (const end of [item.from, item.to]) {
+      if (!map.nodes[end]) throw new Error(`関連線の端のノードが存在しません: ${end}`);
+    }
+    if (item.from === item.to) throw new Error(RELATION_ERROR);
+    const pair = [item.from, item.to].sort().join("\n");
+    if (ids.has(item.id) || pairs.has(pair)) throw new Error("関連線が重複しています");
+    ids.add(item.id);
+    pairs.add(pair);
+    return { id: item.id, from: item.from, to: item.to };
+  });
+  return relations.length === 0 ? undefined : relations;
 }

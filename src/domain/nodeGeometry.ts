@@ -245,3 +245,43 @@ export function taperedBranchPath(from: MindMapNode, to: MindMapNode, start: num
   }
   return `M${left[0]} L${[...left.slice(1), ...right.reverse()].join(" L")} Z`;
 }
+
+/** 関連線の端を、ノードの位置から離す距離（ノードの印に、重ならないように） */
+const RELATION_GAP = 10;
+/** 関連線の曲がりの大きさ（2つのノードの距離に対する割合） */
+const RELATION_BEND = 0.25;
+const ARROW_LENGTH = 11;
+const ARROW_WIDTH = 8;
+
+/**
+ * 関連線（2つのノードを結ぶ、曲がった矢印）の形。line は曲線（二次ベジェ）、arrow は向かう先の矢じり（塗りつぶす三角形）。
+ * from から to へ向かう。
+ */
+export function relationGeometry(from: MindMapNode, to: MindMapNode): { line: string; arrow: string } {
+  const dx = to.position.x - from.position.x;
+  const dy = to.position.y - from.position.y;
+  const distance = Math.hypot(dx, dy);
+  // 位置が重なっているときは、向きが決まらないので、横向きとみなす
+  const ux = distance === 0 ? 1 : dx / distance;
+  const uy = distance === 0 ? 0 : dy / distance;
+
+  const sx = from.position.x + ux * RELATION_GAP;
+  const sy = from.position.y + uy * RELATION_GAP;
+  const ex = to.position.x - ux * RELATION_GAP;
+  const ey = to.position.y - uy * RELATION_GAP;
+  const cx = (sx + ex) / 2 - uy * distance * RELATION_BEND;
+  const cy = (sy + ey) / 2 + ux * distance * RELATION_BEND;
+
+  // 矢じりは、終点での、曲線の向き（制御点から終点）に合わせる（制御点は、終点と重ならない）
+  const tLength = Math.hypot(ex - cx, ey - cy);
+  const vx = (ex - cx) / tLength;
+  const vy = (ey - cy) / tLength;
+  const bx = ex - vx * ARROW_LENGTH;
+  const by = ey - vy * ARROW_LENGTH;
+  const half = ARROW_WIDTH / 2;
+
+  return {
+    line: `M${fmt(sx)} ${fmt(sy)} Q${fmt(cx)} ${fmt(cy)} ${fmt(ex)} ${fmt(ey)}`,
+    arrow: `M${fmt(ex)} ${fmt(ey)} L${fmt(bx - vy * half)} ${fmt(by + vx * half)} L${fmt(bx + vy * half)} ${fmt(by - vx * half)} Z`,
+  };
+}

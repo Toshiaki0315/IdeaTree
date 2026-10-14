@@ -1,4 +1,5 @@
 import type { MindMap, NodeId } from "./mindmap";
+import { removeRelationsOf } from "./relations";
 
 /** 指定ノードをサブツリーごと削除する（元のマップは変更しない） */
 export function deleteNode(map: MindMap, nodeId: NodeId): MindMap {
@@ -25,5 +26,6 @@ export function deleteNode(map: MindMap, nodeId: NodeId): MindMap {
     childIds: parent.childIds.filter((id) => id !== nodeId),
   };
 
-  return { ...map, nodes };
+  // 削除するノードにつながる関連線も、外す
+  return removeRelationsOf({ ...map, nodes }, removed);
 }
