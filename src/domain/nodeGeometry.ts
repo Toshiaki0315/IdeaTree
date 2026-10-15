@@ -249,6 +249,9 @@ export function taperedBranchPath(from: MindMapNode, to: MindMapNode, start: num
 /** 関連線の色・太さ・破線の間隔 */
 export const RELATION_STYLE = { color: "#8B949E", width: 2, dash: "6 4" } as const;
 
+/** 関連線のラベルの文字サイズと、縁取りの太さ */
+export const RELATION_LABEL = { fontSize: 13, haloWidth: 4 } as const;
+
 /** 関連線の端を、ノードの位置から離す距離（ノードの印に、重ならないように） */
 const RELATION_GAP = 10;
 /** 関連線の曲がりの大きさ（2つのノードの距離に対する割合） */
@@ -260,7 +263,10 @@ const ARROW_WIDTH = 8;
  * 関連線（2つのノードを結ぶ、曲がった矢印）の形。line は曲線（二次ベジェ）、arrow は向かう先の矢じり（塗りつぶす三角形）。
  * from から to へ向かう。
  */
-export function relationGeometry(from: MindMapNode, to: MindMapNode): { line: string; arrow: string } {
+export function relationGeometry(
+  from: MindMapNode,
+  to: MindMapNode,
+): { line: string; arrow: string; mid: { x: number; y: number } } {
   const dx = to.position.x - from.position.x;
   const dy = to.position.y - from.position.y;
   const distance = Math.hypot(dx, dy);
@@ -284,6 +290,8 @@ export function relationGeometry(from: MindMapNode, to: MindMapNode): { line: st
   const half = ARROW_WIDTH / 2;
 
   return {
+    // 曲線（二次ベジェ）の、真ん中（t = 0.5）。ラベルを置く位置
+    mid: { x: (sx + 2 * cx + ex) / 4, y: (sy + 2 * cy + ey) / 4 },
     line: `M${fmt(sx)} ${fmt(sy)} Q${fmt(cx)} ${fmt(cy)} ${fmt(ex)} ${fmt(ey)}`,
     arrow: `M${fmt(ex)} ${fmt(ey)} L${fmt(bx - vy * half)} ${fmt(by + vx * half)} L${fmt(bx + vy * half)} ${fmt(by - vx * half)} Z`,
   };

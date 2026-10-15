@@ -3,6 +3,7 @@ import { isIcon, legacyIconToId } from "./nodeIcon";
 import { isImageDataUrl } from "./nodeImage";
 import { isLink, isNote } from "./nodeNote";
 import { isOffset } from "./nodeOffset";
+import { MAX_RELATION_LABEL } from "./relations";
 import { isColor, isNodeStyle } from "./nodeStyle";
 import { SAVE_FORMAT_VERSION } from "./serialize";
 
@@ -144,11 +145,21 @@ function parseRelations(value: unknown, map: MindMap): Relation[] | undefined {
       if (!map.nodes[end]) throw new Error(`関連線の端のノードが存在しません: ${end}`);
     }
     if (item.from === item.to) throw new Error(RELATION_ERROR);
+    const { label, color } = item;
+    if (
+      (label !== undefined && (typeof label !== "string" || label.length > MAX_RELATION_LABEL)) ||
+      (color !== undefined && !isColor(color))
+    ) {
+      throw new Error(RELATION_ERROR);
+    }
     const pair = [item.from, item.to].sort().join("\n");
     if (ids.has(item.id) || pairs.has(pair)) throw new Error("関連線が重複しています");
     ids.add(item.id);
     pairs.add(pair);
-    return { id: item.id, from: item.from, to: item.to };
+    const relation: Relation = { id: item.id, from: item.from, to: item.to };
+    if (label !== undefined) relation.label = label as string;
+    if (color !== undefined) relation.color = color as string;
+    return relation;
   });
   return relations.length === 0 ? undefined : relations;
 }

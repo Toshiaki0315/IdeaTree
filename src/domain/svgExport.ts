@@ -4,6 +4,7 @@ import {
   BRANCH_OUTLINE_WIDTH,
   CENTRAL_RX,
   CENTRAL_RY,
+  FONT_FAMILY,
   LABEL_HALO_WIDTH,
   branchWidths,
   centralLabelY,
@@ -14,6 +15,7 @@ import {
   labelPosition,
   nodeLabel,
   nodeTextStyle,
+  RELATION_LABEL,
   RELATION_STYLE,
   relationGeometry,
   taperedBranchPath,
@@ -127,16 +129,24 @@ export function exportSvg(map: MindMap): string {
 
   // 関連線は、ブランチより背面に描く（見えているノードどうしのものだけ）
   const visible = new Set(nodes.map((n) => n.id));
-  const relations = (map.relations ?? [])
-    .filter((r) => visible.has(r.from) && visible.has(r.to))
-    .flatMap((r) => {
-      const { line, arrow } = relationGeometry(map.nodes[r.from], map.nodes[r.to]);
-      const id = escapeXml(r.id);
-      return [
-        `<path data-relation-id="${id}" d="${line}" fill="none" stroke="${RELATION_STYLE.color}" stroke-width="${RELATION_STYLE.width}" stroke-dasharray="${RELATION_STYLE.dash}" stroke-linecap="round"/>`,
-        `<path data-relation-arrow="${id}" d="${arrow}" fill="${RELATION_STYLE.color}" stroke="${RELATION_STYLE.color}" stroke-width="1" stroke-linejoin="round"/>`,
-      ];
-    });
+  const visibleRelations = (map.relations ?? []).filter((r) => visible.has(r.from) && visible.has(r.to));
+  const relations = visibleRelations.flatMap((r) => {
+    const { line, arrow } = relationGeometry(map.nodes[r.from], map.nodes[r.to]);
+    const id = escapeXml(r.id);
+    const color = r.color ?? RELATION_STYLE.color;
+    return [
+      `<path data-relation-id="${id}" d="${line}" fill="none" stroke="${color}" stroke-width="${RELATION_STYLE.width}" stroke-dasharray="${RELATION_STYLE.dash}" stroke-linecap="round"/>`,
+      `<path data-relation-arrow="${id}" d="${arrow}" fill="${color}" stroke="${color}" stroke-width="1" stroke-linejoin="round"/>`,
+    ];
+  });
+  // 関連線のラベルは、曲線の中点に、文字で描く（ノードのラベルと同じく、前面）
+  const relationLabels = visibleRelations.flatMap((r) => {
+    if (r.label === undefined) return [];
+    const { mid } = relationGeometry(map.nodes[r.from], map.nodes[r.to]);
+    return [
+      `<text data-relation-label="${escapeXml(r.id)}" x="${fmt(mid.x)}" y="${fmt(mid.y)}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(FONT_FAMILY)}" font-size="${RELATION_LABEL.fontSize}" fill="${r.color ?? RELATION_STYLE.color}" stroke="${BACKGROUND}" stroke-width="${RELATION_LABEL.haloWidth}" paint-order="stroke" stroke-linejoin="round">${escapeXml(r.label)}</text>`,
+    ];
+  });
 
   const viewBox = `${fmt(minX)} ${fmt(minY)} ${fmt(width)} ${fmt(height)}`;
   return [
@@ -147,6 +157,7 @@ export function exportSvg(map: MindMap): string {
     ...shapes,
     ...images,
     ...labels,
+    ...relationLabels,
     "</svg>",
   ].join("\n");
 }

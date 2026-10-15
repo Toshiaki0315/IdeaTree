@@ -140,8 +140,8 @@ describe("relationGeometry: 曲線の中点（ラベルを置く位置）", () =
   it("中点は、曲線（二次ベジェ）の真ん中で、2つのノードを結ぶ直線から、曲がった側に外れている", () => {
     const { mid } = relationGeometry(node(0, 0), node(300, 0));
 
-    // 始点 (10, 0)・終点 (290, 0)・制御点 (150, 70) の、t = 0.5 の点
+    // 始点 (10, 0)・終点 (290, 0)・制御点 (150, 75) の、t = 0.5 の点
     expect(mid.x).toBeCloseTo(150);
-    expect(mid.y).toBeCloseTo(35);
+    expect(mid.y).toBeCloseTo(37.5);
   });
 });

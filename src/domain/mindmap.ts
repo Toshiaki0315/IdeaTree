@@ -48,6 +48,10 @@ export interface Relation {
   from: NodeId;
   /** 矢印の先 */
   to: NodeId;
+  /** 線に添える、短い文字（なければ、省略） */
+  label?: string;
+  /** 線の色（#RRGGBB。なければ、既定のグレー） */
+  color?: string;
 }
 
 export interface MindMap {
