@@ -56,3 +56,29 @@ export function resetOffsets(map: MindMap, nodeId: NodeId): MindMap {
   }
   return changed ? { ...map, nodes } : map;
 }
+
+/**
+ * 複数選択のうち、動かす対象（最上位のノード）。中心ノードと、祖先も選択されているノード（子孫）は除く
+ * （子孫は、祖先と一緒に動くので、二重に動かさないため）。重複は 1 つにして、順序は保つ。
+ */
+export function topmostNodes(map: MindMap, ids: readonly NodeId[]): NodeId[] {
+  // 中心ノードは、動かせないので、選択から除く（全体が、中心ノードの子孫なので、除かないと、すべてが除かれてしまう）
+  const selected = new Set(ids.filter((id) => map.nodes[id].parentId !== null));
+  const hasSelectedAncestor = (id: NodeId) => {
+    for (let parent = map.nodes[id].parentId; parent !== null; parent = map.nodes[parent].parentId) {
+      if (selected.has(parent)) return true;
+    }
+    return false;
+  };
+  return [...selected].filter((id) => !hasSelectedAncestor(id));
+}
+
+/** 複数のノードを、一緒に、同じ量だけ動かす（子孫は、親と一緒に動く）。動かせるノードがなければ、同じマップ */
+export function nudgeNodes(map: MindMap, ids: readonly NodeId[], dx: number, dy: number): MindMap {
+  return topmostNodes(map, ids).reduce((current, id) => nudgeNode(current, id, dx, dy), map);
+}
+
+/** 複数のノードと、それぞれの子孫の手動配置を、外す（中心ノードを含めば、すべて）。変化がなければ、同じマップ */
+export function resetOffsetsOf(map: MindMap, ids: readonly NodeId[]): MindMap {
+  return ids.reduce((current, id) => resetOffsets(current, id), map);
+}
