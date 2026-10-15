@@ -539,7 +539,7 @@ export default function App() {
         void open();
         return;
       }
-      if (key === "c") {
+      if (key === "c" && !event.shiftKey) {
         event.preventDefault();
         copySelected();
         return;
@@ -631,7 +631,7 @@ export default function App() {
         togglePanel("style");
         return;
       }
-      if (key === "x") {
+      if (key === "x" && !event.shiftKey) {
         event.preventDefault();
         if (!isRoot) {
           copySelected();
@@ -639,7 +639,7 @@ export default function App() {
         }
         return;
       }
-      if (key === "v") {
+      if (key === "v" && !event.shiftKey) {
         event.preventDefault();
         void paste();
         return;
