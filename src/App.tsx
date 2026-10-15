@@ -16,12 +16,12 @@ import { layout } from "./domain/layout";
 import { PALETTES } from "./domain/theme";
 import { createMindMap } from "./domain/mindmap";
 import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
-import { setNodeIcon } from "./domain/nodeIcon";
+import { setIconOf } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeLink, setNodeNote } from "./domain/nodeNote";
 import { nudgeNodes, resetOffsetsOf } from "./domain/nodeOffset";
 import { removeRelation, reverseRelation, toggleRelation, updateRelation } from "./domain/relations";
-import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
+import { setStyleOf, toggleStyleOf } from "./domain/nodeStyle";
 import { moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
@@ -391,12 +391,12 @@ export default function App() {
 
   /** スタイルパネルでのアイコンの変更を、1手の履歴として記録する（選び直しは、変更にならない） */
   const changeIcon = (icon: string | undefined) =>
-    commit({ map: setNodeIcon(map, selectedId, icon), selectedId });
+    commit({ map: setIconOf(map, selection, icon), selectedId, extraIds });
 
   /** スタイルパネルでの変更を、1手の履歴として記録する（変化がなければ記録しない） */
   const changeStyle = (patch: Partial<NodeStyle>) => {
-    const updated = setNodeStyle(map, selectedId, patch);
-    if (updated !== map) commit({ map: updated, selectedId });
+    const updated = setStyleOf(map, selection, patch);
+    if (updated !== map) commit({ map: updated, selectedId, extraIds });
   };
 
   /** 画像を選ばせて、選択ノードに設定する（履歴に1手として記録）。キャンセルなら、何もしない */
@@ -589,8 +589,8 @@ export default function App() {
       }
       if ((key === "b" || key === "i") && !event.shiftKey) {
         event.preventDefault();
-        const toggled = toggleStyle(map, selectedId, key === "b" ? "bold" : "italic");
-        commit({ map: toggled, selectedId });
+        const toggled = toggleStyleOf(map, selection, key === "b" ? "bold" : "italic");
+        commit({ map: toggled, selectedId, extraIds });
         return;
       }
       if (key === "=" || key === "+") {

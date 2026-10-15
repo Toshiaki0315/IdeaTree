@@ -199,6 +199,11 @@ export function setNodeIcon(map: MindMap, nodeId: NodeId, icon: string | undefin
   return { ...map, nodes: { ...map.nodes, [nodeId]: updated } };
 }
 
+/** 複数のノードに、同じアイコンを設定する（undefined で、すべて外す。変化がなければ、同じマップを返す） */
+export function setIconOf(map: MindMap, ids: readonly NodeId[], icon: string | undefined): MindMap {
+  return ids.reduce((current, id) => setNodeIcon(current, id, icon), map);
+}
+
 /** アイコンの図形の、SVG の属性（塗りや線の指定がなければ、なし） */
 export function iconShapeAttributes(shape: IconShape) {
   return {

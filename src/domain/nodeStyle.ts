@@ -88,3 +88,17 @@ export function toggleStyle(map: MindMap, nodeId: NodeId, key: "bold" | "italic"
   const enabled = map.nodes[nodeId]?.style?.[key];
   return setNodeStyle(map, nodeId, { [key]: enabled ? undefined : true });
 }
+
+/** 複数のノードに、同じスタイルを設定する（変化がなければ、同じマップを返す） */
+export function setStyleOf(map: MindMap, ids: readonly NodeId[], patch: Partial<NodeStyle>): MindMap {
+  return ids.reduce((current, id) => setNodeStyle(current, id, patch), map);
+}
+
+/**
+ * 複数のノードの、太字・斜体を、そろえて切り替える。
+ * 1つでも、オフのノードがあれば、すべてオンにする。すべてオンなら、すべてオフにする（設定を解除する）。
+ */
+export function toggleStyleOf(map: MindMap, ids: readonly NodeId[], key: "bold" | "italic"): MindMap {
+  const allOn = ids.every((id) => map.nodes[id].style?.[key]);
+  return setStyleOf(map, ids, { [key]: allOn ? undefined : true });
+}
