@@ -5784,4 +5784,197 @@ describe("App（マインドマップ編集UI）", () => {
       expect(container.querySelectorAll("path[data-relation-id]")).toHaveLength(0);
     });
   });
+
+  describe("複数選択（まとめて動かす）", () => {
+    const at = (x: number, y: number) => ({ clientX: x, clientY: y });
+    const labelPos = (text: string) => {
+      const el = screen.getByText(text);
+      return { x: Number(el.getAttribute("x")), y: Number(el.getAttribute("y")) };
+    };
+    const multi = (container: HTMLElement) =>
+      [...container.querySelectorAll('g[data-multi-selected="true"]')].map((g) => g.textContent);
+    const nudgeKey = (key: string) => fireEvent.keyDown(window, { key, metaKey: true, altKey: true });
+
+    /** 中心の下に a（子 a1）と b（子 b1）。選択は b1 */
+    async function build(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}a{Enter}{Tab}a1{Enter}{ArrowLeft}{Enter}b{Enter}{Tab}b1{Enter}");
+      expect(selectedText(view.container)).toBe("b1");
+      return view;
+    }
+    const clickNode = (user: User, text: string, shift = false) =>
+      shift
+        ? user
+            .keyboard("{Shift>}")
+            .then(() => user.click(screen.getByText(text)))
+            .then(() => user.keyboard("{/Shift}"))
+        : user.click(screen.getByText(text));
+
+    describe("選び方", () => {
+      it("Shift + 矢印キーで、選択を広げる。今の選択は、複数選択に加わる", async () => {
+        const user = userEvent.setup();
+        const { container } = await build(user);
+        await user.keyboard("{ArrowLeft}"); // b
+
+        await user.keyboard("{Shift>}{ArrowUp}{/Shift}"); // a
+
+        expect(selectedText(container)).toBe("a");
+        expect(multi(container)).toEqual(["b"]);
+      });
+
+      it("選択した方向と逆へ動くと、選択が縮む（今のノードが、選択から外れる）", async () => {
+        const user = userEvent.setup();
+        const { container } = await build(user);
+        await user.keyboard("{ArrowLeft}"); // b
+        await user.keyboard("{Shift>}{ArrowUp}{/Shift}"); // a、複数選択 {b}
+
+        await user.keyboard("{Shift>}{ArrowDown}{/Shift}"); // b（複数選択に入っていた）
+
+        expect(selectedText(container)).toBe("b");
+        expect(multi(container)).toEqual([]);
+      });
+
+      it("Shift + クリックで、選択に加える。もう一度で、外す。中心ノードは、加えない", async () => {
+        const user = userEvent.setup();
+        const { container } = await build(user);
+
+        await clickNode(user, "a1");
+        await clickNode(user, "b1", true);
+        expect(selectedText(container)).toBe("a1");
+        expect(multi(container)).toEqual(["b1"]);
+
+        await clickNode(user, "b1", true);
+        expect(multi(container)).toEqual([]);
+
+        await clickNode(user, "中心テーマ", true);
+        expect(multi(container)).toEqual([]);
+      });
+
+      it("今のノードを Shift + クリックしても、何も変わらない", async () => {
+        const user = userEvent.setup();
+        const { container } = await build(user);
+        await clickNode(user, "a1");
+        await clickNode(user, "b1", true);
+
+        await clickNode(user, "a1", true);
+
+        expect(selectedText(container)).toBe("a1");
+        expect(multi(container)).toEqual(["b1"]);
+      });
+
+      it("普通のクリック・矢印キーで、単独の選択に戻る。Escape でも、複数選択を解く", async () => {
+        const user = userEvent.setup();
+        const { container } = await build(user);
+        await clickNode(user, "a1");
+        await clickNode(user, "b1", true);
+
+        await user.click(screen.getByText("a"));
+        expect(multi(container)).toEqual([]);
+
+        await clickNode(user, "b1", true);
+        await user.keyboard("{ArrowDown}");
+        expect(multi(container)).toEqual([]);
+
+        await clickNode(user, "b1", true);
+        await user.keyboard("{Escape}");
+        expect(multi(container)).toEqual([]);
+        expect(selectedText(container)).not.toBeNull();
+      });
+    });
+
+    describe("まとめて動かす", () => {
+      it("Cmd + Option + 矢印キーで、選択したすべてを、動かす", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        await clickNode(user, "a1");
+        await clickNode(user, "b1", true);
+        const a1 = labelPos("a1");
+        const b1 = labelPos("b1");
+
+        nudgeKey("ArrowRight");
+
+        expect(labelPos("a1")).toEqual({ x: a1.x + 20, y: a1.y });
+        expect(labelPos("b1")).toEqual({ x: b1.x + 20, y: b1.y });
+      });
+
+      it("動かしたあとも、複数選択は、保たれる。元に戻せる（Cmd+Z）", async () => {
+        const user = userEvent.setup();
+        const { container } = await build(user);
+        await clickNode(user, "a1");
+        await clickNode(user, "b1", true);
+        const a1 = labelPos("a1");
+
+        nudgeKey("ArrowDown");
+        expect(multi(container)).toEqual(["b1"]);
+
+        fireEvent.keyDown(window, { key: "z", metaKey: true });
+        expect(labelPos("a1")).toEqual(a1);
+      });
+
+      it("親と子の両方を選んでいても、子は、二重に動かない", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        await clickNode(user, "a");
+        await clickNode(user, "a1", true);
+        const a1 = labelPos("a1");
+
+        nudgeKey("ArrowRight");
+
+        expect(labelPos("a1")).toEqual({ x: a1.x + 20, y: a1.y });
+      });
+
+      it("選択したノードの1つをドラッグすると、選択したすべてが、同じ量だけ動く（ドラッグ中も）", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        await clickNode(user, "a1");
+        await clickNode(user, "b1", true);
+        const a1 = labelPos("a1");
+        const b1 = labelPos("b1");
+        const svg = screen.getByRole("application");
+
+        await user.pointer([
+          { keys: "[MouseLeft>]", target: screen.getByText("a1"), coords: at(100, 100) },
+          { target: svg, coords: at(160, 140) },
+        ]);
+        expect(labelPos("b1")).toEqual({ x: b1.x + 60, y: b1.y + 40 });
+
+        await user.pointer({ keys: "[/MouseLeft]", target: svg, coords: at(160, 140) });
+        expect(labelPos("a1")).toEqual({ x: a1.x + 60, y: a1.y + 40 });
+        expect(labelPos("b1")).toEqual({ x: b1.x + 60, y: b1.y + 40 });
+      });
+
+      it("選択していないノードをドラッグすると、そのノードだけが動き、複数選択は、解かれる", async () => {
+        const user = userEvent.setup();
+        const { container } = await build(user);
+        await clickNode(user, "a1");
+        await clickNode(user, "b1", true);
+        const b1 = labelPos("b1");
+        const svg = screen.getByRole("application");
+
+        await user.pointer([
+          { keys: "[MouseLeft>]", target: screen.getByText("b"), coords: at(100, 100) },
+          { target: svg, coords: at(160, 140) },
+          { keys: "[/MouseLeft]", target: svg, coords: at(160, 140) },
+        ]);
+
+        expect(multi(container)).toEqual([]);
+        expect(labelPos("b1").x).toBeCloseTo(b1.x + 60); // b の子孫として、一緒に動く（a1 は、動かない）
+      });
+
+      it("Cmd + Shift + R で、選択したすべての手動配置を、自動配置に戻す", async () => {
+        const user = userEvent.setup();
+        await build(user);
+        const a1 = labelPos("a1");
+        const b1 = labelPos("b1");
+        await clickNode(user, "a1");
+        await clickNode(user, "b1", true);
+        nudgeKey("ArrowRight");
+
+        fireEvent.keyDown(window, { key: "r", metaKey: true, shiftKey: true });
+
+        expect(labelPos("a1")).toEqual(a1);
+        expect(labelPos("b1")).toEqual(b1);
+      });
+    });
+  });
 });
