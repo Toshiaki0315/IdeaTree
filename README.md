@@ -1,6 +1,6 @@
 # IdeaTree
 
-現在のバージョン: **0.8.0**（変更点は [CHANGELOG.md](CHANGELOG.md)）
+現在のバージョン: **0.9.0**（変更点は [CHANGELOG.md](CHANGELOG.md)）
 
 TypeScript と Rust (Tauri) で開発する、macOS 向けのマインドマップツールです。トニー・ブザンのマインドマップの法則に忠実な描画と、キーボードだけで完結する操作性を目指します。
 
