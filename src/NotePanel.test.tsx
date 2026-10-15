@@ -247,6 +247,12 @@ describe("NotePanel: 関連線", () => {
     expect(onRelationChange).toHaveBeenCalledWith("r1", { color: undefined });
   });
 
+  it("選択肢にない色（ファイルに保存された色）も、そのまま選ばれた状態で表示する", () => {
+    setup({ relations: [{ id: "r3", direction: "to", otherText: "予算", label: "", color: "#123456" }] });
+
+    expect(screen.getByRole("combobox", { name: "色（→ 予算）" })).toHaveValue("#123456");
+  });
+
   it("「関連線を削除」で、その関連線を、削除する", async () => {
     const { onRelationRemove } = setup({ relations: rows });
 

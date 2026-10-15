@@ -20,7 +20,7 @@ import { setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeLink, setNodeNote } from "./domain/nodeNote";
 import { nudgeNode, resetOffsets } from "./domain/nodeOffset";
-import { toggleRelation } from "./domain/relations";
+import { removeRelation, toggleRelation, updateRelation } from "./domain/relations";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
@@ -57,7 +57,8 @@ import { useViewport } from "./hooks/useViewport";
 import { useSubscription } from "./hooks/useSubscription";
 import NodeView from "./NodeView";
 import NotePanel from "./NotePanel";
-import RelationView from "./RelationView";
+import type { RelationRow } from "./NotePanel";
+import RelationView, { RelationLabel } from "./RelationView";
 import RecentFilesPanel from "./RecentFilesPanel";
 import SearchBar from "./SearchBar";
 import SettingsPanel from "./SettingsPanel";
@@ -133,6 +134,19 @@ export default function App() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { map, selectedId } = history.present;
+  // 選択ノードにつながる関連線（メモとリンクのパネルで、ラベルと色を編集する）
+  const relationRows: RelationRow[] = (map.relations ?? [])
+    .filter((r) => r.from === selectedId || r.to === selectedId)
+    .map((r) => {
+      const outgoing = r.from === selectedId;
+      return {
+        id: r.id,
+        direction: outgoing ? "to" : "from",
+        otherText: map.nodes[outgoing ? r.to : r.from].text,
+        label: r.label ?? "",
+        color: r.color,
+      };
+    });
   const mapRef = useRef(map);
   mapRef.current = map;
   const dirty = map !== savedMap;
@@ -722,7 +736,13 @@ export default function App() {
         {(map.relations ?? [])
           .filter((r) => visibleIds.has(r.from) && visibleIds.has(r.to))
           .map((r) => (
-            <RelationView key={r.id} id={r.id} from={laidOut.nodes[r.from]} to={laidOut.nodes[r.to]} />
+            <RelationView
+              key={r.id}
+              id={r.id}
+              from={laidOut.nodes[r.from]}
+              to={laidOut.nodes[r.to]}
+              color={r.color}
+            />
           ))}
         {nodes.map((node) => {
           if (node.parentId === null) return null;
@@ -765,6 +785,19 @@ export default function App() {
             onOpenLink={(url) => void openLinkAction(url)}
           />
         ))}
+        {(map.relations ?? [])
+          .filter((r) => r.label !== undefined && visibleIds.has(r.from) && visibleIds.has(r.to))
+          .map((r) => (
+            <RelationLabel
+              key={r.id}
+              id={r.id}
+              from={laidOut.nodes[r.from]}
+              to={laidOut.nodes[r.to]}
+              label={r.label as string}
+              color={r.color}
+              background={palette.background}
+            />
+          ))}
       </svg>
       {Math.round(viewport.zoom * 100) !== 100 && (
         <div className="zoom-state">{Math.round(viewport.zoom * 100)}%</div>
@@ -799,6 +832,9 @@ export default function App() {
           link={map.nodes[selectedId].link}
           onNoteChange={(note) => commit({ map: setNodeNote(map, selectedId, note), selectedId })}
           onLinkChange={(link) => commit({ map: setNodeLink(map, selectedId, link), selectedId })}
+          relations={relationRows}
+          onRelationChange={(id, patch) => commit({ map: updateRelation(map, id, patch), selectedId })}
+          onRelationRemove={(id) => commit({ map: removeRelation(map, id), selectedId })}
           onOpenLink={(url) => void openLinkAction(url)}
           onClose={() => closePanel("note")}
         />

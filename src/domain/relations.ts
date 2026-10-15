@@ -74,3 +74,13 @@ export function updateRelation(
 
   return { ...map, relations: (map.relations as Relation[]).map((r) => (r === relation ? updated : r)) };
 }
+
+/** 関連線を、削除する。存在しなければ、エラー */
+export function removeRelation(map: MindMap, relationId: string): MindMap {
+  const relation = map.relations?.find((r) => r.id === relationId);
+  if (!relation) throw new Error(`関連線が存在しません: ${relationId}`);
+  return withRelations(
+    map,
+    (map.relations as Relation[]).filter((r) => r !== relation),
+  );
+}

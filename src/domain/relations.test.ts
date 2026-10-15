@@ -5,6 +5,7 @@ import { createMindMap } from "./mindmap";
 import {
   MAX_RELATION_LABEL,
   findRelation,
+  removeRelation,
   removeRelationsOf,
   toggleRelation,
   updateRelation,
@@ -174,5 +175,23 @@ describe("updateRelation（関連線のラベルと色）", () => {
       "ラベルが長すぎます",
     );
     expect(() => updateRelation(map, id, { color: "red" })).toThrow("色は、#RRGGBB の形式にしてください");
+  });
+});
+
+describe("removeRelation（関連線の削除）", () => {
+  it("指定した関連線だけを削除する。なくなったら、relations も外す", () => {
+    const { map, ids } = sample();
+    const two = toggleRelation(toggleRelation(map, ids.a, ids.b), ids.b, ids.c);
+
+    const one = removeRelation(two, two.relations![0].id);
+    expect(one.relations).toEqual([two.relations![1]]);
+
+    expect("relations" in removeRelation(one, one.relations![0].id)).toBe(false);
+  });
+
+  it("存在しない関連線は、エラーにする", () => {
+    const { map } = sample();
+
+    expect(() => removeRelation(map, "ghost")).toThrow("関連線が存在しません: ghost");
   });
 });
