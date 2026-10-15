@@ -2,15 +2,15 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { SHORTCUT_GROUPS } from "./domain/shortcuts";
-import { readAutosave } from "./files/autosave";
-import { readClipboardText } from "./files/clipboard";
+import { clearAutosave, readAutosave, writeAutosave } from "./files/autosave";
+import { readClipboardText, writeClipboardText } from "./files/clipboard";
 import { registerCloseGuard } from "./files/closeGuard";
 import { confirmDiscard } from "./files/confirmDiscard";
 import { exportFile } from "./files/exportFile";
 import { loadFile } from "./files/loadFile";
 import { onOpenFileRequest, takePendingOpenFiles } from "./files/openRequests";
 import { pickImage } from "./files/pickImage";
-import { readRecentFiles } from "./files/recent";
+import { readRecentFiles, writeRecentFiles } from "./files/recent";
 import { saveFile } from "./files/saveFile";
 
 // このテストは、「ショートカット一覧（shortcuts.ts）に載っているキー」と、「実際に処理されるキー」が、
@@ -147,11 +147,15 @@ describe("ショートカット一覧と、キー処理の、食い違い防止"
     vi.mocked(registerCloseGuard).mockResolvedValue(vi.fn());
     vi.mocked(confirmDiscard).mockResolvedValue(true);
     vi.mocked(readClipboardText).mockResolvedValue("");
+    vi.mocked(writeClipboardText).mockResolvedValue(undefined);
     vi.mocked(exportFile).mockResolvedValue(null);
     vi.mocked(loadFile).mockResolvedValue(null);
     vi.mocked(pickImage).mockResolvedValue(null);
     vi.mocked(saveFile).mockResolvedValue(null);
     vi.mocked(readRecentFiles).mockResolvedValue([]);
+    vi.mocked(writeRecentFiles).mockResolvedValue(undefined);
+    vi.mocked(writeAutosave).mockResolvedValue(undefined);
+    vi.mocked(clearAutosave).mockResolvedValue(undefined);
     vi.mocked(takePendingOpenFiles).mockResolvedValue([]);
     vi.mocked(onOpenFileRequest).mockResolvedValue(vi.fn());
   });
