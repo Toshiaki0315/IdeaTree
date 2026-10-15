@@ -18,7 +18,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "Enter", description: "兄弟ノードを追加（入力中は確定）" },
       { keys: "Shift + Enter", description: "入力中に、ラベルの改行（Enter で確定）" },
       { keys: "F2", description: "テキストを編集（ダブルクリックでも可）" },
-      { keys: "Escape", description: "入力を取り消す" },
+      { keys: "Escape", description: "入力・ドラッグ・複数選択を取り消す" },
       { keys: "Delete / Backspace", description: "ノードを削除（子孫ごと）" },
     ],
   },
@@ -26,7 +26,12 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: "選択・移動",
     items: [
       { keys: "← → ↑ ↓", description: "親 / 最初の子 / 前の兄弟 / 次の兄弟へ移動" },
+      {
+        keys: "Shift + ← → ↑ ↓",
+        description: "選択を広げる（複数選択）。手動配置の移動・自動配置に戻す操作は、選択したすべてに効く",
+      },
       { keys: "クリック", description: "ノードを選択" },
+      { keys: "Shift + クリック", description: "複数選択に、加える / 外す" },
       { keys: "Option + ↑ / ↓", description: "兄弟の順序を入れ替える" },
       { keys: "Option + → / ←", description: "インデント / アウトデント" },
       { keys: "Cmd + Option + 矢印キー", description: "選択ノードと子孫を、20 ずつ動かす（手動配置）" },

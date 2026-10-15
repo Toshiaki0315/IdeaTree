@@ -19,7 +19,7 @@ import type { MindMap, NodeId, NodeStyle } from "./domain/mindmap";
 import { setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeLink, setNodeNote } from "./domain/nodeNote";
-import { nudgeNode, resetOffsets } from "./domain/nodeOffset";
+import { nudgeNodes, resetOffsetsOf } from "./domain/nodeOffset";
 import { removeRelation, toggleRelation, updateRelation } from "./domain/relations";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { moveNode } from "./domain/moveNode";
@@ -134,6 +134,9 @@ export default function App() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { map, selectedId } = history.present;
+  const extraIds = history.present.extraIds ?? [];
+  /** 選択しているすべてのノード（複数選択を含む） */
+  const selection = [selectedId, ...extraIds];
   // 選択ノードにつながる関連線（メモとリンクのパネルで、ラベルと色を編集する）
   const relationRows: RelationRow[] = (map.relations ?? [])
     .filter((r) => r.from === selectedId || r.to === selectedId)
@@ -194,10 +197,12 @@ export default function App() {
   const scaleRef = useRef<() => number>(undefined as never); // 描画のたびに、useViewport の関数を入れる
   const { dropTarget, preview: dragPreview, startDrag } = useNodeDrag(mapRef, setHistory, scaleRef);
   // ドラッグ中は、動かしているノードを、マウスについてこさせる（離すまで、履歴には残さない）
-  const laidOut = useMemo(
-    () => layout(dragPreview ? nudgeNode(map, dragPreview.nodeId, dragPreview.dx, dragPreview.dy) : map),
-    [map, dragPreview],
-  );
+  const present = history.present;
+  const laidOut = useMemo(() => {
+    // 複数選択しているときは、選択したすべてを、一緒に動かす
+    const ids = [present.selectedId, ...(present.extraIds ?? [])];
+    return layout(dragPreview ? nudgeNodes(map, ids, dragPreview.dx, dragPreview.dy) : map);
+  }, [map, dragPreview, present]);
   const visibleIds = new Set(visibleNodeIds(laidOut));
   const nodes = [...visibleIds].map((id) => laidOut.nodes[id]);
   /** 拡大率 100% のとき、中心から見える距離。マップが大きくなったら、広げる */
@@ -233,7 +238,18 @@ export default function App() {
   const commit = (snapshot: Snapshot) => setHistory(record(history, snapshot));
 
   /** ノードを選択する（履歴には残さない） */
-  const select = (nodeId: NodeId) => replacePresent({ map, selectedId: nodeId });
+  const select = (nodeId: NodeId, additive = false) => {
+    if (!additive) {
+      replacePresent({ map, selectedId: nodeId });
+      return;
+    }
+    // Shift + クリック: 複数選択に加える（すでに加えていれば、外す）。中心ノードと、今のノードは、そのまま
+    if (nodeId === selectedId || map.nodes[nodeId].parentId === null) return;
+    const toggled = extraIds.includes(nodeId)
+      ? extraIds.filter((id) => id !== nodeId)
+      : [...extraIds, nodeId];
+    replacePresent({ map, selectedId, extraIds: toggled });
+  };
 
   /** 既存のノードのテキスト編集を始める */
   const startEdit = (nodeId: NodeId) => setEditing({ nodeId, draft: map.nodes[nodeId].text, base: null });
@@ -517,10 +533,9 @@ export default function App() {
     // Cmd + Option + 矢印キー: 選択ノード（と子孫）を、手動配置で、少しずつ動かす（中心ノードは動かせない）
     if (event.metaKey && event.altKey && !event.ctrlKey && !event.shiftKey && event.key in NUDGE_DIRECTIONS) {
       event.preventDefault();
-      if (!isRoot) {
-        const [dx, dy] = NUDGE_DIRECTIONS[event.key];
-        commit({ map: nudgeNode(map, selectedId, dx * NUDGE_STEP, dy * NUDGE_STEP), selectedId });
-      }
+      // 選択したすべて（複数選択を含む）を動かす。中心ノードは、動かない
+      const [dx, dy] = NUDGE_DIRECTIONS[event.key];
+      commit({ map: nudgeNodes(map, selection, dx * NUDGE_STEP, dy * NUDGE_STEP), selectedId, extraIds });
       return;
     }
 
@@ -609,12 +624,12 @@ export default function App() {
       }
       if (key === "r" && event.shiftKey) {
         event.preventDefault();
-        // 選択ノードと子孫の手動配置を外す（中心ノードなら、すべて）
-        const reset = resetOffsets(map, selectedId);
+        // 選択したすべて（複数選択を含む）と、子孫の手動配置を外す（中心ノードを含めば、すべて）
+        const reset = resetOffsetsOf(map, selection);
         if (reset === map) {
           setMessage({ kind: "status", text: "手動で動かしたノードは、ありません" });
         } else {
-          commit({ map: reset, selectedId });
+          commit({ map: reset, selectedId, extraIds });
           setMessage({ kind: "status", text: "自動配置に戻しました" });
         }
         return;
@@ -690,7 +705,21 @@ export default function App() {
       if (!isRoot) deleteSelected(node.parentId as NodeId);
     } else if (event.key in ARROW_DIRECTIONS) {
       event.preventDefault();
-      replacePresent({ map, selectedId: navigate(map, selectedId, ARROW_DIRECTIONS[event.key]) });
+      const target = navigate(map, selectedId, ARROW_DIRECTIONS[event.key]);
+      if (event.shiftKey) {
+        // Shift + 矢印キー: 選択を広げる。今のノードは、複数選択に加わる（中心ノードは、加えない）。
+        // すでに選択に入っているノードへ動いたときは、選択が縮む（今のノードは、選択から外れる）
+        const shrinking = extraIds.includes(target);
+        const rest = extraIds.filter((id) => id !== target);
+        const widened = shrinking || isRoot ? rest : [...rest, selectedId];
+        replacePresent({ map, selectedId: target, extraIds: widened });
+      } else {
+        replacePresent({ map, selectedId: target });
+      }
+    } else if (event.key === "Escape" && extraIds.length > 0) {
+      // 複数選択を解く（今のノードだけの選択に戻す）
+      event.preventDefault();
+      replacePresent({ map, selectedId });
     }
   };
   keyDownRef.current = onKeyDown;
@@ -767,12 +796,13 @@ export default function App() {
             palette={palette}
             node={node}
             selected={node.id === selectedId}
+            multiSelected={extraIds.includes(node.id)}
             dropMode={dropTarget?.id === node.id ? dropTarget.mode : null}
             searchMatch={matchSet.has(node.id)}
             searchCurrent={node.id === currentMatch}
             editing={editing?.nodeId === node.id ? editing : null}
             inputRef={inputRef}
-            onSelect={() => select(node.id)}
+            onSelect={(additive) => select(node.id, additive)}
             onStartEdit={() => startEdit(node.id)}
             onDragStart={(x, y) => startDrag(node.id, x, y)}
             onDraftChange={(current, draft) => setEditing({ ...current, draft })}

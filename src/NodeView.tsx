@@ -39,6 +39,8 @@ interface Props {
   palette: Palette;
   node: MindMapNode;
   selected: boolean;
+  /** 複数選択に入っている（今のノードは、selected のほう） */
+  multiSelected: boolean;
   /** ドラッグ中に、離すとつなぎ替えられるノードなら、その方法 */
   dropMode: "child" | "reorder" | null;
   searchMatch: boolean;
@@ -46,7 +48,8 @@ interface Props {
   /** このノードを編集中なら、編集の状態（そうでなければ null） */
   editing: Editing | null;
   inputRef: RefObject<HTMLTextAreaElement | null>;
-  onSelect: () => void;
+  /** ノードを選んだ（additive: Shift を押していて、複数選択に加える・外す） */
+  onSelect: (additive: boolean) => void;
   onStartEdit: () => void;
   /** ドラッグの候補になるノードを押した（マウスの位置を渡す） */
   onDragStart: (x: number, y: number) => void;
@@ -130,6 +133,7 @@ export default function NodeView({
   palette,
   node,
   selected,
+  multiSelected,
   dropMode,
   searchMatch,
   searchCurrent,
@@ -145,6 +149,8 @@ export default function NodeView({
   onOpenLink,
 }: Props) {
   const isRoot = node.parentId === null;
+  /** 選択の見た目にするか（今のノードも、複数選択に入っているノードも） */
+  const highlighted = selected || multiSelected;
   const look = nodeTextStyle(map, node, palette.centralText);
   // 中心ノードは、ノードの位置（画像があれば、その下）に、それ以外は、枝の中点にラベルを置く
   const labelX = isRoot ? node.position.x : labelPosition(map, node).x;
@@ -159,11 +165,12 @@ export default function NodeView({
     <g
       role="treeitem"
       aria-label={nodeLabel(node).replace(/\r?\n/g, " ")}
-      aria-selected={selected}
+      aria-selected={highlighted}
       // 子を持つノードだけ、展開・折りたたみの状態を伝える
       aria-expanded={node.childIds.length > 0 ? !node.collapsed : undefined}
       data-node-id={node.id}
       data-selected={selected}
+      data-multi-selected={multiSelected ? "true" : undefined}
       data-drop-target={dropMode !== null}
       data-drop-mode={dropMode ?? undefined}
       data-search-match={searchMatch ? "true" : undefined}
@@ -173,7 +180,7 @@ export default function NodeView({
         if (event.button !== 0 || isRoot || event.target instanceof HTMLTextAreaElement) return;
         onDragStart(event.clientX, event.clientY);
       }}
-      onClick={onSelect}
+      onClick={(event) => onSelect(event.shiftKey)}
       onDoubleClick={onStartEdit}
     >
       {!isRoot && (
@@ -191,8 +198,8 @@ export default function NodeView({
           rx={CENTRAL_RX}
           ry={CENTRAL_RY}
           fill={palette.background}
-          stroke={selected ? "#1A7FD1" : look.color}
-          strokeWidth={selected ? 6 : 4}
+          stroke={highlighted ? "#1A7FD1" : look.color}
+          strokeWidth={highlighted ? 6 : 4}
         />
       )}
       {node.image && box && (
@@ -205,7 +212,7 @@ export default function NodeView({
             height={box.height}
             preserveAspectRatio="xMidYMid meet"
           />
-          {selected && (
+          {highlighted && (
             <rect
               x={box.x - 4}
               y={box.y - 4}
@@ -233,8 +240,8 @@ export default function NodeView({
           {...(isRoot
             ? {}
             : {
-                stroke: selected ? "#FFE066" : palette.background,
-                strokeWidth: LABEL_HALO_WIDTH + (selected ? 3 : 0),
+                stroke: highlighted ? "#FFE066" : palette.background,
+                strokeWidth: LABEL_HALO_WIDTH + (highlighted ? 3 : 0),
                 paintOrder: "stroke",
                 strokeLinejoin: "round" as const,
               })}

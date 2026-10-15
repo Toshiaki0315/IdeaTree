@@ -4,7 +4,7 @@ import { record } from "../domain/history";
 import type { History } from "../domain/history";
 import type { MindMap, NodeId } from "../domain/mindmap";
 import { canMoveTo, canReorderTo, dropNode } from "../domain/moveNode";
-import { nudgeNode } from "../domain/nodeOffset";
+import { nudgeNodes } from "../domain/nodeOffset";
 import type { Snapshot } from "../editorState";
 
 /** この距離（px）より動かしたら、クリックではなく、ドラッグとみなす */
@@ -84,7 +84,12 @@ export function useNodeDrag(
           return;
         }
         drag.active = true;
-        setHistory((h) => ({ ...h, present: { ...h.present, selectedId: drag.nodeId } }));
+        // 押したノードが、複数選択に入っていれば、選択を保つ（一緒に動かす）。そうでなければ、そのノードだけを選ぶ
+        setHistory((h) => {
+          const all = [h.present.selectedId, ...(h.present.extraIds ?? [])];
+          const extraIds = all.includes(drag.nodeId) ? all.filter((id) => id !== drag.nodeId) : undefined;
+          return { ...h, present: { ...h.present, selectedId: drag.nodeId, extraIds } };
+        });
       }
       const target = dropTargetAt(event, drag.nodeId);
       setDropTarget(target);
@@ -105,10 +110,15 @@ export function useNodeDrag(
           }),
         );
       } else if (drag.active) {
-        // 何もない場所で離したので、その分だけ動かす
-        setHistory((h) =>
-          record(h, { map: nudgeNode(h.present.map, drag.nodeId, dx, dy), selectedId: drag.nodeId }),
-        );
+        // 何もない場所で離したので、その分だけ動かす（複数選択していれば、選択したすべてを、一緒に）
+        setHistory((h) => {
+          const { selectedId, extraIds } = h.present;
+          return record(h, {
+            map: nudgeNodes(h.present.map, [selectedId, ...(extraIds ?? [])], dx, dy),
+            selectedId,
+            extraIds,
+          });
+        });
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {

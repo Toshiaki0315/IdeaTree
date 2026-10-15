@@ -5893,8 +5893,9 @@ describe("App（マインドマップ編集UI）", () => {
 
         nudgeKey("ArrowRight");
 
-        expect(labelPos("a1")).toEqual({ x: a1.x + 20, y: a1.y });
-        expect(labelPos("b1")).toEqual({ x: b1.x + 20, y: b1.y });
+        // 子のラベルは、親子の枝の中点（親は動かない）ので、子が 20 動くと、ラベルは、その半分の 10 動く
+        expect(labelPos("a1")).toEqual({ x: a1.x + 10, y: a1.y });
+        expect(labelPos("b1")).toEqual({ x: b1.x + 10, y: b1.y });
       });
 
       it("動かしたあとも、複数選択は、保たれる。元に戻せる（Cmd+Z）", async () => {
@@ -5936,11 +5937,12 @@ describe("App（マインドマップ編集UI）", () => {
           { keys: "[MouseLeft>]", target: screen.getByText("a1"), coords: at(100, 100) },
           { target: svg, coords: at(160, 140) },
         ]);
-        expect(labelPos("b1")).toEqual({ x: b1.x + 60, y: b1.y + 40 });
+        // 子のラベルは、親子の枝の中点なので、動いた量の半分
+        expect(labelPos("b1")).toEqual({ x: b1.x + 30, y: b1.y + 20 });
 
         await user.pointer({ keys: "[/MouseLeft]", target: svg, coords: at(160, 140) });
-        expect(labelPos("a1")).toEqual({ x: a1.x + 60, y: a1.y + 40 });
-        expect(labelPos("b1")).toEqual({ x: b1.x + 60, y: b1.y + 40 });
+        expect(labelPos("a1")).toEqual({ x: a1.x + 30, y: a1.y + 20 });
+        expect(labelPos("b1")).toEqual({ x: b1.x + 30, y: b1.y + 20 });
       });
 
       it("選択していないノードをドラッグすると、そのノードだけが動き、複数選択は、解かれる", async () => {

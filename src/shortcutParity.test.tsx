@@ -134,10 +134,6 @@ const ALIASES: Record<string, string> = {
   "shift+Backspace": "Backspace と同じ（Shift の有無を区別しない）",
   "shift+Delete": "Delete と同じ（Shift の有無を区別しない）",
   "shift+F2": "F2 と同じ（Shift の有無を区別しない）",
-  "shift+ArrowLeft": "← と同じ（Shift の有無を区別しない）",
-  "shift+ArrowRight": "→ と同じ（Shift の有無を区別しない）",
-  "shift+ArrowUp": "↑ と同じ（Shift の有無を区別しない）",
-  "shift+ArrowDown": "↓ と同じ（Shift の有無を区別しない）",
 };
 
 /** 一覧にあっても、window のキー処理（preventDefault）では、検出できないもの */
