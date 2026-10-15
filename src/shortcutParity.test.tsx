@@ -77,7 +77,7 @@ function parseShortcutKeys(keys: string): string[] {
     } else if (/^[←→↑↓]( [←→↑↓])+$/.test(keyToken)) {
       combos.push(...keyToken.split(" ").map((arrow) => combo(modifiers, KEY_NAMES[arrow])));
     } else if (
-      /[^\x00-\x7F]/.test(keyToken.replace(/[←→↑↓]/g, "")) ||
+      /[^\u0020-\u007E]/.test(keyToken.replace(/[←→↑↓]/g, "")) ||
       ["クリック", "ドラッグ"].includes(keyToken)
     ) {
       continue; // マウス操作
@@ -96,7 +96,7 @@ function parseInherited(names: string): Mods {
 /** 調べるキー（キーボードの、ほぼすべて） */
 const CANDIDATE_KEYS = [
   ..."abcdefghijklmnopqrstuvwxyz0123456789",
-  ..."`-=[]\;',./",
+  ..."`-=[]\\;',./",
   ...'~!@#$%^&*()_+{}|:"<>?',
   "Tab",
   "Enter",
