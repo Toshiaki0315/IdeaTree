@@ -20,7 +20,7 @@ import { setNodeIcon } from "./domain/nodeIcon";
 import { setNodeImage } from "./domain/nodeImage";
 import { setNodeLink, setNodeNote } from "./domain/nodeNote";
 import { nudgeNodes, resetOffsetsOf } from "./domain/nodeOffset";
-import { removeRelation, toggleRelation, updateRelation } from "./domain/relations";
+import { removeRelation, reverseRelation, toggleRelation, updateRelation } from "./domain/relations";
 import { setNodeStyle, toggleStyle } from "./domain/nodeStyle";
 import { moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
@@ -771,6 +771,11 @@ export default function App() {
               from={laidOut.nodes[r.from]}
               to={laidOut.nodes[r.to]}
               color={r.color}
+              onActivate={() => {
+                // 矢印の元のノードを選んで、メモとリンクのパネル（関連線の欄）を開く
+                replacePresent({ map, selectedId: r.from });
+                setPanel("note");
+              }}
             />
           ))}
         {nodes.map((node) => {
@@ -865,6 +870,7 @@ export default function App() {
           relations={relationRows}
           onRelationChange={(id, patch) => commit({ map: updateRelation(map, id, patch), selectedId })}
           onRelationRemove={(id) => commit({ map: removeRelation(map, id), selectedId })}
+          onRelationReverse={(id) => commit({ map: reverseRelation(map, id), selectedId })}
           onOpenLink={(url) => void openLinkAction(url)}
           onClose={() => closePanel("note")}
         />

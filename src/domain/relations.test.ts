@@ -200,11 +200,7 @@ describe("removeRelation（関連線の削除）", () => {
 describe("reverseRelation（関連線の向きの入れ替え）", () => {
   it("矢印の元と先を、入れ替える。id・ラベル・色は、そのまま。元のマップは変えない", () => {
     const { map, ids } = sample();
-    const linked = updateRelation(
-      toggleRelation(map, ids.a, ids.b),
-      toggleRelation(map, ids.a, ids.b).relations![0].id,
-      {},
-    );
+    const linked = toggleRelation(map, ids.a, ids.b);
     const id = linked.relations![0].id;
     const styled = updateRelation(linked, id, { label: "依存", color: "#1A7FD1" });
 

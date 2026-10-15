@@ -33,6 +33,8 @@ interface Props {
   /** 関連線のラベルか色を、確定した（色は undefined なら、既定に戻す。ラベルは、空なら、外す） */
   onRelationChange?: (id: string, patch: { label?: string; color?: string | undefined }) => void;
   onRelationRemove?: (id: string) => void;
+  /** 関連線の向き（矢印の元と先）を、入れ替える */
+  onRelationReverse?: (id: string) => void;
   onClose: () => void;
 }
 
@@ -47,6 +49,7 @@ export default function NotePanel({
   relations = [],
   onRelationChange,
   onRelationRemove,
+  onRelationReverse,
   onClose,
 }: Props) {
   const [noteDraft, setNoteDraft] = useState(note ?? "");
@@ -180,6 +183,13 @@ export default function NotePanel({
                 <option value={row.color}>{row.color}</option>
               )}
             </select>
+            <button
+              type="button"
+              onClick={() => onRelationReverse?.(row.id)}
+              aria-label={`向きを入れ替え（${name}）`}
+            >
+              向きを入れ替え
+            </button>
             <button
               type="button"
               onClick={() => onRelationRemove?.(row.id)}

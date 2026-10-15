@@ -84,3 +84,11 @@ export function removeRelation(map: MindMap, relationId: string): MindMap {
     (map.relations as Relation[]).filter((r) => r !== relation),
   );
 }
+
+/** 関連線の向き（矢印の元と先）を、入れ替える。存在しなければ、エラー */
+export function reverseRelation(map: MindMap, relationId: string): MindMap {
+  const relation = map.relations?.find((r) => r.id === relationId);
+  if (!relation) throw new Error(`関連線が存在しません: ${relationId}`);
+  const reversed: Relation = { ...relation, from: relation.to, to: relation.from };
+  return { ...map, relations: (map.relations as Relation[]).map((r) => (r === relation ? reversed : r)) };
+}

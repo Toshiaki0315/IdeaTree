@@ -247,7 +247,7 @@ export function taperedBranchPath(from: MindMapNode, to: MindMapNode, start: num
 }
 
 /** 関連線の色・太さ・破線の間隔 */
-export const RELATION_STYLE = { color: "#8B949E", width: 2, dash: "6 4" } as const;
+export const RELATION_STYLE = { color: "#8B949E", width: 2, dash: "6 4", hitWidth: 14 } as const;
 
 /** 関連線のラベルの文字サイズと、縁取りの太さ */
 export const RELATION_LABEL = { fontSize: 13, haloWidth: 4 } as const;

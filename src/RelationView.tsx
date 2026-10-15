@@ -7,13 +7,29 @@ interface Props {
   to: MindMapNode;
   /** 線の色（なければ、既定のグレー） */
   color?: string;
+  /** 線を押した（クリックした） */
+  onActivate: () => void;
 }
 
 /** 関連線（2つのノードを結ぶ、破線の曲線と、矢じり）。ブランチより背面に描く */
-export default function RelationView({ id, from, to, color = RELATION_STYLE.color }: Props) {
+export default function RelationView({ id, from, to, color = RELATION_STYLE.color, onActivate }: Props) {
   const { line, arrow } = relationGeometry(from, to);
   return (
     <>
+      {/* 細い破線は押しにくいので、まわりに、透明で太い、押せる範囲を置く */}
+      <path
+        data-relation-hit={id}
+        d={line}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={RELATION_STYLE.hitWidth}
+        style={{ cursor: "pointer" }}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onActivate();
+        }}
+      />
       <path
         data-relation-id={id}
         d={line}
