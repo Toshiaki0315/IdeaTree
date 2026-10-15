@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { layout } from "./layout";
 import { createMindMap } from "./mindmap";
-import { nudgeNode, resetOffsets, setNodeOffset } from "./nodeOffset";
+import {
+  nudgeNode,
+  nudgeNodes,
+  resetOffsets,
+  resetOffsetsOf,
+  setNodeOffset,
+  topmostNodes,
+} from "./nodeOffset";
 
 /** 中心の下に 企画（調査・競合）と 予算 */
 function sample() {
@@ -125,5 +132,70 @@ describe("layout と手動配置", () => {
     const once = layout(setNodeOffset(map, ids.a, { x: 40, y: 0 }));
 
     expect(layout(once).nodes[ids.a].position).toEqual(once.nodes[ids.a].position);
+  });
+});
+
+describe("topmostNodes（複数選択の、動かす対象）", () => {
+  it("選択したノードのうち、祖先も選択されているもの（子孫）と、中心ノードを除く", () => {
+    const { map, ids } = sample();
+
+    expect(topmostNodes(map, [ids.a, ids.a1, ids.b, ids.root])).toEqual([ids.a, ids.b]);
+  });
+
+  it("子孫だけでも、除かれない。重複は、1つにする。順序は、保つ", () => {
+    const { map, ids } = sample();
+
+    expect(topmostNodes(map, [ids.a1, ids.a2, ids.a1])).toEqual([ids.a1, ids.a2]);
+    expect(topmostNodes(map, [])).toEqual([]);
+  });
+});
+
+describe("nudgeNodes（複数のノードを、一緒に動かす）", () => {
+  it("選択したノードを、それぞれ、同じ量だけ動かす。ほかのノードは、動かさない", () => {
+    const { map, ids } = sample();
+
+    const moved = nudgeNodes(map, [ids.a, ids.b], 10, -5);
+
+    expect(moved.nodes[ids.a].offset).toEqual({ x: 10, y: -5 });
+    expect(moved.nodes[ids.b].offset).toEqual({ x: 10, y: -5 });
+    expect(moved.nodes[ids.a1].offset).toBeUndefined();
+  });
+
+  it("親と子の両方を選んでいても、子は、二重に動かさない（親と一緒に動く）", () => {
+    const { map, ids } = sample();
+    const auto = layout(map);
+
+    const moved = layout(nudgeNodes(map, [ids.a, ids.a1], 30, 0));
+
+    expect(moved.nodes[ids.a1].position.x).toBeCloseTo(auto.nodes[ids.a1].position.x + 30);
+  });
+
+  it("動かせるノードがなければ（中心ノードだけなど）、同じマップを返す", () => {
+    const { map, ids } = sample();
+
+    expect(nudgeNodes(map, [ids.root], 10, 10)).toBe(map);
+    expect(nudgeNodes(map, [], 10, 10)).toBe(map);
+  });
+});
+
+describe("resetOffsetsOf（複数のノードを、自動配置に戻す）", () => {
+  it("選択したノードと、その子孫の手動配置を、外す。ほかのノードは、そのまま", () => {
+    const { map, ids } = sample();
+    let moved = nudgeNodes(map, [ids.a, ids.b], 5, 5);
+    moved = nudgeNode(moved, ids.a1, 1, 1);
+
+    const reset = resetOffsetsOf(moved, [ids.a]);
+
+    expect(reset.nodes[ids.a].offset).toBeUndefined();
+    expect(reset.nodes[ids.a1].offset).toBeUndefined();
+    expect(reset.nodes[ids.b].offset).toEqual({ x: 5, y: 5 });
+  });
+
+  it("中心ノードを含めば、すべて戻す。変化がなければ、同じマップ", () => {
+    const { map, ids } = sample();
+    const moved = nudgeNodes(map, [ids.a, ids.b], 5, 5);
+
+    expect(Object.values(resetOffsetsOf(moved, [ids.b, ids.root]).nodes).some((n) => n.offset)).toBe(false);
+    expect(resetOffsetsOf(map, [ids.a, ids.b])).toBe(map);
   });
 });
