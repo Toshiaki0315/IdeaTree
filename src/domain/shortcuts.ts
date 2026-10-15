@@ -28,7 +28,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "← → ↑ ↓", description: "親 / 最初の子 / 前の兄弟 / 次の兄弟へ移動" },
       {
         keys: "Shift + ← → ↑ ↓",
-        description: "選択を広げる（複数選択）。手動配置の移動・自動配置に戻す操作は、選択したすべてに効く",
+        description:
+          "選択を広げる（複数選択）。移動・削除・太字/斜体・スタイル・コピー等が、選択したすべてに効く",
       },
       { keys: "クリック", description: "ノードを選択" },
       { keys: "Shift + クリック", description: "複数選択に、加える / 外す" },

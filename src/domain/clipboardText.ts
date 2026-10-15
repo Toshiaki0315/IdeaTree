@@ -4,12 +4,17 @@ import { SAVE_FORMAT_VERSION } from "./serialize";
 
 /** クリップボードの文字列が、IdeaTree のサブツリーであることを示す印 */
 const SUBTREE_TYPE = "ideatree-subtree";
+/** 複数のサブツリーであることを示す印 */
+const SUBTREES_TYPE = "ideatree-subtrees";
 
 /** 貼り付けられる行数の上限（巨大なテキストで、ノードが大量にできないようにする） */
 export const MAX_PASTE_LINES = 200;
 
 export type ClipboardContent =
-  { kind: "subtree"; subtree: Subtree } | { kind: "lines"; lines: string[] } | { kind: "none" };
+  | { kind: "subtree"; subtree: Subtree }
+  | { kind: "subtrees"; subtrees: Subtree[] }
+  | { kind: "lines"; lines: string[] }
+  | { kind: "none" };
 
 /** コピーしたサブツリーを、クリップボードに入れる文字列（JSON）にする */
 export function subtreeToText(subtree: Subtree): string {
@@ -21,11 +26,30 @@ export function subtreeToText(subtree: Subtree): string {
   });
 }
 
-/** JSON として読めて、サブツリーの印があれば、検証して返す。壊れていれば null */
-function parseSubtree(text: string): Subtree | null {
+/**
+ * コピーした複数のサブツリーを、クリップボードに入れる文字列（JSON）にする。
+ * 1つだけなら、subtreeToText と同じ形式（従来のバージョンでも、貼り付けられる）。
+ */
+export function subtreesToText(subtrees: readonly Subtree[]): string {
+  if (subtrees.length === 1) return subtreeToText(subtrees[0]);
+  return JSON.stringify({
+    type: SUBTREES_TYPE,
+    version: SAVE_FORMAT_VERSION,
+    subtrees: subtrees.map(({ rootId, nodes }) => ({ rootId, nodes })),
+  });
+}
+
+/** JSON として読めて、サブツリー（1つ・複数）の印があれば、検証して返す。壊れていれば null */
+function parseSubtrees(text: string): Subtree[] | null {
   try {
-    if (JSON.parse(text).type !== SUBTREE_TYPE) return null;
-    return deserialize(text, { subtree: true });
+    const data = JSON.parse(text);
+    if (data.type === SUBTREE_TYPE) return [deserialize(text, { subtree: true })];
+    if (data.type !== SUBTREES_TYPE) return null;
+    const { subtrees, version } = data;
+    if (!Array.isArray(subtrees) || subtrees.length === 0 || subtrees.length > MAX_PASTE_LINES) return null;
+    return subtrees.map((item) =>
+      deserialize(JSON.stringify({ version, rootId: item.rootId, nodes: item.nodes }), { subtree: true }),
+    );
   } catch {
     return null;
   }
@@ -40,8 +64,9 @@ export function parseClipboardText(text: string): ClipboardContent {
 
   // JSON のように見えるものは、IdeaTree のサブツリー以外は貼り付けない（文字の羅列になるため）
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    const subtree = parseSubtree(trimmed);
-    return subtree ? { kind: "subtree", subtree } : { kind: "none" };
+    const subtrees = parseSubtrees(trimmed);
+    if (subtrees === null) return { kind: "none" };
+    return subtrees.length === 1 ? { kind: "subtree", subtree: subtrees[0] } : { kind: "subtrees", subtrees };
   }
 
   const lines = trimmed

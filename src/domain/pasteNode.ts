@@ -48,3 +48,22 @@ export function pasteNode(
     },
   };
 }
+
+/**
+ * 複数のサブツリーを、指定ノードの子の末尾に、順に貼り付ける（元のマップは変更しない）。
+ * 貼り付けた根の ID を、順に返す。貼り付けるものがなければ、同じマップと、空の一覧。
+ */
+export function pasteNodes(
+  map: MindMap,
+  targetId: NodeId,
+  subtrees: readonly Subtree[],
+): { map: MindMap; nodeIds: NodeId[] } {
+  let current = map;
+  const nodeIds: NodeId[] = [];
+  for (const subtree of subtrees) {
+    const pasted = pasteNode(current, targetId, subtree);
+    current = pasted.map;
+    nodeIds.push(pasted.nodeId);
+  }
+  return { map: current, nodeIds };
+}

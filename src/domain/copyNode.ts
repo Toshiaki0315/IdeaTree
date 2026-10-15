@@ -1,4 +1,6 @@
 import type { MindMap, MindMapNode, NodeId } from "./mindmap";
+import { documentOrder } from "./search";
+import { topmostNodes } from "./selection";
 
 /** コピーしたサブツリー。元のマップから切り離された、自己完結のデータ */
 export type Subtree = MindMap;
@@ -19,4 +21,15 @@ export function copyNode(map: MindMap, nodeId: NodeId): Subtree {
   nodes[nodeId].parentId = null;
 
   return { rootId: nodeId, nodes };
+}
+
+/**
+ * 複数のノードを、それぞれ、サブツリーとしてコピーする（文書の順）。
+ * 中心ノードと、祖先も選択されているノード（子孫）は、除く。コピーできるものがなければ、空の一覧
+ */
+export function copyNodes(map: MindMap, ids: readonly NodeId[]): Subtree[] {
+  const top = new Set(topmostNodes(map, ids));
+  return documentOrder(map)
+    .filter((id) => top.has(id))
+    .map((id) => copyNode(map, id));
 }

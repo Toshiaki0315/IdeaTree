@@ -6159,4 +6159,87 @@ describe("App（マインドマップ編集UI）", () => {
       expect(container.querySelectorAll("g[data-icon-for]")).toHaveLength(2);
     });
   });
+
+  describe("複数選択での、コピー・カット・貼り付け", () => {
+    const multi = (container: HTMLElement) =>
+      [...container.querySelectorAll('g[data-multi-selected="true"]')].map((g) => g.textContent);
+    const order = (container: HTMLElement) => [...nodes(container)].map((g) => g.textContent);
+    const clickNode = (user: User, text: string, shift = false) =>
+      shift
+        ? user
+            .keyboard("{Shift>}")
+            .then(() => user.click(screen.getByText(text)))
+            .then(() => user.keyboard("{/Shift}"))
+        : user.click(screen.getByText(text));
+
+    /** 中心の下に a（子 a1）・b・c。システムのクリップボードは、読み書きできる */
+    async function build(user: User) {
+      let content = "";
+      mockedWriteClipboard.mockImplementation(async (text) => {
+        content = text;
+      });
+      mockedReadClipboard.mockImplementation(async () => content);
+      const view = render(<App />);
+      await user.keyboard("{Tab}a{Enter}{Tab}a1{Enter}{ArrowLeft}{Enter}b{Enter}{Enter}c{Enter}");
+      return view;
+    }
+
+    it("Cmd+C でコピーして、別のノードに、Cmd+V で貼り付けると、すべて複製され、貼り付けたものが、複数選択になる", async () => {
+      const user = userEvent.setup();
+      const { container } = await build(user);
+      await clickNode(user, "a");
+      await clickNode(user, "b", true);
+
+      fireEvent.keyDown(window, { key: "c", metaKey: true });
+      await clickNode(user, "c");
+      fireEvent.keyDown(window, { key: "v", metaKey: true });
+
+      await waitFor(() =>
+        expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b", "c", "a", "a1", "b"]),
+      );
+      expect(selectedText(container)).toBe("a");
+      expect(multi(container)).toEqual(["b"]);
+    });
+
+    it("Cmd+X で、選択したすべてを、切り取る（まとめて削除し、クリップボードに入れる）。貼り付けると、戻る", async () => {
+      const user = userEvent.setup();
+      const { container } = await build(user);
+      await clickNode(user, "a");
+      await clickNode(user, "b", true);
+
+      fireEvent.keyDown(window, { key: "x", metaKey: true });
+      expect(order(container)).toEqual(["中心テーマ", "c"]);
+
+      await clickNode(user, "c");
+      fireEvent.keyDown(window, { key: "v", metaKey: true });
+      await waitFor(() => expect(order(container)).toEqual(["中心テーマ", "c", "a", "a1", "b"]));
+    });
+
+    it("システムのクリップボードが使えないときは、アプリの中のコピー（複数）を貼り付ける", async () => {
+      const user = userEvent.setup();
+      const { container } = await build(user);
+      mockedReadClipboard.mockRejectedValue(new Error("使えません"));
+      await clickNode(user, "a");
+      await clickNode(user, "b", true);
+
+      fireEvent.keyDown(window, { key: "c", metaKey: true });
+      await clickNode(user, "c");
+      fireEvent.keyDown(window, { key: "v", metaKey: true });
+
+      await waitFor(() =>
+        expect(order(container)).toEqual(["中心テーマ", "a", "a1", "b", "c", "a", "a1", "b"]),
+      );
+    });
+
+    it("複数選択のコピーは、システムのクリップボードに、複数のサブツリーとして書き込まれる", async () => {
+      const user = userEvent.setup();
+      await build(user);
+      await clickNode(user, "a");
+      await clickNode(user, "b", true);
+
+      fireEvent.keyDown(window, { key: "c", metaKey: true });
+
+      expect(parseClipboardText(mockedWriteClipboard.mock.calls[0][0]).kind).toBe("subtrees");
+    });
+  });
 });

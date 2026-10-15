@@ -5,9 +5,9 @@ import type { Editing, Snapshot } from "./editorState";
 import { addChild } from "./domain/addChild";
 import { addSibling } from "./domain/addSibling";
 import { toggleCollapse } from "./domain/collapse";
-import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
+import { parseClipboardText, subtreesToText } from "./domain/clipboardText";
 import type { ClipboardContent } from "./domain/clipboardText";
-import { copyNode } from "./domain/copyNode";
+import { copyNode, copyNodes } from "./domain/copyNode";
 import type { Subtree } from "./domain/copyNode";
 import { deleteNode, deleteNodes } from "./domain/deleteNode";
 import { createHistory, record, redo, undo } from "./domain/history";
@@ -25,7 +25,7 @@ import { setStyleOf, toggleStyleOf } from "./domain/nodeStyle";
 import { moveNode } from "./domain/moveNode";
 import { navigate } from "./domain/navigate";
 import type { NavigateDirection } from "./domain/navigate";
-import { pasteNode } from "./domain/pasteNode";
+import { pasteNodes } from "./domain/pasteNode";
 import { pasteTexts } from "./domain/pasteTexts";
 import {
   BRANCH_OUTLINE_WIDTH,
@@ -130,7 +130,7 @@ export default function App() {
   const { setting: themeSetting, theme, setSetting: setThemeSetting } = useTheme();
   const palette = PALETTES[theme];
   /** コピーしたサブツリー。ファイルを開いても保持する */
-  const [clipboard, setClipboard] = useState<Subtree | null>(null);
+  const [clipboard, setClipboard] = useState<Subtree[] | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { map, selectedId } = history.present;
@@ -285,12 +285,13 @@ export default function App() {
     setEditing(null);
   };
 
-  /** 選択ノードのサブツリーをコピーする（アプリの中と、システムのクリップボードの両方に保持する） */
+  /** 選択ノード（複数選択なら、すべて）のサブツリーをコピーする（アプリの中と、システムのクリップボードの両方に保持する） */
   const copySelected = () => {
-    const subtree = copyNode(map, selectedId);
-    setClipboard(subtree);
+    // 複数選択していれば、選択したすべて（子孫は、祖先と一緒にコピーされる）
+    const subtrees = extraIds.length > 0 ? copyNodes(map, selection) : [copyNode(map, selectedId)];
+    setClipboard(subtrees);
     // システムのクリップボードに書けなくても、アプリの中のコピーは使えるので、失敗は無視する
-    writeClipboardText(subtreeToText(subtree)).catch(() => {});
+    writeClipboardText(subtreesToText(subtrees)).catch(() => {});
   };
 
   /**
@@ -303,15 +304,22 @@ export default function App() {
     try {
       content = parseClipboardText(await readClipboardText());
     } catch {
-      content = clipboard ? { kind: "subtree", subtree: clipboard } : { kind: "none" };
+      content = clipboard ? { kind: "subtrees", subtrees: clipboard } : { kind: "none" };
     }
     if (content.kind === "none") return;
 
     setHistory((h) => {
       const { map: current, selectedId: target } = h.present;
-      if (content.kind === "subtree") {
-        const pasted = pasteNode(expanded(current, target), target, content.subtree);
-        return record(h, { map: pasted.map, selectedId: pasted.nodeId });
+      if (content.kind === "subtree" || content.kind === "subtrees") {
+        const subtrees = content.kind === "subtree" ? [content.subtree] : content.subtrees;
+        const pasted = pasteNodes(expanded(current, target), target, subtrees);
+        // 貼り付けたものが複数なら、すべてを選択する（最初のものが、今のノード）
+        const [first, ...rest] = pasted.nodeIds;
+        return record(h, {
+          map: pasted.map,
+          selectedId: first,
+          extraIds: rest.length > 0 ? rest : undefined,
+        });
       }
       const pasted = pasteTexts(current, target, content.lines);
       return record(h, { map: pasted.map, selectedId: pasted.nodeIds[0] });
@@ -671,7 +679,10 @@ export default function App() {
       }
       if (key === "x" && !event.shiftKey) {
         event.preventDefault();
-        if (!isRoot) {
+        if (extraIds.length > 0) {
+          copySelected();
+          deleteSelection();
+        } else if (!isRoot) {
           copySelected();
           deleteSelected(node.parentId as NodeId);
         }
