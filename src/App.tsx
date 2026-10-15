@@ -9,7 +9,7 @@ import { parseClipboardText, subtreeToText } from "./domain/clipboardText";
 import type { ClipboardContent } from "./domain/clipboardText";
 import { copyNode } from "./domain/copyNode";
 import type { Subtree } from "./domain/copyNode";
-import { deleteNode } from "./domain/deleteNode";
+import { deleteNode, deleteNodes } from "./domain/deleteNode";
 import { createHistory, record, redo, undo } from "./domain/history";
 import type { History } from "./domain/history";
 import { layout } from "./domain/layout";
@@ -342,6 +342,15 @@ export default function App() {
   /** 選択ノードをサブツリーごと削除し、親を選択する（履歴に1件記録） */
   const deleteSelected = (parentId: NodeId) =>
     commit({ map: deleteNode(map, selectedId), selectedId: parentId });
+
+  /** 複数選択しているすべてのノードを、子孫ごと削除する。今のノードに近い、残っている祖先を選ぶ（履歴に1件記録） */
+  const deleteSelection = () => {
+    // 複数選択には、中心ノード以外の、ノードが入っているので、必ず、何かが削除される
+    const next = deleteNodes(map, selection);
+    let remaining = selectedId;
+    while (!next.nodes[remaining]) remaining = map.nodes[remaining].parentId as NodeId;
+    commit({ map: next, selectedId: remaining });
+  };
 
   /** 検索の一致を、選択する。折りたたまれた枝の中なら、展開して見せる（変更があれば、1手の履歴） */
   const goToMatch = (nodeId: NodeId) => {
@@ -702,7 +711,8 @@ export default function App() {
       startEdit(selectedId);
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      if (!isRoot) deleteSelected(node.parentId as NodeId);
+      if (extraIds.length > 0) deleteSelection();
+      else if (!isRoot) deleteSelected(node.parentId as NodeId);
     } else if (event.key in ARROW_DIRECTIONS) {
       event.preventDefault();
       const target = navigate(map, selectedId, ARROW_DIRECTIONS[event.key]);
