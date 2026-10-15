@@ -611,3 +611,26 @@ describe("deserialize（offset: 手動配置のずれ）", () => {
     expect(() => deserialize(JSON.stringify(data))).toThrow(`ノードの形式が不正です: ${ids.root}`);
   });
 });
+
+describe("deserialize（関連線の label・color）", () => {
+  it("ラベルと色を、保存して読み込んでも保てる（往復）", () => {
+    const { data, ids } = validData();
+    data.relations = [{ id: "r1", from: ids.a, to: ids.b, label: "依存", color: "#1A7FD1" }];
+
+    expect(deserialize(JSON.stringify(data)).relations).toEqual([
+      { id: "r1", from: ids.a, to: ids.b, label: "依存", color: "#1A7FD1" },
+    ]);
+  });
+
+  it.each([
+    ["数値のラベル", { label: 1 }],
+    ["長すぎるラベル", { label: "あ".repeat(101) }],
+    ["数値の色", { color: 1 }],
+    ["形式が不正な色", { color: "red" }],
+  ])("不正な関連線（%s）はエラーになる", (_name, extra) => {
+    const { data, ids } = validData();
+    data.relations = [{ id: "r1", from: ids.a, to: ids.b, ...extra }];
+
+    expect(() => deserialize(JSON.stringify(data))).toThrow("関連線の形式が不正です");
+  });
+});

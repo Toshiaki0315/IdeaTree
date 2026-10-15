@@ -9,7 +9,7 @@ import { estimateTextWidth } from "./hitArea";
 import { ICON_PRESETS, setNodeIcon } from "./nodeIcon";
 import { setNodeImage } from "./nodeImage";
 import { setNodeStyle } from "./nodeStyle";
-import { toggleRelation } from "./relations";
+import { toggleRelation, updateRelation } from "./relations";
 import { labelPosition } from "./nodeGeometry";
 import { exportSvg } from "./svgExport";
 import { updateText } from "./updateText";
@@ -884,5 +884,32 @@ describe("exportSvg: 関連線", () => {
     const folded = toggleCollapse(linked, ids.a); // a11 は、a の子孫（見えない）
 
     expect(parse(exportSvg(folded)).querySelector("[data-relation-id]")).toBeNull();
+  });
+});
+
+describe("exportSvg: 関連線のラベルと色", () => {
+  it("色を指定した関連線は、線と矢じりが、その色になる。指定がなければ、既定の色", () => {
+    const { map, ids } = buildMap();
+    const linked = toggleRelation(map, ids.a11, ids.b);
+    const id = linked.relations![0].id;
+    const colored = updateRelation(linked, id, { color: "#1A7FD1" });
+
+    const doc = parse(exportSvg(colored));
+    expect(doc.querySelector(`path[data-relation-id="${id}"]`)!.getAttribute("stroke")).toBe("#1A7FD1");
+    expect(doc.querySelector(`path[data-relation-arrow="${id}"]`)!.getAttribute("fill")).toBe("#1A7FD1");
+    const plain = parse(exportSvg(linked));
+    expect(plain.querySelector(`path[data-relation-id="${id}"]`)!.getAttribute("stroke")).toBe("#8B949E");
+  });
+
+  it("ラベルは、曲線の中点に、文字で描く。ラベルがなければ、描かない", () => {
+    const { map, ids } = buildMap();
+    const linked = toggleRelation(map, ids.a11, ids.b);
+    const id = linked.relations![0].id;
+    const labeled = updateRelation(linked, id, { label: "依存 & <関連>" });
+
+    const text = parse(exportSvg(labeled)).querySelector(`text[data-relation-label="${id}"]`)!;
+    expect(text.textContent).toBe("依存 & <関連>");
+    expect(text.getAttribute("text-anchor")).toBe("middle");
+    expect(parse(exportSvg(linked)).querySelector("[data-relation-label]")).toBeNull();
   });
 });

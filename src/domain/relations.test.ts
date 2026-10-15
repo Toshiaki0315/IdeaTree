@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { deleteNode } from "./deleteNode";
 import { createMindMap } from "./mindmap";
-import { findRelation, removeRelationsOf, toggleRelation } from "./relations";
+import {
+  MAX_RELATION_LABEL,
+  findRelation,
+  removeRelationsOf,
+  toggleRelation,
+  updateRelation,
+} from "./relations";
 
 /** 中心の下に 企画・予算・調査（企画の子） */
 function sample() {
@@ -101,5 +107,62 @@ describe("deleteNode と関連線", () => {
 
     expect(deleted.relations).toHaveLength(1);
     expect(deleted.relations![0]).toMatchObject({ from: ids.b, to: ids.root });
+  });
+});
+
+describe("updateRelation（関連線のラベルと色）", () => {
+  function linked() {
+    const { map, ids } = sample();
+    const withRelation = toggleRelation(map, ids.a, ids.b);
+    return { map: withRelation, ids, id: withRelation.relations![0].id };
+  }
+
+  it("ラベルと色を設定する。元のマップは変えない", () => {
+    const { map, id } = linked();
+
+    const updated = updateRelation(map, id, { label: "依存", color: "#1A7FD1" });
+
+    expect(updated.relations![0]).toMatchObject({ label: "依存", color: "#1A7FD1" });
+    expect(map.relations![0].label).toBeUndefined();
+  });
+
+  it("指定した項目だけを変える。undefined（または、空のラベル）で、外す", () => {
+    const { map, id } = linked();
+    const both = updateRelation(map, id, { label: "依存", color: "#1A7FD1" });
+
+    const onlyColor = updateRelation(both, id, { label: undefined });
+    expect("label" in onlyColor.relations![0]).toBe(false);
+    expect(onlyColor.relations![0].color).toBe("#1A7FD1");
+
+    const noColor = updateRelation(both, id, { color: undefined });
+    expect("color" in noColor.relations![0]).toBe(false);
+    expect(noColor.relations![0].label).toBe("依存");
+
+    expect("label" in updateRelation(both, id, { label: "  " }).relations![0]).toBe(false);
+  });
+
+  it("ラベルは、前後の空白を取り除き、改行は空白にする", () => {
+    const { map, id } = linked();
+
+    expect(updateRelation(map, id, { label: "  上の\n下 " }).relations![0].label).toBe("上の 下");
+  });
+
+  it("変化がなければ、同じマップを返す", () => {
+    const { map, id } = linked();
+    const labeled = updateRelation(map, id, { label: "依存" });
+
+    expect(updateRelation(labeled, id, { label: "依存" })).toBe(labeled);
+    expect(updateRelation(map, id, {})).toBe(map);
+    expect(updateRelation(map, id, { label: undefined })).toBe(map);
+  });
+
+  it("存在しない関連線・長すぎるラベル・色の形式が不正なものは、エラーにする", () => {
+    const { map, id } = linked();
+
+    expect(() => updateRelation(map, "ghost", { label: "x" })).toThrow("関連線が存在しません: ghost");
+    expect(() => updateRelation(map, id, { label: "あ".repeat(MAX_RELATION_LABEL + 1) })).toThrow(
+      "ラベルが長すぎます",
+    );
+    expect(() => updateRelation(map, id, { color: "red" })).toThrow("色は、#RRGGBB の形式にしてください");
   });
 });
