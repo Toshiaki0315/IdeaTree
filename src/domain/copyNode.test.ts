@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
-import { copyNode } from "./copyNode";
+import { copyNode, copyNodes } from "./copyNode";
 import { createMindMap } from "./mindmap";
 
 /** root ─ a(a1(a11), a2) / b の木 */
@@ -97,5 +97,22 @@ describe("copyNode（サブツリーのコピー / Cmd+C）", () => {
     const { map } = buildMap();
 
     expect(() => copyNode(map, "missing")).toThrow("ノードが存在しません: missing");
+  });
+});
+
+describe("copyNodes（複数ノードのコピー）", () => {
+  it("選択したノードを、それぞれ、サブツリーとして複製する（文書の順）。中心ノードと、子孫は、除く", () => {
+    const { map, ids } = buildMap();
+
+    const copied = copyNodes(map, [ids.b, ids.a, ids.a1, ids.root]);
+
+    expect(copied.map((s) => s.rootId)).toEqual([ids.a, ids.b]);
+    expect(Object.keys(copied[0].nodes).sort()).toEqual([ids.a, ids.a1, ids.a2, ids.a11].sort());
+  });
+
+  it("コピーできるものがなければ、空の一覧", () => {
+    const { map, ids } = buildMap();
+
+    expect(copyNodes(map, [ids.root])).toEqual([]);
   });
 });

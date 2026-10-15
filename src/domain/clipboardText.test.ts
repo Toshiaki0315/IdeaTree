@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
-import { MAX_PASTE_LINES, parseClipboardText, subtreeToText } from "./clipboardText";
+import { MAX_PASTE_LINES, parseClipboardText, subtreeToText, subtreesToText } from "./clipboardText";
 import { toggleCollapse } from "./collapse";
-import { copyNode } from "./copyNode";
+import { copyNode, copyNodes } from "./copyNode";
 import { createMindMap } from "./mindmap";
 import { setNodeStyle } from "./nodeStyle";
 import { serialize } from "./serialize";
@@ -115,5 +115,56 @@ describe("parseClipboardText（クリップボードの文字列の解釈）", (
         lines: ["ブレース {a} を含む文"],
       });
     });
+  });
+});
+
+describe("subtreesToText・parseClipboardText（複数のサブツリー）", () => {
+  function twoSubtrees() {
+    const base = createMindMap("root");
+    const a = addChild(base, base.rootId, "企画");
+    const b = addChild(a.map, base.rootId, "予算");
+    return copyNodes(b.map, [a.nodeId, b.nodeId]);
+  }
+
+  it("1つだけなら、これまでと同じ形式（subtreeToText と同じ文字列）", () => {
+    const [first] = twoSubtrees();
+
+    expect(subtreesToText([first])).toBe(subtreeToText(first));
+  });
+
+  it("2つ以上なら、複数のサブツリーとして書き出し、読み込むと、元に戻る", () => {
+    const subtrees = twoSubtrees();
+
+    const content = parseClipboardText(subtreesToText(subtrees));
+
+    expect(content).toEqual({ kind: "subtrees", subtrees });
+  });
+
+  it("中身が壊れたサブツリーが含まれていれば、貼り付けられない", () => {
+    const [a, b] = twoSubtrees();
+    const broken = { ...b, rootId: "ghost" };
+    const text = JSON.stringify({
+      type: "ideatree-subtrees",
+      version: 1,
+      subtrees: [
+        { rootId: a.rootId, nodes: a.nodes },
+        { rootId: broken.rootId, nodes: broken.nodes },
+      ],
+    });
+
+    expect(parseClipboardText(text)).toEqual({ kind: "none" });
+  });
+
+  it("サブツリーの一覧でない（配列でない・空・多すぎる）ものは、貼り付けられない", () => {
+    const wrap = (subtrees: unknown) => JSON.stringify({ type: "ideatree-subtrees", version: 1, subtrees });
+    const [a] = twoSubtrees();
+    const tree = { rootId: a.rootId, nodes: a.nodes };
+
+    expect(parseClipboardText(wrap("x"))).toEqual({ kind: "none" });
+    expect(parseClipboardText(wrap([]))).toEqual({ kind: "none" });
+    expect(parseClipboardText(wrap(Array.from({ length: MAX_PASTE_LINES + 1 }, () => tree)))).toEqual({
+      kind: "none",
+    });
+    expect(parseClipboardText(wrap([null]))).toEqual({ kind: "none" });
   });
 });

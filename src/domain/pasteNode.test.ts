@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { addSibling } from "./addSibling";
-import { copyNode } from "./copyNode";
+import { copyNode, copyNodes } from "./copyNode";
 import { nextBranchColor } from "./branchColor";
 import { createMindMap } from "./mindmap";
 import type { MindMap, NodeId } from "./mindmap";
-import { pasteNode } from "./pasteNode";
+import { pasteNode, pasteNodes } from "./pasteNode";
 
 /** root ─ a(a1(a11), a2) / b の木 */
 function buildMap() {
@@ -175,5 +175,35 @@ describe("pasteNode（メインブランチの色）", () => {
     const { map: next, nodeId } = pasteNode(map, ids.b, copied);
 
     expect("branchColor" in next.nodes[nodeId]).toBe(false);
+  });
+});
+
+describe("pasteNodes（複数のサブツリーの貼り付け）", () => {
+  it("すべてのサブツリーを、貼り付け先の子の末尾に、順に貼り付ける。新しい ID が振られる", () => {
+    const { map, ids } = buildMap();
+    const subtrees = copyNodes(map, [ids.a, ids.b]);
+
+    const { map: next, nodeIds } = pasteNodes(map, ids.root, subtrees);
+
+    expect(nodeIds).toHaveLength(2);
+    expect(next.nodes[ids.root].childIds.slice(-2)).toEqual(nodeIds);
+    expect(nodeIds.map((id) => textsOf(next, id))).toEqual([textsOf(map, ids.a), textsOf(map, ids.b)]);
+    expect(nodeIds).not.toContain(ids.a);
+  });
+
+  it("貼り付ける先が、中心ノードなら、それぞれに、別の色が割り当てられる", () => {
+    const { map, ids } = buildMap();
+
+    const { map: next, nodeIds } = pasteNodes(map, ids.root, copyNodes(map, [ids.a, ids.b]));
+
+    const colors = nodeIds.map((id) => next.nodes[id].branchColor);
+    expect(colors[0]).toBeDefined();
+    expect(colors[0]).not.toBe(colors[1]);
+  });
+
+  it("貼り付けるものがなければ、同じマップと、空の一覧を返す", () => {
+    const { map, ids } = buildMap();
+
+    expect(pasteNodes(map, ids.root, [])).toEqual({ map, nodeIds: [] });
   });
 });
