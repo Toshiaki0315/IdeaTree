@@ -147,6 +147,16 @@ describe("updateRelation（関連線のラベルと色）", () => {
     expect(updateRelation(map, id, { label: "  上の\n下 " }).relations![0].label).toBe("上の 下");
   });
 
+  it("ほかの関連線は、変えない", () => {
+    const { map, ids, id } = linked();
+    const two = toggleRelation(map, ids.b, ids.c);
+
+    const updated = updateRelation(two, id, { label: "依存" });
+
+    expect(updated.relations![0].label).toBe("依存");
+    expect(updated.relations![1]).toBe(two.relations![1]);
+  });
+
   it("変化がなければ、同じマップを返す", () => {
     const { map, id } = linked();
     const labeled = updateRelation(map, id, { label: "依存" });
