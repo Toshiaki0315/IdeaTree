@@ -239,17 +239,19 @@ describe("アウトラインの、リンクとメモ", () => {
     expect([b.text, b.link]).toEqual(["予算", "http://example.com/b"]);
   });
 
-  it("%28・%29 は、リンクの URL として、そのまま保つ", () => {
+  it("URL の %28・%29 は、( ) に戻して、リンクにする", () => {
     const map = fromOutline("# t\n- [x](https://example.com/a_%28b%29)\n");
 
-    expect(map.nodes[map.nodes[map.rootId].childIds[0]].link).toBe("https://example.com/a_%28b%29");
+    expect(map.nodes[map.nodes[map.rootId].childIds[0]].link).toBe("https://example.com/a_(b)");
   });
 
   it("http・https でない URL・URL として読めないものは、リンクにせず、そのままのテキストにする", () => {
-    const map = fromOutline("# t\n- [x](javascript:alert(1))\n- [y](file:///etc/passwd)\n- [z](https://)\n");
+    const map = fromOutline(
+      "# t\n- [x](javascript:alert(1))\n- [y](file:///etc/passwd)\n- [z](https://)\n- [w](http://?q=1)\n",
+    );
 
     const kids = map.nodes[map.rootId].childIds.map((id) => map.nodes[id]);
-    expect(kids.map((k) => k.link)).toEqual([undefined, undefined, undefined]);
+    expect(kids.map((k) => k.link)).toEqual([undefined, undefined, undefined, undefined]);
     expect(kids[1].text).toBe("[y](file:///etc/passwd)");
   });
 
