@@ -4,6 +4,7 @@ import { toggleCollapse } from "./collapse";
 import type { MindMap, NodeId } from "./mindmap";
 import { createMindMap } from "./mindmap";
 import { MAX_OUTLINE_LINES, fromOutline, toOutline } from "./outline";
+import { setNodeLink, setNodeNote } from "./nodeNote";
 import { updateText } from "./updateText";
 
 /** 中心「中心」の下に 企画（調査・競合）と 予算 */
@@ -176,5 +177,145 @@ describe("fromOutline（アウトラインからの読み込み）", () => {
     const text = Array.from({ length: MAX_OUTLINE_LINES }, (_, i) => `- ${i}`).join("\n");
 
     expect(Object.keys(fromOutline(text).nodes)).toHaveLength(MAX_OUTLINE_LINES + 1);
+  });
+});
+
+describe("アウトラインの、リンクとメモ", () => {
+  it("リンクは、[ラベル](URL) の形で書き出す", () => {
+    const { map, ids } = sample();
+    const linked = setNodeLink(map, ids.a, "https://example.com/a");
+
+    expect(toOutline(linked)).toContain("- [企画](https://example.com/a)\n");
+  });
+
+  it("URL の中の括弧は、%28・%29 にして、書き出す（リンクの括弧と、取り違えないように）", () => {
+    const { map, ids } = sample();
+    const linked = setNodeLink(map, ids.a, "https://example.com/a_(b)");
+
+    expect(toOutline(linked)).toContain("- [企画](https://example.com/a_%28b%29)\n");
+  });
+
+  it("メモは、そのノードの行の直後に、「> 」で始まる行として、書き出す（子と同じインデント）", () => {
+    const { map, ids } = sample();
+    const noted = setNodeNote(map, ids.a, "一行目\n\n三行目");
+
+    expect(toOutline(noted)).toBe(
+      ["# 中心", "- 企画", "  > 一行目", "  >", "  > 三行目", "  - 調査", "  - 競合", "- 予算", ""].join(
+        "\n",
+      ),
+    );
+  });
+
+  it("中心ノードのメモは、見出しの直後に書き出す", () => {
+    const { map, ids } = sample();
+    const noted = setNodeNote(map, ids.root, "全体のメモ");
+
+    expect(toOutline(noted).split("\n").slice(0, 3)).toEqual(["# 中心", "> 全体のメモ", "- 企画"]);
+  });
+
+  it("リンクとメモを、すべて含む木を、書き出して読み込むと、元に戻る", () => {
+    const { map, ids } = sample();
+    let rich = setNodeLink(map, ids.a1, "https://example.com/a_(b)?x=1#y");
+    rich = setNodeNote(rich, ids.a1, "調査のメモ\n二行目");
+    rich = setNodeNote(rich, ids.root, "全体のメモ");
+    rich = setNodeLink(rich, ids.root, "https://root.example/");
+    rich = setNodeNote(rich, ids.b, "予算のメモ");
+
+    const restored = fromOutline(toOutline(rich));
+
+    const detail = (m: MindMap) =>
+      Object.values(m.nodes)
+        .map((n) => [n.text, n.link, n.note])
+        .sort();
+    expect(detail(restored)).toEqual(detail(rich));
+    expect(shape(restored)).toEqual(shape(rich));
+  });
+
+  it("[ラベル](URL) は、ラベルとリンクに分けて読み込む（箇条書きの印は、あってもなくてもよい）", () => {
+    const map = fromOutline("# t\n- [企画](https://example.com/a)\n[予算](http://example.com/b)\n");
+
+    const [a, b] = map.nodes[map.rootId].childIds.map((id) => map.nodes[id]);
+    expect([a.text, a.link]).toEqual(["企画", "https://example.com/a"]);
+    expect([b.text, b.link]).toEqual(["予算", "http://example.com/b"]);
+  });
+
+  it("%28・%29 は、リンクの URL として、そのまま保つ", () => {
+    const map = fromOutline("# t\n- [x](https://example.com/a_%28b%29)\n");
+
+    expect(map.nodes[map.nodes[map.rootId].childIds[0]].link).toBe("https://example.com/a_%28b%29");
+  });
+
+  it("http・https でない URL・URL として読めないものは、リンクにせず、そのままのテキストにする", () => {
+    const map = fromOutline("# t\n- [x](javascript:alert(1))\n- [y](file:///etc/passwd)\n- [z](https://)\n");
+
+    const kids = map.nodes[map.rootId].childIds.map((id) => map.nodes[id]);
+    expect(kids.map((k) => k.link)).toEqual([undefined, undefined, undefined]);
+    expect(kids[1].text).toBe("[y](file:///etc/passwd)");
+  });
+
+  it("文の途中の [ ] ( ) は、リンクとして扱わない", () => {
+    const map = fromOutline("# t\n- 前 [x](https://example.com/) 後\n");
+
+    const node = map.nodes[map.nodes[map.rootId].childIds[0]];
+    expect(node.text).toBe("前 [x](https://example.com/) 後");
+    expect(node.link).toBeUndefined();
+  });
+
+  it("「> 」の行は、直前のノードのメモになる（複数行・空行も）", () => {
+    const map = fromOutline("# t\n- A\n  > 一行目\n  >\n  > 三行目\n  - A1\n- B\n");
+
+    const [a, b] = map.nodes[map.rootId].childIds.map((id) => map.nodes[id]);
+    expect(a.note).toBe("一行目\n\n三行目");
+    expect(b.note).toBeUndefined();
+    expect(shape(map)).toEqual([
+      [0, "t"],
+      [1, "A"],
+      [2, "A1"],
+      [1, "B"],
+    ]);
+  });
+
+  it("見出しの直後の「> 」の行は、中心ノードのメモになる", () => {
+    const map = fromOutline("# 計画\n> 全体のメモ\n- A\n");
+
+    expect(map.nodes[map.rootId].note).toBe("全体のメモ");
+  });
+
+  it("見出しがなく、一番上の行が中心ノードになるときも、その直後のメモは、中心ノードのメモ", () => {
+    const map = fromOutline("計画\n> 全体のメモ\n  A\n");
+
+    expect(map.nodes[map.rootId].note).toBe("全体のメモ");
+    expect(shape(map)).toEqual([
+      [0, "計画"],
+      [1, "A"],
+    ]);
+  });
+
+  it("メモの先頭・末尾の空行は、取り除く。空のメモ（> だけ）は、付けない", () => {
+    const map = fromOutline("# t\n- A\n  >\n  > 本文\n  >\n- B\n  >\n");
+
+    const [a, b] = map.nodes[map.rootId].childIds.map((id) => map.nodes[id]);
+    expect(a.note).toBe("本文");
+    expect(b.note).toBeUndefined();
+  });
+
+  it("ノードの前にある「> 」の行（メモをつける先がない）は、普通のテキストの行として読む", () => {
+    const map = fromOutline("> 引用\n- A\n");
+
+    expect(map.nodes[map.rootId].text).toBe("中心テーマ");
+    expect(shape(map)[1]).toEqual([1, "> 引用"]);
+  });
+
+  it("「>」で始まらない行の途中の > は、メモにしない", () => {
+    const map = fromOutline("# t\n- a > b\n");
+
+    expect(map.nodes[map.nodes[map.rootId].childIds[0]].text).toBe("a > b");
+    expect(map.nodes[map.nodes[map.rootId].childIds[0]].note).toBeUndefined();
+  });
+
+  it("メモが長すぎれば、エラーにする", () => {
+    const text = `# t\n- A\n${Array.from({ length: 1100 }, () => "  > 0123456789").join("\n")}\n`;
+
+    expect(() => fromOutline(text)).toThrow("メモが長すぎます");
   });
 });
