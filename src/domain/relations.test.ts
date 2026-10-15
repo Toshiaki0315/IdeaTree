@@ -7,6 +7,7 @@ import {
   findRelation,
   removeRelation,
   removeRelationsOf,
+  reverseRelation,
   toggleRelation,
   updateRelation,
 } from "./relations";
@@ -193,5 +194,33 @@ describe("removeRelation（関連線の削除）", () => {
     const { map } = sample();
 
     expect(() => removeRelation(map, "ghost")).toThrow("関連線が存在しません: ghost");
+  });
+});
+
+describe("reverseRelation（関連線の向きの入れ替え）", () => {
+  it("矢印の元と先を、入れ替える。id・ラベル・色は、そのまま。元のマップは変えない", () => {
+    const { map, ids } = sample();
+    const linked = updateRelation(
+      toggleRelation(map, ids.a, ids.b),
+      toggleRelation(map, ids.a, ids.b).relations![0].id,
+      {},
+    );
+    const id = linked.relations![0].id;
+    const styled = updateRelation(linked, id, { label: "依存", color: "#1A7FD1" });
+
+    const reversed = reverseRelation(styled, id);
+
+    expect(reversed.relations![0]).toEqual({ id, from: ids.b, to: ids.a, label: "依存", color: "#1A7FD1" });
+    expect(styled.relations![0].from).toBe(ids.a);
+  });
+
+  it("ほかの関連線は、変えない。存在しない関連線は、エラー", () => {
+    const { map, ids } = sample();
+    const two = toggleRelation(toggleRelation(map, ids.a, ids.b), ids.b, ids.c);
+
+    const reversed = reverseRelation(two, two.relations![0].id);
+
+    expect(reversed.relations![1]).toBe(two.relations![1]);
+    expect(() => reverseRelation(map, "ghost")).toThrow("関連線が存在しません: ghost");
   });
 });

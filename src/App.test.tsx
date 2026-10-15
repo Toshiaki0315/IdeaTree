@@ -5979,4 +5979,44 @@ describe("App（マインドマップ編集UI）", () => {
       });
     });
   });
+
+  describe("関連線の、向きの入れ替えと、クリック", () => {
+    const panel = () => screen.getByRole("dialog", { name: "メモとリンク" });
+
+    /** 中心の下に 企画・予算（兄弟）を作り、予算 → 企画 の関連線を引く（選択は 企画） */
+    async function linkedPair(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}企画{Enter}{Enter}予算{Enter}");
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      await user.keyboard("{ArrowUp}{Enter}");
+      return view;
+    }
+
+    it("パネルの「向きを入れ替え」で、矢印の向きが逆になる（元に戻せる）", async () => {
+      const user = userEvent.setup();
+      const { container } = await linkedPair(user); // 選択は企画。予算 → 企画 なので、「← 予算」
+      const before = container.querySelector("path[data-relation-arrow]")!.getAttribute("d");
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      expect(within(panel()).getByRole("group", { name: "関連線: ← 予算" })).toBeInTheDocument();
+
+      await user.click(within(panel()).getByRole("button", { name: "向きを入れ替え（← 予算）" }));
+
+      expect(within(panel()).getByRole("group", { name: "関連線: → 予算" })).toBeInTheDocument();
+      expect(container.querySelector("path[data-relation-arrow]")!.getAttribute("d")).not.toBe(before);
+
+      fireEvent.keyDown(window, { key: "z", metaKey: true });
+      expect(within(panel()).getByRole("group", { name: "関連線: ← 予算" })).toBeInTheDocument();
+    });
+
+    it("関連線をクリックすると、矢印の元のノードを選んで、メモとリンクのパネル（関連線の欄）を開く", async () => {
+      const user = userEvent.setup();
+      const { container } = await linkedPair(user);
+      expect(selectedText(container)).toContain("企画");
+
+      await user.click(container.querySelector("path[data-relation-hit]")!);
+
+      expect(selectedText(container)).toContain("予算");
+      expect(within(panel()).getByRole("group", { name: "関連線: → 企画" })).toBeInTheDocument();
+    });
+  });
 });

@@ -11,6 +11,7 @@ function setup(props: { note?: string; link?: string; relations?: RelationRow[] 
     onOpenLink: vi.fn(),
     onRelationChange: vi.fn(),
     onRelationRemove: vi.fn(),
+    onRelationReverse: vi.fn(),
     onClose: vi.fn(),
   };
   render(
@@ -259,6 +260,14 @@ describe("NotePanel: 関連線", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "関連線を削除（← 調査）" }));
 
     expect(onRelationRemove).toHaveBeenCalledWith("r2");
+  });
+
+  it("「向きを入れ替え」で、その関連線の、矢印の向きを入れ替える", async () => {
+    const { onRelationReverse } = setup({ relations: rows });
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "向きを入れ替え（→ 予算）" }));
+
+    expect(onRelationReverse).toHaveBeenCalledWith("r1");
   });
 
   it("閉じるとき、入力中のラベルを、確定する", async () => {
