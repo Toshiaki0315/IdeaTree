@@ -6076,4 +6076,87 @@ describe("App（マインドマップ編集UI）", () => {
       expect(selectedText(container)).toContain("中心テーマ");
     });
   });
+
+  describe("複数選択での、スタイル（太字・斜体・色・アイコン）", () => {
+    const CMD_K = "{Meta>}k{/Meta}";
+    const panel = () => screen.getByRole("dialog", { name: "スタイル" });
+    const fillOf = (text: string) => screen.getByText(text).getAttribute("fill");
+    const weightOf = (text: string) => screen.getByText(text).getAttribute("font-weight");
+    const clickNode = (user: User, text: string, shift = false) =>
+      shift
+        ? user
+            .keyboard("{Shift>}")
+            .then(() => user.click(screen.getByText(text)))
+            .then(() => user.keyboard("{/Shift}"))
+        : user.click(screen.getByText(text));
+
+    /** 中心の下に a・b・c。a と b を選んでいる（今のノードは a） */
+    async function buildAndSelect(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}a{Enter}{Enter}b{Enter}{Enter}c{Enter}");
+      await clickNode(user, "a");
+      await clickNode(user, "b", true);
+      return view;
+    }
+
+    it("Cmd+B で、選択したすべてを、太字にする。すべて太字なら、すべて解除する。選択していないノードは、変わらない", async () => {
+      const user = userEvent.setup();
+      await buildAndSelect(user);
+
+      fireEvent.keyDown(window, { key: "b", metaKey: true });
+      expect([weightOf("a"), weightOf("b"), weightOf("c")]).toEqual(["bold", "bold", "normal"]);
+
+      fireEvent.keyDown(window, { key: "b", metaKey: true });
+      expect([weightOf("a"), weightOf("b")]).toEqual(["normal", "normal"]);
+    });
+
+    it("太字のノードと、そうでないノードが混ざっていれば、すべて太字にそろえる。1手で、元に戻せる", async () => {
+      const user = userEvent.setup();
+      await buildAndSelect(user);
+      fireEvent.keyDown(window, { key: "b", metaKey: true });
+      await clickNode(user, "b"); // 単独の選択
+      fireEvent.keyDown(window, { key: "b", metaKey: true }); // b だけ、太字を解除
+      await clickNode(user, "a");
+      await clickNode(user, "b", true);
+      expect([weightOf("a"), weightOf("b")]).toEqual(["bold", "normal"]);
+
+      fireEvent.keyDown(window, { key: "b", metaKey: true });
+      expect([weightOf("a"), weightOf("b")]).toEqual(["bold", "bold"]);
+
+      fireEvent.keyDown(window, { key: "z", metaKey: true });
+      expect([weightOf("a"), weightOf("b")]).toEqual(["bold", "normal"]);
+    });
+
+    it("Cmd+I で、選択したすべてを、斜体にする", async () => {
+      const user = userEvent.setup();
+      await buildAndSelect(user);
+
+      fireEvent.keyDown(window, { key: "i", metaKey: true });
+
+      expect(screen.getByText("a").getAttribute("font-style")).toBe("italic");
+      expect(screen.getByText("b").getAttribute("font-style")).toBe("italic");
+    });
+
+    it("スタイルパネルで色を選ぶと、選択したすべてに、効く", async () => {
+      const user = userEvent.setup();
+      await buildAndSelect(user);
+      await user.keyboard(CMD_K);
+
+      await user.click(within(panel()).getByRole("radio", { name: "青" }));
+
+      expect(fillOf("a")).toBe(BRANCH_COLORS[4]);
+      expect(fillOf("b")).toBe(BRANCH_COLORS[4]);
+      expect(fillOf("c")).not.toBe(BRANCH_COLORS[4]);
+    });
+
+    it("スタイルパネルでアイコンを選ぶと、選択したすべてに付く", async () => {
+      const user = userEvent.setup();
+      const { container } = await buildAndSelect(user);
+      await user.keyboard(CMD_K);
+
+      await user.click(within(panel()).getAllByRole("radio", { name: ICON_PRESETS[0].name })[0]);
+
+      expect(container.querySelectorAll("g[data-icon-for]")).toHaveLength(2);
+    });
+  });
 });

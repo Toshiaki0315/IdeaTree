@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { createMindMap } from "./mindmap";
-import { ICON_PRESETS, iconShapes, isIcon, legacyIconToId, setNodeIcon } from "./nodeIcon";
+import { ICON_PRESETS, iconShapes, isIcon, legacyIconToId, setIconOf, setNodeIcon } from "./nodeIcon";
 
 function buildMap() {
   const base = createMindMap("root");
@@ -148,5 +148,22 @@ describe("setNodeIcon（ノードのアイコンの設定）", () => {
     setNodeIcon(map, ids.a, star);
 
     expect(map).toEqual(before);
+  });
+});
+
+describe("setIconOf（複数のノードに、同じアイコンを設定）", () => {
+  it("指定したすべてのノードに設定し、undefined で、すべて外す。変化がなければ、同じマップ", () => {
+    const { map, ids } = buildMap();
+    const star = ICON_PRESETS[0].value;
+
+    const next = setIconOf(map, [ids.a, ids.b], star);
+    expect(next.nodes[ids.a].icon).toBe(star);
+    expect(next.nodes[ids.b].icon).toBe(star);
+    expect(next.nodes[ids.root].icon).toBeUndefined();
+
+    expect(setIconOf(next, [ids.a, ids.b], star)).toBe(next);
+    const cleared = setIconOf(next, [ids.a, ids.b], undefined);
+    expect("icon" in cleared.nodes[ids.a]).toBe(false);
+    expect("icon" in cleared.nodes[ids.b]).toBe(false);
   });
 });

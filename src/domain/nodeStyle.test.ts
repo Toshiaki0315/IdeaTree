@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { addChild } from "./addChild";
 import { createMindMap } from "./mindmap";
-import { MAX_IMAGE_SCALE, MIN_IMAGE_SCALE, setNodeStyle, toggleStyle } from "./nodeStyle";
+import {
+  MAX_IMAGE_SCALE,
+  MIN_IMAGE_SCALE,
+  setNodeStyle,
+  setStyleOf,
+  toggleStyle,
+  toggleStyleOf,
+} from "./nodeStyle";
 
 function buildMap() {
   const base = createMindMap("root");
@@ -216,5 +223,48 @@ describe("setNodeStyle（画像の倍率: imageScale）", () => {
     const styled = setNodeStyle(map, ids.a, { imageScale: 2, bold: true });
 
     expect(setNodeStyle(styled, ids.a, { imageScale: undefined }).nodes[ids.a].style).toEqual({ bold: true });
+  });
+});
+
+describe("setStyleOf（複数のノードに、同じスタイルを設定）", () => {
+  it("指定したすべてのノードに、同じ項目を設定する。ほかのノードは、変えない", () => {
+    const { map, ids } = buildMap();
+
+    const next = setStyleOf(map, [ids.a, ids.root], { color: "#123456", fontSize: 30 });
+
+    expect(next.nodes[ids.a].style).toEqual({ color: "#123456", fontSize: 30 });
+    expect(next.nodes[ids.root].style).toEqual({ color: "#123456", fontSize: 30 });
+    expect(next.nodes[ids.b].style).toBeUndefined();
+    expect(map.nodes[ids.a].style).toBeUndefined();
+  });
+
+  it("変化がなければ、同じマップを返す", () => {
+    const { map, ids } = buildMap();
+    const styled = setStyleOf(map, [ids.a, ids.b], { bold: true });
+
+    expect(setStyleOf(styled, [ids.a, ids.b], { bold: true })).toBe(styled);
+    expect(setStyleOf(map, [], { bold: true })).toBe(map);
+  });
+});
+
+describe("toggleStyleOf（複数のノードの、太字・斜体を、そろえて切り替える）", () => {
+  it("1つでも、オフのノードがあれば、すべてオンにする", () => {
+    const { map, ids } = buildMap();
+    const oneBold = toggleStyle(map, ids.a, "bold");
+
+    const next = toggleStyleOf(oneBold, [ids.a, ids.b], "bold");
+
+    expect(next.nodes[ids.a].style?.bold).toBe(true);
+    expect(next.nodes[ids.b].style?.bold).toBe(true);
+  });
+
+  it("すべてオンなら、すべてオフにする（設定を解除する）", () => {
+    const { map, ids } = buildMap();
+    const allBold = toggleStyleOf(map, [ids.a, ids.b], "italic");
+
+    const next = toggleStyleOf(allBold, [ids.a, ids.b], "italic");
+
+    expect(next.nodes[ids.a].style?.italic).toBeUndefined();
+    expect(next.nodes[ids.b].style?.italic).toBeUndefined();
   });
 });
