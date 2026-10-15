@@ -2,15 +2,26 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import NotePanel from "./NotePanel";
+import type { RelationRow } from "./NotePanel";
 
-function setup(props: { note?: string; link?: string } = {}) {
+function setup(props: { note?: string; link?: string; relations?: RelationRow[] } = {}) {
   const handlers = {
     onNoteChange: vi.fn(),
     onLinkChange: vi.fn(),
     onOpenLink: vi.fn(),
+    onRelationChange: vi.fn(),
+    onRelationRemove: vi.fn(),
     onClose: vi.fn(),
   };
-  render(<NotePanel nodeText="企画" note={props.note} link={props.link} {...handlers} />);
+  render(
+    <NotePanel
+      nodeText="企画"
+      note={props.note}
+      link={props.link}
+      relations={props.relations}
+      {...handlers}
+    />,
+  );
   return handlers;
 }
 
@@ -181,5 +192,77 @@ describe("NotePanel（メモとリンク）", () => {
 
     window.removeEventListener("keydown", outer);
     expect(outer).not.toHaveBeenCalled();
+  });
+});
+
+describe("NotePanel: 関連線", () => {
+  const rows: RelationRow[] = [
+    { id: "r1", direction: "to", otherText: "予算", label: "依存", color: "#1A7FD1" },
+    { id: "r2", direction: "from", otherText: "調査", label: "", color: undefined },
+  ];
+  const labelField = (name: string) => screen.getByRole("textbox", { name }) as HTMLInputElement;
+
+  it("関連線がなければ、関連線の欄は、出さない", () => {
+    setup();
+
+    expect(screen.queryByRole("group", { name: /関連線/ })).not.toBeInTheDocument();
+  });
+
+  it("このノードにつながる関連線を、向き（→ / ←）と相手の名前で、一覧にする", () => {
+    setup({ relations: rows });
+
+    expect(screen.getByRole("group", { name: "関連線: → 予算" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "関連線: ← 調査" })).toBeInTheDocument();
+    expect(labelField("ラベル（→ 予算）").value).toBe("依存");
+    expect(labelField("ラベル（← 調査）").value).toBe("");
+  });
+
+  it("ラベルは、Enter かフォーカスを外したときに、確定する（変えていなければ、確定しない）", async () => {
+    const { onRelationChange } = setup({ relations: rows });
+    const user = userEvent.setup();
+
+    await user.click(labelField("ラベル（← 調査）"));
+    await user.keyboard("{Tab}");
+    expect(onRelationChange).not.toHaveBeenCalled();
+
+    await user.type(labelField("ラベル（← 調査）"), "参照{Enter}");
+    expect(onRelationChange).toHaveBeenCalledWith("r2", { label: "参照" });
+
+    await user.clear(labelField("ラベル（→ 予算）"));
+    await user.click(memo());
+    expect(onRelationChange).toHaveBeenCalledWith("r1", { label: undefined });
+  });
+
+  it("色を選ぶと、すぐに、その色を通知する。「既定」で、色を外す", async () => {
+    const { onRelationChange } = setup({ relations: rows });
+    const user = userEvent.setup();
+
+    expect(screen.getByRole("combobox", { name: "色（→ 予算）" })).toHaveValue("#1A7FD1");
+    expect(screen.getByRole("combobox", { name: "色（← 調査）" })).toHaveValue("");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "色（← 調査）" }), "#E63946");
+    expect(onRelationChange).toHaveBeenCalledWith("r2", { color: "#E63946" });
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "色（→ 予算）" }), "");
+    expect(onRelationChange).toHaveBeenCalledWith("r1", { color: undefined });
+  });
+
+  it("「関連線を削除」で、その関連線を、削除する", async () => {
+    const { onRelationRemove } = setup({ relations: rows });
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "関連線を削除（← 調査）" }));
+
+    expect(onRelationRemove).toHaveBeenCalledWith("r2");
+  });
+
+  it("閉じるとき、入力中のラベルを、確定する", async () => {
+    const { onRelationChange, onClose } = setup({ relations: rows });
+    const user = userEvent.setup();
+
+    await user.type(labelField("ラベル（← 調査）"), "書きかけ");
+    await user.keyboard("{Escape}");
+
+    expect(onRelationChange).toHaveBeenCalledWith("r2", { label: "書きかけ" });
+    expect(onClose).toHaveBeenCalled();
   });
 });

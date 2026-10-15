@@ -5708,4 +5708,80 @@ describe("App（マインドマップ編集UI）", () => {
       });
     });
   });
+
+  describe("関連線のラベルと色（Cmd+L のパネル）", () => {
+    const panel = () => screen.getByRole("dialog", { name: "メモとリンク" });
+    const labels = (container: HTMLElement) =>
+      [...container.querySelectorAll("text[data-relation-label]")].map((t) => t.textContent);
+
+    /** 中心の下に 企画・予算（兄弟）を作り、予算 → 企画 の関連線を引く（選択は 企画） */
+    async function linkedPair(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}企画{Enter}{Enter}予算{Enter}");
+      fireEvent.keyDown(window, { key: "r", metaKey: true });
+      await user.keyboard("{ArrowUp}{Enter}");
+      return view;
+    }
+
+    it("つながっているノードでパネルを開くと、関連線の欄に、向きと相手の名前が出る。つながっていなければ、出ない", async () => {
+      const user = userEvent.setup();
+      await linkedPair(user); // 選択は 企画（予算 → 企画 の、向かう先）
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+
+      expect(within(panel()).getByRole("group", { name: "関連線: ← 予算" })).toBeInTheDocument();
+
+      fireEvent.keyDown(panel(), { key: "Escape" });
+      await user.keyboard("{ArrowLeft}"); // 中心ノード（関連線なし）
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      expect(within(panel()).queryByRole("group", { name: /関連線/ })).not.toBeInTheDocument();
+    });
+
+    it("ラベルを付けると、関連線の中ほどに、文字が出る。消すと、文字も消える", async () => {
+      const user = userEvent.setup();
+      const { container } = await linkedPair(user);
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      const field = within(panel()).getByRole("textbox", { name: "ラベル（← 予算）" });
+
+      await user.type(field, "依存{Enter}");
+      expect(labels(container)).toEqual(["依存"]);
+
+      await user.clear(field);
+      await user.keyboard("{Enter}");
+      expect(labels(container)).toEqual([]);
+    });
+
+    it("色を選ぶと、線・矢じり・ラベルが、その色になる。「既定」で、元の色に戻る", async () => {
+      const user = userEvent.setup();
+      const { container } = await linkedPair(user);
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      const field = within(panel()).getByRole("textbox", { name: "ラベル（← 予算）" });
+      await user.type(field, "依存{Enter}");
+      const select = within(panel()).getByRole("combobox", { name: "色（← 予算）" });
+
+      await user.selectOptions(select, "#1A7FD1");
+      expect(container.querySelector("path[data-relation-id]")!.getAttribute("stroke")).toBe("#1A7FD1");
+      expect(container.querySelector("path[data-relation-arrow]")!.getAttribute("fill")).toBe("#1A7FD1");
+      expect(container.querySelector("text[data-relation-label]")!.getAttribute("fill")).toBe("#1A7FD1");
+
+      await user.selectOptions(select, "");
+      expect(container.querySelector("path[data-relation-id]")!.getAttribute("stroke")).toBe("#8B949E");
+    });
+
+    it("「関連線を削除」で、関連線が消える。ラベルと色の変更は、元に戻せる（Cmd+Z）", async () => {
+      const user = userEvent.setup();
+      const { container } = await linkedPair(user);
+      fireEvent.keyDown(window, { key: "l", metaKey: true });
+      await user.type(within(panel()).getByRole("textbox", { name: "ラベル（← 予算）" }), "依存{Enter}");
+      expect(labels(container)).toEqual(["依存"]);
+
+      fireEvent.keyDown(panel(), { key: "z", metaKey: true });
+      expect(labels(container)).toEqual(["依存"]); // パネルの中のキーは、ショートカットに渡さない
+
+      fireEvent.keyDown(window, { key: "z", metaKey: true });
+      expect(labels(container)).toEqual([]);
+
+      await user.click(within(panel()).getByRole("button", { name: "関連線を削除（← 予算）" }));
+      expect(container.querySelectorAll("path[data-relation-id]")).toHaveLength(0);
+    });
+  });
 });
