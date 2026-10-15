@@ -6019,4 +6019,61 @@ describe("App（マインドマップ編集UI）", () => {
       expect(within(panel()).getByRole("group", { name: "関連線: → 企画" })).toBeInTheDocument();
     });
   });
+
+  describe("複数選択での、削除", () => {
+    const multi = (container: HTMLElement) =>
+      [...container.querySelectorAll('g[data-multi-selected="true"]')].map((g) => g.textContent);
+    const clickNode = (user: User, text: string, shift = false) =>
+      shift
+        ? user
+            .keyboard("{Shift>}")
+            .then(() => user.click(screen.getByText(text)))
+            .then(() => user.keyboard("{/Shift}"))
+        : user.click(screen.getByText(text));
+
+    /** 中心の下に a（子 a1）・b・c。選択は c */
+    async function build(user: User) {
+      const view = render(<App />);
+      await user.keyboard("{Tab}a{Enter}{Tab}a1{Enter}{ArrowLeft}{Enter}b{Enter}{Enter}c{Enter}");
+      return view;
+    }
+
+    it("Delete で、選択したすべてを、子孫ごと削除し、今のノードの親を選ぶ。1手で元に戻せる", async () => {
+      const user = userEvent.setup();
+      const { container } = await build(user);
+      await clickNode(user, "a");
+      await clickNode(user, "c", true);
+
+      await user.keyboard("{Delete}");
+
+      expect([...nodes(container)].map((g) => g.textContent)).toEqual(["中心テーマ", "b"]);
+      expect(selectedText(container)).toContain("中心テーマ");
+      expect(multi(container)).toEqual([]);
+
+      fireEvent.keyDown(window, { key: "z", metaKey: true });
+      expect([...nodes(container)].map((g) => g.textContent)).toEqual(["中心テーマ", "a", "a1", "b", "c"]);
+    });
+
+    it("親と子の両方を選んでいても、削除できる（Backspace でも）", async () => {
+      const user = userEvent.setup();
+      const { container } = await build(user);
+      await clickNode(user, "a");
+      await clickNode(user, "a1", true);
+
+      await user.keyboard("{Backspace}");
+
+      expect([...nodes(container)].map((g) => g.textContent)).toEqual(["中心テーマ", "b", "c"]);
+    });
+
+    it("今のノードが、選択した別のノードの子孫でも、残っている祖先を選ぶ", async () => {
+      const user = userEvent.setup();
+      const { container } = await build(user);
+      await clickNode(user, "a1");
+      await clickNode(user, "a", true); // 今のノードは a1、複数選択は a
+
+      await user.keyboard("{Delete}");
+
+      expect(selectedText(container)).toContain("中心テーマ");
+    });
+  });
 });
